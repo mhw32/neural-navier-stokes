@@ -15,17 +15,29 @@ import torch.nn.functional as F
 LOG2PI = float(np.log(2.0 * math.pi))
 
 
-def categorical_log_pdf(x, logits):
-    r"""Log-likelihood of data given ~Bernoulli(mu)
+def sample_gumbel(shape, eps=1e-20):
+    U = torch.rand(shape).cuda()
+    return -torch.log(-torch.log(U + eps) + eps)
 
-    @param x: PyTorch.Tensor
-              ground truth input
-    @param logits: PyTorch.Tensor
-               logits (pre-softmax)
-    @return log_pdf: PyTorch.Tensor
-                     log-likelihood
+
+def gumbel_softmax_sample(logits, temperature):
+    y = logits + sample_gumbel(logits.size())
+    return F.softmax(y / temperature, dim=-1)
+
+
+def gumbel_softmax(logits, temperature):
+    r"""ST-gumple-softmax
+    input: [*, n_class]
+    return: flatten --> [*, n_class] an one-hot vector
     """
-    return -F.cross_entropy(logits, x.long(), reduction='none')
+    y = gumbel_softmax_sample(logits, temperature)
+    shape = y.size()
+    _, ind = y.max(dim=-1)
+    y_hard = torch.zeros_like(y).view(-1, shape[-1])
+    y_hard.scatter_(1, ind.view(-1, 1), 1)
+    y_hard = y_hard.view(*shape)
+    y_hard = (y_hard - y).detach() + y
+    return y_hard.view(-1, shape[1] * shape[2])
 
 
 def bernoulli_log_pdf(x, mu):

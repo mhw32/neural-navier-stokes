@@ -11,11 +11,7 @@ import numpy as np
 
 import torch
 import torch.nn as nn
-from utils import (
-    bernoulli_log_pdf,
-    gaussian_log_pdf,
-    unit_gaussian_log_pdf,
-)
+import torch.nn.functional as F
 
 
 class BernoulliEmitter(nn.Module):
@@ -111,10 +107,9 @@ class Combiner(nn.Module):
 
 class DMM(nn.Module):
     r"""Deep Markov Model."""
-    def __init__(self, device, input_dim, z_dim, emission_dim, transition_dim, 
+    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, 
                     rnn_dim, rnn_dropout_rate=0.0, emission_dist='bernoulli'):
         super(DMM, self).__init__()
-        self.device = device
         self.input_dim = input_dim
         self.z_dim = z_dim
         self.emission_dim = emission_dim
