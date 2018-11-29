@@ -106,7 +106,11 @@ class Combiner(nn.Module):
 
 
 class DMM(nn.Module):
-    r"""Deep Markov Model."""
+    r"""Deep Markov Model.
+    
+    NOTE: I assume all inputs are the SAME length. We need to fix this later
+          but I bet this assumption will make initial development much easier.
+    """
     def __init__(self, input_dim, z_dim, emission_dim, transition_dim, 
                     rnn_dim, rnn_dropout_rate=0.0, emission_dist='bernoulli'):
         super(DMM, self).__init__()
@@ -144,19 +148,29 @@ class DMM(nn.Module):
 
     # define an inference network q(z_{1:T}|x_{1:T}) where T is maximum length
     # FIX: not all inputs are used
-    def inference_network(self, mini_batch, mini_batch_reversed, mini_batch_seq_lengths):
+    def inference_network(self, data):
+        # data: (batch_size, time_steps, dimension)
         # this is the number of time steps we need to process in the mini-batch
-        T_max = mini_batch.size(1)
+        batch_size = data.size(0)
+        T_max = data.size(1)
+        data_npy = data.cpu().numpy()
+        data_reversed_npy = data_npy[:, ::-1, :]
+        data_reversed = torch.from_numpy(data_reversed_npy)
+        data_reversed = data_reversed.to(data.device)
+
+        data_seq_lengths = [T_max for _ in xrange(batch_size)]
+        data_seq_lengths = torch.from_numpy(data_seq_lengths).long()
+        data_seq_lengths = data_seq_lengths.to(data.device)
 
         h_0_contig = self.h_0.expand(
-            1, mini_batch.size(0), self.rnn.hidden_size).contiguous()
+            1, data.size(0), self.rnn.hidden_size).contiguous()
         # push the observed x's through the rnn;
         # rnn_output contains the hidden state at each time step
-        rnn_output, _ = self.rnn(mini_batch_reversed, h_0_contig)
+        rnn_output, _ = self.rnn(data_reversed, h_0_contig)
         # reverse the time-ordering in the hidden state and un-pack it
-        rnn_output = pad_and_reverse(rnn_output, mini_batch_seq_lengths)
+        rnn_output = pad_and_reverse(rnn_output, data_seq_lengths)
         # set z_prev = z_q_0 to setup the recursive conditioning in q(z_t |...)
-        z_prev = self.z_q_0.expand(mini_batch.size(0), self.z_q_0.size(0))
+        z_prev = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
         # store all z's in here
         z_list = []
         z_mu_list = []
@@ -195,11 +209,9 @@ class DMM(nn.Module):
 
         return z_list, z_mu_list, z_logvar_list
 
-    def forward(self, mini_batch, mini_batch_reversed, mini_batch_seq_lengths):
-        batch_size = mini_batch.size(0)
-        T_max = mini_batch.size(1)
-        q_z_list, q_z_mu_list, q_z_logvar_list = self.inference_network(
-            mini_batch, mini_batch_reversed, mini_batch_seq_lengths)
+    def forward(self, data):
+        batch_size, T_max, _ = data.size()
+        q_z_list, q_z_mu_list, q_z_logvar_list = self.inference_network(data)
         p_z_list, p_z_mu_list, p_z_logvar_list = self.prior_network(batch_size, T_max)
 
         emission_probs_list = []
@@ -218,7 +230,6 @@ class DMM(nn.Module):
             'p_z_logvar': p_z_logvar_list,
             'emission_probs': emission_probs_list,
             'T_max': T_max,
-            'seq_lengths': mini_batch_seq_lengths,
         }
         
         return output
