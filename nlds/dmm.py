@@ -15,7 +15,15 @@ import torch.nn.functional as F
 
 
 class BernoulliEmitter(nn.Module):
-    r"""Parameterizes the bernoulli observation likelihood `p(x_t | z_t)`"""
+    r"""Parameterizes the bernoulli observation likelihood `p(x_t | z_t)`
+    
+    @param input_dim: integer
+                      number of input dimensions
+    @param z_dim: integer
+                  number of latent dimensions
+    @param emission_dim: integer
+                         number of output dimensions
+    """
     def __init__(self, input_dim, z_dim, emission_dim):
         super(BernoulliEmitter, self).__init__()
         # initialize the three linear transformations used in the neural network
@@ -38,6 +46,11 @@ class BernoulliEmitter(nn.Module):
 class GatedTransition(nn.Module):
     r"""Parameterizes the gaussian latent transition probability `p(z_t | z_{t-1})`
     See section 5 in the reference for comparison.
+
+    @param z_dim: integer
+                  number of latent dimensions
+    @param transition_dim: integer
+                           number of transition dimensions
     """
     def __init__(self, z_dim, transition_dim):
         super(GatedTransition, self).__init__()
@@ -80,6 +93,11 @@ class Combiner(nn.Module):
     r"""Parameterizes `q(z_t | z_{t-1}, x_{t:T})`, which is the basic building block
     of the guide (i.e. the variational distribution). The dependence on `x_{t:T}` is
     through the hidden state of the RNN (see the PyTorch module `rnn` below)
+
+    @param z_dim: integer
+                  number of latent dimensions
+    @param rnn_dim: integer
+                    hidden dimensions of RNN
     """
     def __init__(self, z_dim, rnn_dim):
         super(Combiner, self).__init__()
@@ -110,6 +128,21 @@ class DMM(nn.Module):
     
     NOTE: I assume all inputs are the SAME length. We need to fix this later
           but I bet this assumption will make initial development much easier.
+    
+    @param input_dim: integer
+                      number of input dimensions 
+    @param z_dim: integer
+                  number of latent dimensions
+    @param emissions_dim: integer
+                          number of output dimensions
+    @param transition_dim: integer
+                           number of transition dimensions
+    @param rnn_dim: integer
+                    hidden dimensions of RNN
+    @param rnn_dropout_rate: float [default: 0.0]
+                             dropout rate for RNN
+    @param emission_dist: string [default: bernoulli]
+                          output distribution type
     """
     def __init__(self, input_dim, z_dim, emission_dim, transition_dim, 
                     rnn_dim, rnn_dropout_rate=0.0, emission_dist='bernoulli'):
