@@ -141,11 +141,9 @@ class DMM(nn.Module):
                     hidden dimensions of RNN
     @param rnn_dropout_rate: float [default: 0.0]
                              dropout rate for RNN
-    @param emission_dist: string [default: bernoulli]
-                          output distribution type
     """
     def __init__(self, input_dim, z_dim, emission_dim, transition_dim, 
-                    rnn_dim, rnn_dropout_rate=0.0, emission_dist='bernoulli'):
+                    rnn_dim, rnn_dropout_rate=0.0):
         super(DMM, self).__init__()
         self.input_dim = input_dim
         self.z_dim = z_dim
@@ -153,13 +151,8 @@ class DMM(nn.Module):
         self.transition_dim = transition_dim
         self.rnn_dim = rnn_dim
         self.rnn_dropout_rate = rnn_dropout_rate
-        self.emission_dist = emission_dist
 
-        if self.emission_dist == 'bernoulli':
-            self.emitter = BernoulliEmitter(self.input_dim, self.z_dim, self.emission_dim)
-        else:
-            raise Exception('Emission distribution %s not supported.' % self.emission_dist)
-        
+        self.emitter = BernoulliEmitter(self.input_dim, self.z_dim, self.emission_dim)
         self.trans = GatedTransition(self.z_dim, self.transition_dim)
         self.combiner = Combiner(self.z_dim, self.rnn_dim)
         self.rnn = nn.RNN(input_size=self.input_dim, hidden_size=self.rnn_dim, nonlinearity='relu',
@@ -179,6 +172,13 @@ class DMM(nn.Module):
         eps = torch.randn_like(std)
         return eps.mul(std).add_(mu)
 
+    def reverse_data(self, data):
+        data_npy = data.cpu().numpy()
+        data_reversed_npy = data_npy[:, ::-1, :]
+        data_reversed = torch.from_numpy(data_reversed_npy)
+        data_reversed = data_reversed.to(data.device)
+        return data_reversed
+
     # define an inference network q(z_{1:T}|x_{1:T}) where T is maximum length
     # FIX: not all inputs are used
     def inference_network(self, data):
@@ -186,11 +186,11 @@ class DMM(nn.Module):
         # this is the number of time steps we need to process in the mini-batch
         batch_size = data.size(0)
         T_max = data.size(1)
-        data_npy = data.cpu().numpy()
-        data_reversed_npy = data_npy[:, ::-1, :]
-        data_reversed = torch.from_numpy(data_reversed_npy)
-        data_reversed = data_reversed.to(data.device)
+        
+        # flip data as RNN takes data in opposing order
+        data_reversed = self.reverse_data(data)
 
+        # compute sequence lengths
         data_seq_lengths = [T_max for _ in xrange(batch_size)]
         data_seq_lengths = torch.from_numpy(data_seq_lengths).long()
         data_seq_lengths = data_seq_lengths.to(data.device)
@@ -204,6 +204,7 @@ class DMM(nn.Module):
         rnn_output = pad_and_reverse(rnn_output, data_seq_lengths)
         # set z_prev = z_q_0 to setup the recursive conditioning in q(z_t |...)
         z_prev = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
+        
         # store all z's in here
         z_list = []
         z_mu_list = []
@@ -252,7 +253,7 @@ class DMM(nn.Module):
             z_t = q_z_list[t]
             # define a generative model p(x_{1:T}|z_{1:T})
             emission_probs_t = self.emitter(z_t)
-            emission_probs_list.append(emission_probs_list)
+            emission_probs_list.append(emission_probs_t)
 
         output = {
             'q_z': q_z_list,
