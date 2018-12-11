@@ -2,6 +2,9 @@ r"""Implementation is heavily borrowed from Pyro's implementation.
 
 [1] Structured Inference Networks for Nonlinear State Space Models [arXiv:1609.09869]
     Rahul G. Krishnan, Uri Shalit, David Sontag
+
+Let x refer to a Gaussian latent variables. Let y be a Bernoulli
+observed variable.
 """
 from __future__ import division
 from __future__ import print_function
@@ -15,36 +18,37 @@ import torch.nn.functional as F
 
 
 class BernoulliEmitter(nn.Module):
-    r"""Parameterizes the bernoulli observation likelihood `p(x_t | z_t)`
+    r"""Parameterizes the bernoulli observation likelihood `p(y_t | x_t)`
     
-    @param input_dim: integer
-                      number of input dimensions
-    @param z_dim: integer
+    @param y_dim: integer
+                  number of input dimensions
+    @param x_dim: integer
                   number of latent dimensions
     @param emission_dim: integer
-                         number of output dimensions
+                         number of hidden dimensions in output 
+                         neural network
     """
-    def __init__(self, input_dim, z_dim, emission_dim):
+    def __init__(self, y_dim, x_dim, emission_dim):
         super(BernoulliEmitter, self).__init__()
         # initialize the three linear transformations used in the neural network
-        self.lin_z_to_hidden = nn.Linear(z_dim, emission_dim)
+        self.lin_x_to_hidden = nn.Linear(x_dim, emission_dim)
         self.lin_hidden_to_hidden = nn.Linear(emission_dim, emission_dim)
-        self.lin_hidden_to_input = nn.Linear(emission_dim, input_dim)
+        self.lin_hidden_to_input = nn.Linear(emission_dim, y_dim)
         # initialize the two non-linearities used in the neural network
         self.relu = nn.ReLU()
 
-    def forward(self, z_t):
-        r"""Given the latent z at a particular time step t we return the vector of
-        probabilities `ps` that parameterizes the bernoulli distribution `p(x_t|z_t)`
+    def forward(self, x_t):
+        r"""Given the latent x at a particular time step t we return the vector of
+        probabilities `ps` that parameterizes the bernoulli distribution `p(y_t|x_t)`
         """
-        h1 = self.relu(self.lin_z_to_hidden(z_t))
+        h1 = self.relu(self.lin_x_to_hidden(x_t))
         h2 = self.relu(self.lin_hidden_to_hidden(h1))
         ps = torch.sigmoid(self.lin_hidden_to_input(h2))
         return ps
 
 
-class GatedTransition(nn.Module):
-    r"""Parameterizes the gaussian latent transition probability `p(z_t | z_{t-1})`
+class GaussianGatedTransition(nn.Module):
+    r"""Parameterizes the gaussian latent transition probability `p(x_t | x_{t-1})`
     See section 5 in the reference for comparison.
 
     @param z_dim: integer
@@ -52,75 +56,78 @@ class GatedTransition(nn.Module):
     @param transition_dim: integer
                            number of transition dimensions
     """
-    def __init__(self, z_dim, transition_dim):
-        super(GatedTransition, self).__init__()
+    def __init__(self, x_dim, transition_dim):
+        super(GaussianGatedTransition, self).__init__()
         # initialize the six linear transformations used in the neural network
-        self.lin_gate_z_to_hidden = nn.Linear(z_dim, transition_dim)
-        self.lin_gate_hidden_to_z = nn.Linear(transition_dim, z_dim)
-        self.lin_proposed_mean_z_to_hidden = nn.Linear(z_dim, transition_dim)
-        self.lin_proposed_mean_hidden_to_z = nn.Linear(transition_dim, z_dim)
-        self.lin_sig = nn.Linear(z_dim, z_dim)
-        self.lin_z_to_loc = nn.Linear(z_dim, z_dim)
-        # modify the default initialization of lin_z_to_loc
+        self.lin_gate_x_to_hidden = nn.Linear(x_dim, transition_dim)
+        self.lin_gate_hidden_to_x = nn.Linear(transition_dim, x_dim)
+        self.lin_proposed_mean_x_to_hidden = nn.Linear(x_dim, transition_dim)
+        self.lin_proposed_mean_hidden_to_x = nn.Linear(transition_dim, x_dim)
+        self.lin_x_to_logvar = nn.Linear(x_dim, x_dim)
+        self.lin_x_to_mu = nn.Linear(x_dim, x_dim)
+        # modify the default initialization of lin_x_to_mu
         # so that it's starts out as the identity function
-        self.lin_z_to_loc.weight.data = torch.eye(z_dim)
-        self.lin_z_to_loc.bias.data = torch.zeros(z_dim)
+        self.lin_x_to_mu.weight.data = torch.eye(x_dim)
+        self.lin_x_to_mu.bias.data = torch.zeros(x_dim)
         # initialize the three non-linearities used in the neural network
         self.relu = nn.ReLU()
 
-    def forward(self, z_t_1):
-        r"""Given the latent `z_{t-1}` corresponding to the time step t-1
+    def forward(self, x_t_1):
+        r"""Given the latent `x_{t-1}` corresponding to the time step t-1
         we return the mean and scale vectors that parameterize the
-        (diagonal) gaussian distribution `p(z_t | z_{t-1})`
+        (diagonal) gaussian distribution `p(x_t | x_{t-1})`
         """
         # compute the gating function
-        _gate = self.relu(self.lin_gate_z_to_hidden(z_t_1))
-        gate = torch.sigmoid(self.lin_gate_hidden_to_z(_gate))
+        _gate = self.relu(self.lin_gate_x_to_hidden(x_t_1))
+        gate = torch.sigmoid(self.lin_gate_hidden_to_x(_gate))
         # compute the 'proposed mean'
-        _proposed_mean = self.relu(self.lin_proposed_mean_z_to_hidden(z_t_1))
-        proposed_mean = self.lin_proposed_mean_hidden_to_z(_proposed_mean)
-        # assemble the actual mean used to sample z_t, which mixes a linear transformation
-        # of z_{t-1} with the proposed mean modulated by the gating function
-        z_t_mu = (1 - gate) * self.lin_z_to_loc(z_t_1) + gate * proposed_mean
-        # compute the scale used to sample z_t, using the proposed mean from
+        _proposed_mean = self.relu(self.lin_proposed_mean_x_to_hidden(x_t_1))
+        proposed_mean = self.lin_proposed_mean_hidden_to_x(_proposed_mean)
+        # assemble the actual mean used to sample x_t, which mixes a linear transformation
+        # of x_{t-1} with the proposed mean modulated by the gating function
+        x_t_mu = (1 - gate) * self.lin_x_to_mu(x_t_1) + gate * proposed_mean
+        # compute the scale used to sample x_t, using the proposed mean from
         # above as input the softplus ensures that scale is positive
-        z_t_logvar = self.lin_sig(self.relu(proposed_mean))
+        x_t_logvar = self.lin_x_to_logvar(self.relu(proposed_mean))
         # return parameters of normal distribution
-        return z_t_mu, z_t_logvar
+        return x_t_mu, x_t_logvar
 
 
-class Combiner(nn.Module):
-    r"""Parameterizes `q(z_t | z_{t-1}, x_{t:T})`, which is the basic building block
-    of the guide (i.e. the variational distribution). The dependence on `x_{t:T}` is
+class GaussianCombiner(nn.Module):
+    r"""Parameterizes `q(x_t | x_{t-1}, y_{t:T})`, which is the basic building block
+    of the guide (i.e. the variational distribution). The dependence on `y_{t:T}` is
     through the hidden state of the RNN (see the PyTorch module `rnn` below)
 
-    @param z_dim: integer
+    NOTE: x_{t-1} is supposed to capture y_{1:t-1}. So, `q(x_t|x_{t-1},y_{t:T})` 
+    refers to `q(x_t|y_{1:T})`.
+
+    @param x_dim: integer
                   number of latent dimensions
     @param rnn_dim: integer
                     hidden dimensions of RNN
     """
-    def __init__(self, z_dim, rnn_dim):
-        super(Combiner, self).__init__()
+    def __init__(self, x_dim, rnn_dim):
+        super(GaussianCombiner, self).__init__()
         # initialize the three linear transformations used in the neural network
-        self.lin_z_to_hidden = nn.Linear(z_dim, rnn_dim)
-        self.lin_hidden_to_loc = nn.Linear(rnn_dim, z_dim)
-        self.lin_hidden_to_scale = nn.Linear(rnn_dim, z_dim)
+        self.lin_x_to_hidden = nn.Linear(x_dim, rnn_dim)
+        self.lin_hidden_to_mu = nn.Linear(rnn_dim, x_dim)
+        self.lin_hidden_to_logvar = nn.Linear(rnn_dim, x_dim)
         # initialize the two non-linearities used in the neural network
         self.tanh = nn.Tanh()
 
-    def forward(self, z_t_1, h_rnn):
-        r"""Given the latent z at at a particular time step t-1 as well as the hidden
-        state of the RNN `h(x_{t:T})` we return the mean and scale vectors that
-        parameterize the (diagonal) gaussian distribution `q(z_t | z_{t-1}, x_{t:T})`
+    def forward(self, x_t_1, h_rnn):
+        r"""Given the latent x at at a particular time step t-1 as well as the hidden
+        state of the RNN `h(y_{t:T})` we return the mean and scale vectors that
+        parameterize the (diagonal) gaussian distribution `q(x_t | x_{t-1}, y_{t:T})`
         """
         # combine the rnn hidden state with a transformed version of z_t_1
-        h_combined = 0.5 * (self.tanh(self.lin_z_to_hidden(z_t_1)) + h_rnn)
+        h_combined = 0.5 * (self.tanh(self.lin_x_to_hidden(x_t_1)) + h_rnn)
         # use the combined hidden state to compute the mean used to sample z_t
-        z_t_mu = self.lin_hidden_to_loc(h_combined)
+        x_t_mu = self.lin_hidden_to_mu(h_combined)
         # use the combined hidden state to compute the scale used to sample z_t
-        z_t_logvar = self.lin_hidden_to_scale(h_combined)
+        x_t_logvar = self.lin_hidden_to_logvar(h_combined)
         # return parameters of normal distribution
-        return z_t_mu, z_t_logvar
+        return x_t_mu, x_t_logvar
 
 
 class DMM(nn.Module):
@@ -129,12 +136,13 @@ class DMM(nn.Module):
     NOTE: I assume all inputs are the SAME length. We need to fix this later
           but I bet this assumption will make initial development much easier.
     
-    @param input_dim: integer
-                      number of input dimensions 
-    @param z_dim: integer
+    @param y_dim: integer
+                  number of input dimensions 
+    @param x_dim: integer
                   number of latent dimensions
     @param emissions_dim: integer
-                          number of output dimensions
+                          number of hidden dimensions in network to 
+                          generate outputs
     @param transition_dim: integer
                            number of transition dimensions
     @param rnn_dim: integer
@@ -142,28 +150,28 @@ class DMM(nn.Module):
     @param rnn_dropout_rate: float [default: 0.0]
                              dropout rate for RNN
     """
-    def __init__(self, input_dim, z_dim, emission_dim, transition_dim, 
-                    rnn_dim, rnn_dropout_rate=0.0):
+    def __init__(self, y_dim, x_dim, emission_dim, transition_dim, 
+                 rnn_dim, rnn_dropout_rate=0.0):
         super(DMM, self).__init__()
-        self.input_dim = input_dim
-        self.z_dim = z_dim
+        self.y_dim = y_dim
+        self.x_dim = x_dim
         self.emission_dim = emission_dim
         self.transition_dim = transition_dim
         self.rnn_dim = rnn_dim
         self.rnn_dropout_rate = rnn_dropout_rate
 
-        self.emitter = BernoulliEmitter(self.input_dim, self.z_dim, self.emission_dim)
-        self.trans = GatedTransition(self.z_dim, self.transition_dim)
-        self.combiner = Combiner(self.z_dim, self.rnn_dim)
-        self.rnn = nn.RNN(input_size=self.input_dim, hidden_size=self.rnn_dim, nonlinearity='relu',
+        self.emitter = BernoulliEmitter(self.y_dim, self.x_dim, self.emission_dim)
+        self.trans = GaussianGatedTransition(self.x_dim, self.transition_dim)
+        self.combiner = GaussianCombiner(self.x_dim, self.rnn_dim)
+        self.rnn = nn.RNN(input_size=self.y_dim, hidden_size=self.rnn_dim, nonlinearity='relu',
                           batch_first=True, bidirectional=False, num_layers=1,
                           dropout=self.rnn_dropout_rate)
 
-        # define a (trainable) parameters z_0 and z_q_0 that help define the probability
-        # distributions p(z_1) and q(z_1)
+        # define a (trainable) parameters x_0 and x_q_0 that help define the probability
+        # distributions p(x_1) and q(x_1|y_{1:T})
         # (since for t = 1 there are no previous latents to condition on)
-        self.z_0 = nn.Parameter(torch.zeros(self.z_dim))
-        self.z_q_0 = nn.Parameter(torch.zeros(self.z_dim))
+        self.x_0 = nn.Parameter(torch.zeros(self.x_dim))
+        self.x_q_0 = nn.Parameter(torch.zeros(self.x_dim))
         # define a (trainable) parameter for the initial hidden state of the rnn
         self.h_0 = nn.Parameter(torch.zeros(1, 1, self.rnn_dim))
 
@@ -179,10 +187,10 @@ class DMM(nn.Module):
         data_reversed = data_reversed.to(data.device)
         return data_reversed
 
-    # define an inference network q(z_{1:T}|x_{1:T}) where T is maximum length
-    # FIX: not all inputs are used
+    # define an inference network q(x_{1:T}|y_{1:T}) where T is maximum length
     def inference_network(self, data):
         # data: (batch_size, time_steps, dimension)
+        # data := y
         # this is the number of time steps we need to process in the mini-batch
         batch_size = data.size(0)
         T_max = data.size(1)
@@ -197,71 +205,71 @@ class DMM(nn.Module):
 
         h_0_contig = self.h_0.expand(
             1, data.size(0), self.rnn.hidden_size).contiguous()
-        # push the observed x's through the rnn;
+        # push the observed y's through the rnn;
         # rnn_output contains the hidden state at each time step
         rnn_output, _ = self.rnn(data_reversed, h_0_contig)
         # reverse the time-ordering in the hidden state and un-pack it
         rnn_output = pad_and_reverse(rnn_output, data_seq_lengths)
-        # set z_prev = z_q_0 to setup the recursive conditioning in q(z_t |...)
-        z_prev = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
+        # set x_prev = x_q_0 to setup the recursive conditioning in q(x_t |...)
+        x_prev = self.x_q_0.expand(batch_size, self.x_q_0.size(0))
         
         # store all z's in here
-        z_list = []
-        z_mu_list = []
-        z_logvar_list = []
+        x_list = []
+        x_mu_list = []
+        x_logvar_list = []
 
         for t in xrange(1, T_max + 1):
-            # the next two lines assemble the distribution q(z_t|z_{t-1},x_{t:T})
-            z_mu, z_logvar = self.combiner(z_prev, rnn_output[:, t - 1, :])
-            z_t = self.reparameterize(z_mu, z_logvar)
-            z_list.append(z_t)
-            z_mu_list.append(z_mu)
-            z_logvar_list.append(z_logvar)
+            # the next two lines assemble the distribution q(x_t|x_{t-1},y_{t:T})
+            x_mu, x_logvar = self.combiner(x_prev, rnn_output[:, t - 1, :])
+            x_t = self.reparameterize(x_mu, x_logvar)
+            x_list.append(x_t)
+            x_mu_list.append(x_mu)
+            x_logvar_list.append(x_logvar)
             # the latent sampled at this time step will be conditioned upon in the next time step
             # so keep track of it
-            z_prev = z_t
+            x_prev = x_t
 
-        # list of length T w/ each element being size batch_size x z_dim
-        return z_list, z_mu_list, z_logvar_list
+        # list of length T w/ each element being size batch_size x x_dim
+        return x_list, x_mu_list, x_logvar_list
 
-    # define a prior network over p(z_{t+1}|z_t)
-    def prior_network(self, batch_size, T_max):
-        z_list = []
-        z_mu_list = []
-        z_logvar_list = []
-        z_prev = self.z_0.expand(batch_size, self.z_0.size(0))
+    # define a generative_model over p(x_t|x_{t-1})
+    def generative_model(self, batch_size, T_max):
+        x_list = []
+        x_mu_list = []
+        x_logvar_list = []
+        x_prev = self.x_0.expand(batch_size, self.x_0.size(0))
 
         for t in xrange(1, T_max + 1):
-            z_mu, z_logvar = self.trans(z_prev)
-            z_t = self.reparameterize(z_mu, z_logvar)
+            x_mu, x_logvar = self.trans(x_prev)
+            x_t = self.reparameterize(x_mu, x_logvar)
 
-            z_list.append(z_t)
-            z_mu_list.append(z_mu)
-            z_logvar_list.append(z_logvar)
+            x_list.append(x_t)
+            x_mu_list.append(x_mu)
+            x_logvar_list.append(x_logvar)
 
-            z_prev = z_t
+            x_prev = x_t
 
-        return z_list, z_mu_list, z_logvar_list
+        return x_list, x_mu_list, x_logvar_list
 
     def forward(self, data):
         batch_size, T_max, _ = data.size()
-        q_z_list, q_z_mu_list, q_z_logvar_list = self.inference_network(data)
-        p_z_list, p_z_mu_list, p_z_logvar_list = self.prior_network(batch_size, T_max)
+        q_x_list, q_x_mu_list, q_x_logvar_list = self.inference_network(data)
+        p_x_list, p_x_mu_list, p_x_logvar_list = self.generative_model(batch_size, T_max)
 
         emission_probs_list = []
         for t in xrange(1, T_max + 1):
-            z_t = q_z_list[t]
-            # define a generative model p(x_{1:T}|z_{1:T})
-            emission_probs_t = self.emitter(z_t)
+            x_t = q_x_list[t]
+            # define a generative model p(y_{1:T}|x_{1:T})
+            emission_probs_t = self.emitter(x_t)
             emission_probs_list.append(emission_probs_t)
 
         output = {
-            'q_z': q_z_list,
-            'q_z_mu': q_z_mu_list,
-            'q_z_logvar': q_z_logvar_list,
-            'p_z': p_z_list,
-            'p_z_mu': p_z_mu_list,
-            'p_z_logvar': p_z_logvar_list,
+            'q_x': q_x_list,
+            'q_x_mu': q_x_mu_list,
+            'q_x_logvar': q_x_logvar_list,
+            'p_x': p_x_list,
+            'p_x_mu': p_x_mu_list,
+            'p_x_logvar': p_x_logvar_list,
             'emission_probs': emission_probs_list,
             'T_max': T_max,
         }
