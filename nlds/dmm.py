@@ -256,12 +256,12 @@ class DMM(nn.Module):
         q_x_list, q_x_mu_list, q_x_logvar_list = self.inference_network(data)
         p_x_list, p_x_mu_list, p_x_logvar_list = self.generative_model(batch_size, T_max)
 
-        emission_probs_list = []
+        y_emission_probs_list = []
         for t in xrange(1, T_max + 1):
             x_t = q_x_list[t]
             # define a generative model p(y_{1:T}|x_{1:T})
-            emission_probs_t = self.emitter(x_t)
-            emission_probs_list.append(emission_probs_t)
+            y_emission_probs_t = self.emitter(x_t)
+            y_emission_probs_list.append(y_emission_probs_t)
 
         output = {
             'q_x': q_x_list,
@@ -270,7 +270,7 @@ class DMM(nn.Module):
             'p_x': p_x_list,
             'p_x_mu': p_x_mu_list,
             'p_x_logvar': p_x_logvar_list,
-            'emission_probs': emission_probs_list,
+            'y_emission_probs': y_emission_probs_list,
             'T_max': T_max,
         }
         

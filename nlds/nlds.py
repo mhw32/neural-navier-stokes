@@ -74,7 +74,8 @@ class CategoricalCombiner(nn.Module):
 
 
 class CategoricalGatedTransition(nn.Module):
-    r"""Parameterizes the categoical latent transition probability `p(z_t | z_{t-1})`
+    r"""Parameterizes the categorical latent transition probability `p(z_t | z_{t-1}, x_{t-1})`
+    We will merely add an extra layer going from [z_dim + x_dim --> z_dim]
 
     @param categorical_dim: integer
                             number of categories
@@ -83,8 +84,9 @@ class CategoricalGatedTransition(nn.Module):
     @param transition_dim: integer
                            number of transition dimensions
     """
-    def __init__(self, categorical_dim, z_dim, transition_dim):
+    def __init__(self, categorical_dim, z_dim, x_dim, transition_dim):
         super(CategoricalGatedTransition, self).__init__()
+        self.lin_compress_x_z_to_z = nn.Linear(z_dim + x_dim, z_dim)
         self.lin_gate_z_to_hidden = nn.Linear(z_dim, transition_dim)
         self.lin_gate_hidden_to_z = nn.Linear(transition_dim, z_dim * categorical_dim)
         self.lin_proposed_mean_z_to_hidden = nn.Linear(z_dim, transition_dim)
@@ -95,7 +97,10 @@ class CategoricalGatedTransition(nn.Module):
         self.lin_z_to_loc.bias.data = torch.zeros(z_dim * categorical_dim)
         self.relu = nn.ReLU()
 
-    def forward(self, z_t_1):
+    def forward(self, z_t_1, x_t_1):
+        z_x_t_1 = torch.cat([z_t_1, x_t_1], dim=1)
+        z_t_1 = self.relu(self.lin_compress_x_z_to_z(z_x_t_1))
+
         _gate = self.relu(self.lin_gate_z_to_hidden(z_t_1))
         gate = torch.sigmoid(self.lin_gate_hidden_to_z(_gate))
         
@@ -151,7 +156,7 @@ class RSSNLDS(nn.Module):
 
         # function to get z_t = p(z_t-1)
         self.z_trans = CategoricalGatedTransition(
-            self.categorical_dim, self.z_dim, self.z_transition_dim)
+            self.categorical_dim, self.z_dim, self.x_dim, self.z_transition_dim)
 
         # function to get z_t = q(z_t-1, x_t-1)
         self.z_combiner = CategoricalCombiner(
@@ -178,19 +183,30 @@ class RSSNLDS(nn.Module):
     def reparameterize(self, logit, temperature):
         return gumbel_softmax(logit, temperature)
 
-    # define an inference network q(z_{1:T}|x_{1:T}) where T is maximum length
+    def gaussian_reparameterize(self, mu, logvar):
+        std = torch.exp(0.5*logvar)
+        eps = torch.randn_like(std)
+        return eps.mul(std).add_(mu)
+
+    # define an inference network q(z_{1:T}|f(x_{1:T})^(1:N)) where T is maximum length
+    # where f(.) is a recurrent neural network. NOTE: this is the same inference 
+    # network used in the DMM. The major difference is that each sampled z_t unlocks
+    # a different sequence x_{1:T}^(j).
     def inference_network(self, data, temperature):
         # data := y
         batch_size = data.size(0)
         T_max = data.size(1)
 
+        # save parameters of q_z here
         z_list = []
         z_logit_list = []
 
+        # save parameters of q_x here
         x_list = []
         x_mu_list = []
         x_logvar_list = []
 
+        # tmp storage
         x_list_tmp = []
         x_mu_list_tmp = []
         x_logvar_list_tmp = []
@@ -212,31 +228,14 @@ class RSSNLDS(nn.Module):
         # use gumble softmax to reparameterize
         z_prev = self.reparameterize(z_prev_logits, temperature)
 
-        t = 0
+        t = 0  # grab x at timestep 1 from system <z_prev> for each item in batch
         x_prev = []
-        x_mu_prev = []
-        x_logvar_prev =[]
-        
         for i in xrange(batch_size):
             cat = z_prev[i].item()
-
             # x_prev_i is a Gaussian latent variable
             x_prev_i = x_list_tmp[cat][t][i].unsqueeze(0)
-            x_mu_i = x_mu_list_tmp[cat][t][i].unsqueeze(0)
-            x_logvar_i = x_logvar_list_tmp[cat][t][i].unsqueeze(0)
-
             x_prev.append(x_prev_i)
-            x_mu_prev.append(x_mu_i)
-            x_logvar_prev.append(x_logvar_i)
-
         x_prev = torch.cat(x_prev, dim=0)
-        x_mu_prev = torch.cat(x_mu_prev, dim=0)
-        x_logvar_prev = torch.cat(x_logvar_prev, dim=0)
-
-        # save these for loss computation
-        x_list.append(x_prev)
-        x_mu_list.append(x_mu_prev)
-        x_logvar_list.append(x_logvar_prev)
 
         # initialize RNN
         x_rnn_hidden = self.h_0.expand(1, batch_size, self.z_rnn.hidden_size)
@@ -246,15 +245,17 @@ class RSSNLDS(nn.Module):
         for t in xrange(1, T_max + 1):
             z_logit = self.z_combiner(z_prev, x_rnn_output)
             z_t = self.reparameterize(z_logit, temperature)
-            z_prev = z_t
 
             z_list.append(z_t)
             z_logit_list.append(z_logit)
 
+            z_prev = z_t  # update for next iter
+
             # note that is overwrites existing data-structures
             x_prev = []
             x_mu_prev = []
-            x_logvar_prev =[]
+            x_logvar_prev = []
+
             for i in xrange(batch_size):
                 cat = z_prev[i].item()
                 # x_prev_i is a Gaussian latent variable
@@ -274,18 +275,50 @@ class RSSNLDS(nn.Module):
             x_mu_list.append(x_mu_prev)
             x_logvar_list.append(x_logvar_prev)
 
+            # update for next iter
             x_rnn_output, x_rnn_hidden = self.x_rnn(x_prev, x_rnn_hidden)
         
         return z_list, z_logit_list, x_list, x_mu_list, x_logvar_list
 
     # define a generative model over p(z_{t}|z_{t-1})
     def generative_model(self, batch_size, T_max, temperature):
+        # save parameters for q_z
         z_list = []
         z_logit_list = []
+
+        # save parameters for q_x
+        x_list = []
+        x_mu_list = []
+        x_logvar_list = []
+
+        # tmp storage
+        x_list_tmp = []
+        x_mu_list_tmp = []
+        x_logvar_list_tmp = []
+
+        for i in xrange(self.categorical_dim):
+            system_i = self.systems[i]
+            q_x_list_i, q_x_mu_list_i, q_x_logvar_list_i = \
+                system_i.generative_model(batch_size, T_max)
+
+            # for now, store entire lists of q's. We will choose the right ones later
+            x_list_tmp.append(q_x_list_i)
+            x_mu_list_tmp.append(q_x_mu_list_i)
+            x_logvar_list_tmp.append(q_x_logvar_list_i)
+
         z_prev = self.z_0.expand(batch_size, self.z_0.size(0))
 
+        t = 0
+        x_prev = []
+        for i in xrange(batch_size):
+            cat = z_prev[i].item()
+            # x_prev_i is a Gaussian latent variable
+            x_prev_i = x_list_tmp[cat][t][i].unsqueeze(0)
+            x_prev.append(x_prev_i)
+        x_prev = torch.cat(x_prev, dim=0)
+
         for t in xrange(1, T_max + 1):
-            z_logit = self.z_trans(z_prev)
+            z_logit = self.z_trans(z_prev, x_prev)
             z_t = self.reparameterize(z_logit, temperature)
 
             z_list.append(z_t)
@@ -293,8 +326,74 @@ class RSSNLDS(nn.Module):
 
             z_prev = z_t
 
-        return z_list, z_logit_list
-        
-    def forward(self, data):
-        batch_size, T_max, _ = data.size()
+            # note that is overwrites existing data-structures
+            x_prev = []
+            x_mu_prev = []
+            x_logvar_prev = []
 
+            for i in xrange(batch_size):
+                cat = z_prev[i].item()
+                # x_prev_i is a Gaussian latent variable
+                x_prev_i = x_list_tmp[cat][t][i].unsqueeze(0)
+                x_mu_i = x_mu_list_tmp[cat][t][i].unsqueeze(0)
+                x_logvar_i = x_logvar_list_tmp[cat][t][i].unsqueeze(0)
+                
+                x_prev.append(x_prev_i)
+                x_mu_prev.append(x_mu_i)
+                x_logvar_prev.append(x_logvar_i)
+
+            x_prev = torch.cat(x_prev, dim=0)
+            x_mu_prev = torch.cat(x_mu_prev, dim=0)
+            x_logvar_prev = torch.cat(x_logvar_prev, dim=0)
+
+            x_list.append(x_prev)
+            x_mu_list.append(x_mu_prev)
+            x_logvar_list.append(x_logvar_prev)
+
+        return z_list, z_logit_list, x_list, x_mu_list, x_logvar_list
+        
+    def forward(self, data, temperature):
+        batch_size, T_max, _ = data.size()
+        q_z_list, q_z_logit_list, q_x_list, q_x_mu_list, q_x_logvar_list = \
+            self.inference_network(data, temperature)
+        p_z_list, p_z_logit_list, p_x_list, p_x_mu_list, p_x_logvar_list = \
+            self.generative_model(batch_size, T_max, temperature)
+        
+        x_emission_mu_list, x_emission_logvar_list = [], []
+        y_emission_probs_list = []
+        
+        for t in xrange(1, T_max + 1):
+            z_t = q_z_list[t]
+            x_emission_mu_t, x_emission_logvar_t = self.x_emitter(z_t)
+            x_emission_t = self.gaussian_reparameterize(
+                x_emission_mu_t, x_emission_logvar_t)
+
+            y_emission_probs_t = []
+            for i in xrange(batch_size):
+                system_i = self.systems[z_t[i].item()]
+                y_emission_probs_t_i = system_i.emitter(x_emission_t)[i].unsqueeze(1)
+                y_emission_probs_t.append(y_emission_probs_t_i)
+            y_emission_probs_t = torch.cat(y_emission_probs_t, dim=0)
+
+            x_emission_mu_list.append(x_emission_mu_t)
+            x_emission_logvar_list.append(x_emission_logvar_t)
+            y_emission_probs_list.append(y_emission_probs_t)
+
+        output = {
+            'q_z': q_z_list,
+            'q_z_logit': q_z_logit_list,
+            'q_x': q_x_list,
+            'q_x_mu': q_x_mu_list,
+            'q_x_logvar': q_x_logvar_list,
+            'p_z': p_z_list,
+            'p_z_logit': p_z_logit_list,
+            'p_x': p_x_list,
+            'p_x_mu': p_x_mu_list,
+            'p_x_logvar': p_x_logvar_list,
+            'x_emission_mu': x_emission_mu_list,
+            'x_emission_logvar': x_emission_logvar_list,
+            'y_emission_probs': y_emission_probs_list,
+            'T_max': T_max,
+        }
+        
+        return output
