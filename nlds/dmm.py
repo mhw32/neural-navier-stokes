@@ -193,13 +193,13 @@ class DMM(nn.Module):
         # data := y
         # this is the number of time steps we need to process in the mini-batch
         batch_size = data.size(0)
-        T_max = data.size(1)
+        T = data.size(1)
         
         # flip data as RNN takes data in opposing order
         data_reversed = self.reverse_data(data)
 
         # compute sequence lengths
-        data_seq_lengths = [T_max for _ in xrange(batch_size)]
+        data_seq_lengths = [T for _ in xrange(batch_size)]
         data_seq_lengths = torch.from_numpy(data_seq_lengths).long()
         data_seq_lengths = data_seq_lengths.to(data.device)
 
@@ -214,64 +214,71 @@ class DMM(nn.Module):
         x_prev = self.x_q_0.expand(batch_size, self.x_q_0.size(0))
         
         # store all z's in here
-        x_list = []
-        x_mu_list = []
-        x_logvar_list = []
+        x_sample_T, x_mu_T, x_logvar_T = [], [], []
 
-        for t in xrange(1, T_max + 1):
+        for t in xrange(1, T + 1):
             # the next two lines assemble the distribution q(x_t|x_{t-1},y_{t:T})
             x_mu, x_logvar = self.combiner(x_prev, rnn_output[:, t - 1, :])
             x_t = self.reparameterize(x_mu, x_logvar)
-            x_list.append(x_t)
-            x_mu_list.append(x_mu)
-            x_logvar_list.append(x_logvar)
+            
+            x_sample_T.append(x_t)
+            x_mu_T.append(x_mu)
+            x_logvar_T.append(x_logvar)
+            
             # the latent sampled at this time step will be conditioned upon in the next time step
             # so keep track of it
             x_prev = x_t
 
-        # list of length T w/ each element being size batch_size x x_dim
-        return x_list, x_mu_list, x_logvar_list
+        x_sample_T = torch.stack(x_sample_T).permute(1, 0, 2)  # (batch_size, T, x_dim)
+        x_mu_T = torch.stack(x_mu_T).permute(1, 0, 2)
+        x_logvar_T = torch.stack(x_logvar_T).permute(1, 0, 2)
+
+        return x_sample_T, x_mu_T, x_logvar_T
 
     # define a generative_model over p(x_t|x_{t-1})
-    def generative_model(self, batch_size, T_max):
-        x_list = []
-        x_mu_list = []
-        x_logvar_list = []
+    def generative_model(self, batch_size, T):
+        x_sample_T, x_mu_T, x_logvar_T = [], [], []
         x_prev = self.x_0.expand(batch_size, self.x_0.size(0))
 
-        for t in xrange(1, T_max + 1):
+        for t in xrange(1, T + 1):
             x_mu, x_logvar = self.trans(x_prev)
             x_t = self.reparameterize(x_mu, x_logvar)
 
-            x_list.append(x_t)
-            x_mu_list.append(x_mu)
-            x_logvar_list.append(x_logvar)
+            x_sample_T.append(x_t)
+            x_mu_T.append(x_mu)
+            x_logvar_T.append(x_logvar)
 
             x_prev = x_t
 
-        return x_list, x_mu_list, x_logvar_list
+        x_sample_T = torch.stack(x_sample_T).permute(1, 0, 2)  # (batch_size, T, x_dim)
+        x_mu_T = torch.stack(x_mu_T).permute(1, 0, 2)
+        x_logvar_T = torch.stack(x_logvar_T).permute(1, 0, 2)
+
+        return x_sample_T, x_mu_T, x_logvar_T
 
     def forward(self, data):
-        batch_size, T_max, _ = data.size()
-        q_x_list, q_x_mu_list, q_x_logvar_list = self.inference_network(data)
-        p_x_list, p_x_mu_list, p_x_logvar_list = self.generative_model(batch_size, T_max)
+        batch_size, T, _ = data.size()
+        q_x, q_x_mu, q_x_logvar = self.inference_network(data)
+        p_x, p_x_mu, p_x_logvar = self.generative_model(batch_size, T)
 
-        y_emission_probs_list = []
-        for t in xrange(1, T_max + 1):
-            x_t = q_x_list[t]
+        y_emission_probs = []
+        for t in xrange(1, T + 1):
+            x_t = q_x[:, t]
             # define a generative model p(y_{1:T}|x_{1:T})
             y_emission_probs_t = self.emitter(x_t)
-            y_emission_probs_list.append(y_emission_probs_t)
+            y_emission_probs.append(y_emission_probs_t)
+
+        y_emission_probs = torch.stack(y_emission_probs)
+        y_emission_probs = y_emission_probs.permute(1, 0, 2)
 
         output = {
-            'q_x': q_x_list,
-            'q_x_mu': q_x_mu_list,
-            'q_x_logvar': q_x_logvar_list,
-            'p_x': p_x_list,
-            'p_x_mu': p_x_mu_list,
-            'p_x_logvar': p_x_logvar_list,
-            'y_emission_probs': y_emission_probs_list,
-            'T_max': T_max,
+            'q_x': q_x,
+            'q_x_mu': q_x_mu,
+            'q_x_logvar': q_x_logvar,
+            'p_x': p_x,
+            'p_x_mu': p_x_mu,
+            'p_x_logvar': p_x_logvar,
+            'y_emission_probs': y_emission_probs,
         }
         
         return output
