@@ -38,6 +38,7 @@ if __name__ == "__main__":
     model = model.to(device)
     
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
+    temp, temp_min, temp_anneal_rate = 1.0, 0.1, 0.00003
 
     step = 0
     best_elbo = 0
@@ -46,15 +47,18 @@ if __name__ == "__main__":
             batch_size = len(data)
             data = data.to(device)
 
-            output = model(data)
+            output = model(data, temp)
             elbo = evidence_lower_bound(data, output)
 
             optimizer.zero_grad()
             elbo.backward()
             optimizer.step()
 
-            if step % args.log_interval:
-                print('step %d: loss = %.4f' % (step, elbo.item()))
+            if step % 10 == 0:
+                print('step %d: loss = %.4f (temp = %.2f)' % (step, elbo.item(), temp))
+
+            if step % 10 == 0:
+                temp = np.maximum(temp * np.exp(-temp_anneal_rate * step), temp_min)
 
             if elbo.item() < best_elbo:
                 best_elbo = elbo.item()
