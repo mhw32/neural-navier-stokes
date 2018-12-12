@@ -150,7 +150,7 @@ class RSSNLDS(nn.Module):
         self.x_rnn_dim = x_rnn_dim
         self.y_rnn_dim = y_rnn_dim
         self.x_rnn_dropout_rate = x_rnn_dropout_rate   
-        self y_rnn_dropout_rate = y_rnn_dropout_rate   
+        self.y_rnn_dropout_rate = y_rnn_dropout_rate   
 
         # this is an RNN over the Gaussian latent dimensions in DMM
         self.x_rnns = nn.ModuleList([
@@ -188,7 +188,7 @@ class RSSNLDS(nn.Module):
         # define |categorical| nonlinear dynamic systems
         self.systems = nn.ModuleList([   
             DMM(self.y_dim, self.x_dim, self.x_emission_dim, self.x_transition_dim, 
-                self.y_rnn_dim, rnn_dropout_rate=self y_rnn_dropout_rate)
+                self.y_rnn_dim, rnn_dropout_rate=self.y_rnn_dropout_rate)
             for _ in xrange(self.categorical_dim)
         ])
 
