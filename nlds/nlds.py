@@ -135,11 +135,10 @@ class RSSNLDS(nn.Module):
     Our notation here uses <variable>2 to represent discrete states
     and <variable> to represent continuous states.
     """
-    def __init__(self, temperature, categorical_dim, z_dim, x_dim, y_dim, 
+    def __init__(self, categorical_dim, z_dim, x_dim, y_dim, 
                  z_emission_dim, x_emission_dim, z_transition_dim, x_transition_dim, 
                  x_rnn_dim, y_rnn_dim, x_rnn_dropout_rate=0.0, y_rnn_dropout_rate=0.0):
         super(RSSNLDS, self).__init__()
-        self.temperature = temperature
         self.categorical_dim = categorical_dim
         self.z_dim = z_dim
         self.x_dim = x_dim

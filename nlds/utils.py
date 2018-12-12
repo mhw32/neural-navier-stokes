@@ -54,6 +54,18 @@ def bernoulli_log_pdf(x, mu):
     return torch.sum(x * torch.log(mu) + (1. - x) * torch.log(1. - mu), dim=1)
 
 
+def categorical_log_pdf(x, logits):
+    r"""Log-likelihood of data given ~Bernoulli(mu)
+    @param x: PyTorch.Tensor
+              ground truth input
+    @param logits: PyTorch.Tensor
+               logits (pre-softmax)
+    @return log_pdf: PyTorch.Tensor
+                     log-likelihood
+    """
+    return -F.cross_entropy(logits, x.long(), reduction='none')
+
+
 def gaussian_log_pdf(x, mu, logvar):
     r"""Log-likelihood of data given ~N(mu, exp(logvar))
     log f(x) = log(1/sqrt(2*pi*var) * e^(-(x - mu)^2 / var))
