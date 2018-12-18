@@ -23,7 +23,7 @@ class BernoulliLorenz(data.Dataset):
     
     def __getitem__(self, index):
         data = self.Y[index].T  # (T, 100)
-        data = torch.from_numpy(data)
+        data = torch.from_numpy(data).float()
 
         return data
 

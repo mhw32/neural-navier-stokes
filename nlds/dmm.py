@@ -181,9 +181,10 @@ class DMM(nn.Module):
         return eps.mul(std).add_(mu)
 
     def reverse_data(self, data):
-        data_npy = data.cpu().numpy()
+        data_npy = data.cpu().detach().numpy()
         data_reversed_npy = data_npy[:, ::-1, :]
-        data_reversed = torch.from_numpy(data_reversed_npy)
+        # important to copy as pytorch does not work with negative numpy strides
+        data_reversed = torch.from_numpy(data_reversed_npy.copy())
         data_reversed = data_reversed.to(data.device)
         return data_reversed
 
@@ -200,6 +201,7 @@ class DMM(nn.Module):
 
         # compute sequence lengths
         data_seq_lengths = [T for _ in xrange(batch_size)]
+        data_seq_lengths = np.array(data_seq_lengths)
         data_seq_lengths = torch.from_numpy(data_seq_lengths).long()
         data_seq_lengths = data_seq_lengths.to(data.device)
 
@@ -208,8 +210,8 @@ class DMM(nn.Module):
         # push the observed y's through the rnn;
         # rnn_output contains the hidden state at each time step
         rnn_output, _ = self.rnn(data_reversed, h_0_contig)
-        # reverse the time-ordering in the hidden state and un-pack it
-        rnn_output = pad_and_reverse(rnn_output, data_seq_lengths)
+        # reverse the time-ordering in the hidden state
+        rnn_output = reverse_sequences_torch(rnn_output, data_seq_lengths)
         # set x_prev = x_q_0 to setup the recursive conditioning in q(x_t |...)
         x_prev = self.x_q_0.expand(batch_size, self.x_q_0.size(0))
         

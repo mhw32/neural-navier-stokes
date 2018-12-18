@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 
 from dmm import DMM
-from dmm import pad_and_reverse
+from dmm import reverse_sequences_torch
 from utils import gumbel_softmax
 
 
@@ -180,10 +180,8 @@ class RSSNLDS(nn.Module):
         self.z_q_0 = nn.Parameter(torch.zeros(self.z_dim * self.categorical_dim))
         
         # define a (trainable) parameter for the initial hidden state of each rnn
-        self.h_0s = nn.ModuleList([
-            nn.Parameter(torch.zeros(1, 1, self.x_rnn_dim))
-            for _ in xrange(self.categorical_dim)
-        ])
+        self.h_0s = nn.ParameterList([nn.Parameter(torch.zeros(1, 1, self.x_rnn_dim))
+                                      for _ in xrange(self.categorical_dim)])
 
         # define |categorical| nonlinear dynamic systems
         self.systems = nn.ModuleList([   
@@ -223,14 +221,15 @@ class RSSNLDS(nn.Module):
             q_x_reversed = system_i.reverse_data(q_x)
 
             q_x_seq_lengths = [T for _ in xrange(batch_size)]
+            q_x_seq_lengths = np.array(q_x_seq_lengths)
             q_x_seq_lengths = torch.from_numpy(q_x_seq_lengths).long()
             q_x_seq_lengths = q_x_seq_lengths.to(data.device)
 
-            h_0_contig = self.h_0.expand(
+            h_0_contig = self.h_0s[i].expand(
                 1, batch_size, self.x_rnns[i].hidden_size).contiguous()
 
             x_rnn_i_output, _ = self.x_rnns[i](q_x_reversed, h_0_contig)
-            x_rnn_i_output = pad_and_reverse(x_rnn_i_output, q_x_seq_lengths)
+            x_rnn_i_output = reverse_sequences_torch(x_rnn_i_output, q_x_seq_lengths)
 
             x_rnn_output_K.append(x_rnn_i_output)
 
