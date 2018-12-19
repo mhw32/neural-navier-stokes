@@ -33,6 +33,9 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
+    if not os.path.isdir(args.out_dir):
+        os.makedirs(args.out_dir)
+
     train_dataset = BernoulliLorenz(100, 1000, dt=0.015)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True)
 
