@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
     step = 0
     best_elbo = sys.maxint
-    for i in xrange(10):
+    for i in xrange(1000):
         for batch_idx, data in enumerate(train_loader):
             batch_size = len(data)
             data = data.to(device)
