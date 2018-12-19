@@ -41,9 +41,12 @@ def evidence_lower_bound(data, output):
         elbo_i = log_p_yt_given_xt + log_p_xt_given_zt + log_p_zt_given_zt1_xt1 - \
                     log_q_xt_given_xt1_y - log_q_zt_given_zt1_x_K
 
+
+        # print(torch.abs(torch.max(elbo_i)).item())
         elbo += elbo_i
-    
+   
     elbo = torch.mean(elbo)
     elbo = -elbo  # turn into a minimization problem
 
     return elbo
+
