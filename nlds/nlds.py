@@ -178,7 +178,7 @@ class RSSNLDS(nn.Module):
 
         # define (trainable) parameters z_0 and z_q_0 that help define
         # the probability distributions p(z_1) and q(z_1)
-        self.x_0 = self.x_0 = nn.Parameter(torch.zeros(self.x_dim))
+        self.z_0 = nn.Parameter(torch.zeros(self.z_dim * self.categorical_dim))
         self.z_q_0 = nn.Parameter(torch.zeros(self.z_dim * self.categorical_dim))
         
         # define a (trainable) parameter for the initial hidden state of each rnn
@@ -303,7 +303,7 @@ class RSSNLDS(nn.Module):
             q_x_logvar_K.append(q_x_logvar)
 
         # initialize gumbel distribution
-        z_logits = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
+        z_logits = self.z_0.expand(batch_size, self.z_0.size(0))
         # use gumble softmax to reparameterize
         z_prev = self.reparameterize(z_logits, temperature)
 
