@@ -21,6 +21,7 @@ from nlds import RSSNLDS
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument('--out-dir', type=str, default='./')
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--cuda', action='store_true', default=False,
                         help='enables CUDA training')
@@ -33,7 +34,7 @@ if __name__ == "__main__":
     np.random.seed(args.seed)
 
     train_dataset = BernoulliLorenz(100, 1000, dt=0.015)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True)
 
     model = RSSNLDS(5, 1, 10, 100, 10, 10, 20, 20, 64, 64)
     model = model.to(device)
@@ -55,7 +56,7 @@ if __name__ == "__main__":
             elbo.backward()
             optimizer.step()
 
-            print('step %d: loss = %.4f (temp = %.2f)' % (step, elbo.item(), temp))
+            print('step %d: loss = %.4f (temp = %.6f)' % (step, elbo.item(), temp))
 
             if step % 10 == 0:
                 temp = np.maximum(temp * np.exp(-temp_anneal_rate * step), temp_min)
