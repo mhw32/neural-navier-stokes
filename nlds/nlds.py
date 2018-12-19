@@ -306,8 +306,10 @@ class RSSNLDS(nn.Module):
         # build 0th x_prev element by element depending on the dynamic system
         t = 0; x_prev = []
         for i in xrange(batch_size):
-            k = z_prev[i].item()
-            x_prev_i = q_x_K[k][i, t, :]
+            z_t_i = z_prev[i].view(self.z_dim, self.categorical_dim)
+            z_t_i = z_t_i[0]  # b/c z_dim == 1 y assumption
+            z_t_i = np.where(z_t_i.cpu().detach().numpy() == 1)[0][0]
+            x_prev_i = q_x_K[z_t_i][i, t, :]
             x_prev.append(x_prev_i)
         x_prev = torch.stack(x_prev)
 
@@ -324,10 +326,12 @@ class RSSNLDS(nn.Module):
             q_x_t, q_x_mu_t, q_x_logvar_t = [], [], []
 
             for i in xrange(batch_size):
-                k = z_t[i].item()
-                q_x_t.append(q_x_K[k][i, t, :])
-                q_x_mu_t.append(q_x_mu_K[k][i, t, :])
-                q_x_logvar_t.append(q_x_logvar_K[k][i, t, :])
+                z_t_i = z_prev[i].view(self.z_dim, self.categorical_dim)
+                z_t_i = z_t_i[0]  # b/c z_dim == 1 y assumption
+                z_t_i = np.where(z_t_i.cpu().detach().numpy() == 1)[0][0]
+                q_x_t.append(q_x_K[z_t_i][i, t - 1, :])
+                q_x_mu_t.append(q_x_mu_K[z_t_i][i, t - 1, :])
+                q_x_logvar_t.append(q_x_logvar_K[z_t_i][i, t - 1, :])
 
             q_x_t = torch.stack(q_x_t)
             q_x_mu_t = torch.stack(q_x_mu_t)
@@ -353,7 +357,7 @@ class RSSNLDS(nn.Module):
         batch_size, T, _ = data.size()
         q_z, q_z_logit, q_x, q_x_mu, q_x_logvar = self.inference_network(data, temperature)
         p_z, p_z_logit, p_x, p_x_mu, p_x_logvar = self.generative_model(batch_size, T, temperature)
-        
+
         y_emission_probs = []
         x_emission_mu, x_emission_logvar = [], []
         for t in xrange(1, T + 1):
