@@ -177,7 +177,7 @@ class RSSNLDS(nn.Module):
 
         # define (trainable) parameters z_0 and z_q_0 that help define
         # the probability distributions p(z_1) and q(z_1)
-        self.z_0 = nn.Parameter(torch.zeros(self.z_dim * self.categorical_dim))
+        self.x_0 = self.x_0 = nn.Parameter(torch.zeros(self.x_dim))
         self.z_q_0 = nn.Parameter(torch.zeros(self.z_dim * self.categorical_dim))
         
         # define a (trainable) parameter for the initial hidden state of each rnn
@@ -301,17 +301,8 @@ class RSSNLDS(nn.Module):
             q_x_mu_K.append(q_x_mu)
             q_x_logvar_K.append(q_x_logvar)
 
-        z_prev = self.z_0.expand(batch_size, self.z_0.size(0))
-
-        # build 0th x_prev element by element depending on the dynamic system
-        t = 0; x_prev = []
-        for i in xrange(batch_size):
-            z_t_i = z_prev[i].view(self.z_dim, self.categorical_dim)
-            z_t_i = z_t_i[0]  # b/c z_dim == 1 y assumption
-            z_t_i = np.where(z_t_i.cpu().detach().numpy() == 1)[0][0]
-            x_prev_i = q_x_K[z_t_i][i, t, :]
-            x_prev.append(x_prev_i)
-        x_prev = torch.stack(x_prev)
+        # initialize 0th x-latent as a hyperparameter
+        x_prev = self.self.x_0.expand(batch_size, self.x_0.size(0))
 
         z_sample_T, z_logit_T = [], []
         x_sample_T, x_mu_T, x_logvar_T = [], [], []
