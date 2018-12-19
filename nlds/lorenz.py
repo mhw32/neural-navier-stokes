@@ -32,7 +32,7 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    train_dataset = BernoulliLorenz(1000, 1000, dt=0.01)
+    train_dataset = BernoulliLorenz(100, 1000, dt=0.015)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True)
 
     model = RSSNLDS(5, 1, 10, 100, 10, 10, 20, 20, 64, 64)
