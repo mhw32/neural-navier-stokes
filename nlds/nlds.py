@@ -25,16 +25,16 @@ class GaussianEmitter(nn.Module):
                          number of hidden dimensions in output 
                          neural network
     """
-    def __init__(self, x_dim, z_dim, emission_dim):
+    def __init__(self, x_dim, categorical_dim, z_dim, emission_dim):
         super(GaussianEmitter, self).__init__()
-        self.lin_z_to_hidden = nn.Linear(z_dim, emission_dim)
+        self.lin_z_to_hidden = nn.Linear(z_dim * categorical_dim, emission_dim)
         self.lin_hidden_to_hidden = nn.Linear(emission_dim, emission_dim)
         self.lin_hidden_to_mu = nn.Linear(emission_dim, x_dim)
         self.lin_hidden_to_logvar = nn.Linear(emission_dim, x_dim)
         self.relu = nn.ReLU()
 
     def forward(self, z_t):
-        h1 = self.relu(self.lin_x_to_hidden(z_t))
+        h1 = self.relu(self.lin_z_to_hidden(z_t))
         h2 = self.relu(self.lin_hidden_to_hidden(h1))
         x_mu = self.lin_hidden_to_mu(h2)
         x_logvar = self.lin_hidden_to_logvar(h2)
@@ -88,10 +88,11 @@ class CategoricalGatedTransition(nn.Module):
     """
     def __init__(self, categorical_dim, z_dim, x_dim, transition_dim):
         super(CategoricalGatedTransition, self).__init__()
-        self.lin_compress_x_z_to_z = nn.Linear(z_dim + x_dim, z_dim)
-        self.lin_gate_z_to_hidden = nn.Linear(z_dim, transition_dim)
+        self.lin_compress_x_z_to_z = nn.Linear(z_dim * categorical_dim + x_dim, 
+                                               z_dim * categorical_dim)
+        self.lin_gate_z_to_hidden = nn.Linear(z_dim * categorical_dim, transition_dim)
         self.lin_gate_hidden_to_z = nn.Linear(transition_dim, z_dim * categorical_dim)
-        self.lin_proposed_mean_z_to_hidden = nn.Linear(z_dim, transition_dim)
+        self.lin_proposed_mean_z_to_hidden = nn.Linear(z_dim * categorical_dim, transition_dim)
         self.lin_proposed_mean_hidden_to_z = nn.Linear(transition_dim, z_dim * categorical_dim)
         self.lin_z_to_loc = nn.Linear(z_dim, z_dim * categorical_dim)
         
@@ -174,7 +175,8 @@ class RSSNLDS(nn.Module):
         self.z_cat_combiner = nn.Linear(self.x_rnn_dim * self.categorical_dim, self.x_rnn_dim)
 
         # function to get x_t = p(x_t | z_t)
-        self.x_emitter = GaussianEmitter(self.x_dim, self.z_dim, self.z_emission_dim)
+        self.x_emitter = GaussianEmitter(self.x_dim, self.categorical_dim,
+                                         self.z_dim, self.z_emission_dim)
 
         # define (trainable) parameters z_0 and z_q_0 that help define
         # the probability distributions p(z_1) and q(z_1)
@@ -361,19 +363,20 @@ class RSSNLDS(nn.Module):
         batch_size, T, _ = data.size()
         q_z, q_z_logit, q_x, q_x_mu, q_x_logvar = self.inference_network(data, temperature)
         p_z, p_z_logit, p_x, p_x_mu, p_x_logvar = self.generative_model(batch_size, T, temperature)
-        import pdb; pdb.set_trace()
 
         y_emission_probs = []
         x_emission_mu, x_emission_logvar = [], []
         for t in xrange(1, T + 1):
-            z_t = q_z[:, t]
+            z_t = q_z[:, t - 1]
             x_emission_mu_t, x_emission_logvar_t = self.x_emitter(z_t)
             x_emission_t = self.gaussian_reparameterize(
                 x_emission_mu_t, x_emission_logvar_t)
 
             y_emission_probs_t = []
             for i in xrange(batch_size):
-                k = z_t[i].item()
+                k = z_t[i].view(self.z_dim, self.categorical_dim)
+                k = k[0]  # b/c z_dim == 1 y assumption
+                k = np.where(k.cpu().detach().numpy() == 1)[0][0]
                 system_i = self.systems[k]
                 y_emission_probs_t_i = system_i.emitter(x_emission_t)[i]
                 y_emission_probs_t.append(y_emission_probs_t_i)
@@ -406,5 +409,5 @@ class RSSNLDS(nn.Module):
             'x_emission_logvar': x_emission_logvar,
             'y_emission_probs': y_emission_probs,
         }
-        
+
         return output
