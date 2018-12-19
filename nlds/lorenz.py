@@ -35,7 +35,7 @@ if __name__ == "__main__":
     train_dataset = BernoulliLorenz(1000, 1000, dt=0.01)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True)
 
-    model = RSSNLDS(5, 10, 10, 100, 10, 10, 20, 20, 64, 64)
+    model = RSSNLDS(5, 1, 10, 100, 10, 10, 20, 20, 64, 64)
     model = model.to(device)
     
     optimizer = optim.Adam(model.parameters(), lr=1e-5)

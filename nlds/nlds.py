@@ -7,6 +7,7 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from dmm import DMM
 from dmm import reverse_sequences_torch
@@ -62,11 +63,11 @@ class CategoricalCombiner(nn.Module):
     """
     def __init__(self, categorical_dim, z_dim, rnn_dim):
         super(CategoricalCombiner, self).__init__()
-        self.lin_z_to_hidden = nn.Linear(z_dim, rnn_dim)
+        self.lin_z_to_hidden = nn.Linear(z_dim * categorical_dim, rnn_dim)
         self.lin_hidden_to_loc = nn.Linear(rnn_dim, z_dim * categorical_dim)
         self.tanh = nn.Tanh()
 
-    def forward(self, z_t_1, x_rnn, temperature):
+    def forward(self, z_t_1, x_rnn):
         h_combined = 0.5 * (self.tanh(self.lin_z_to_hidden(z_t_1)) + x_rnn)
         z_t_logit = self.lin_hidden_to_loc(h_combined)
         # note: logit means no gumble-softmax-reparameterization yet
@@ -191,6 +192,8 @@ class RSSNLDS(nn.Module):
         ])
 
     def reparameterize(self, logit, temperature):
+        b, n = logit.size(0), logit.size(1)
+        logit = logit.view(b, n // self.categorical_dim, self.categorical_dim)
         return gumbel_softmax(logit, temperature)
 
     def gaussian_reparameterize(self, mu, logvar):
@@ -238,7 +241,7 @@ class RSSNLDS(nn.Module):
             q_x_logvar_K.append(q_x_logvar)
 
         # reshape into (batch_size, T, x_rnn_dim * categorical_dim)
-        x_rnn_output_K = torch.cat(x_rnn_output_K, dim=3)
+        x_rnn_output_K = torch.cat(x_rnn_output_K, dim=2)
 
         # initialize categorical distribution
         z_prev_logits = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
@@ -256,10 +259,12 @@ class RSSNLDS(nn.Module):
             q_x_t, q_x_mu_t, q_x_logvar_t = [], [], []
 
             for i in xrange(batch_size):
-                z_t_i = z_t[i].item()
-                q_x_t.append(q_x_K[z_t_i][i, t, :])
-                q_x_mu_t.append(q_x_mu_K[z_t_i][i, t, :])
-                q_x_logvar_t.append(q_x_logvar_K[z_t_i][i, t, :])
+                z_t_i = z_t[i].view(self.z_dim, self.categorical_dim)
+                z_t_i = z_t_i[0]  # b/c z_dim == 1 y assumption
+                z_t_i = np.where(z_t_i.cpu().detach().numpy() == 1)[0][0]
+                q_x_t.append(q_x_K[z_t_i][i, t - 1, :])
+                q_x_mu_t.append(q_x_mu_K[z_t_i][i, t - 1, :])
+                q_x_logvar_t.append(q_x_logvar_K[z_t_i][i, t - 1, :])
 
             q_x_t = torch.stack(q_x_t)
             q_x_mu_t = torch.stack(q_x_mu_t)
