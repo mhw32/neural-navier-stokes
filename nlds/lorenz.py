@@ -55,8 +55,7 @@ if __name__ == "__main__":
             elbo.backward()
             optimizer.step()
 
-            if step % 10 == 0:
-                print('step %d: loss = %.4f (temp = %.2f)' % (step, elbo.item(), temp))
+            print('step %d: loss = %.4f (temp = %.2f)' % (step, elbo.item(), temp))
 
             if step % 10 == 0:
                 temp = np.maximum(temp * np.exp(-temp_anneal_rate * step), temp_min)

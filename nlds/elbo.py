@@ -25,17 +25,18 @@ def evidence_lower_bound(data, output):
     T = data.size(1)
 
     for t in xrange(T):
+        q_z_t = output['q_z'][:, t, :]
+        q_z_t = torch.argmax(q_z_t, dim=1)
         log_p_yt_given_xt = bernoulli_log_pdf(data[:, t, :], output['y_emission_probs'][:, t, :])
         # even though we use ST-gumbel softmax, it seems the original paper just uses Categorical KL
-        log_p_xt_given_zt = gaussian_log_pdf(output['q_x'][:, t, :], output['x_emission_mu'][:, t, :],
+        log_p_xt_given_zt = gaussian_log_pdf(output['q_x'][:, t, :], 
+                                             output['x_emission_mu'][:, t, :],
                                              output['x_emission_logvar'][:, t, :])
-        log_p_zt_given_zt1_xt1 = categorical_log_pdf(output['q_z'][:, t, :],
-                                                        output['p_z_logit'][:, t, :]) 
+        log_p_zt_given_zt1_xt1 = categorical_log_pdf(q_z_t, output['p_z_logit'][:, t, :]) 
         log_q_xt_given_xt1_y = gaussian_log_pdf(output['q_x'][:, t, :], 
                                                 output['q_x_mu'][:, t, :],
                                                 output['q_x_logvar'][:, t, :])
-        log_q_zt_given_zt1_x_K = categorical_log_pdf(output['q_z'][:, t, :],
-                                                        output['q_z_logit'][:, t, :])  
+        log_q_zt_given_zt1_x_K = categorical_log_pdf(q_z_t, output['q_z_logit'][:, t, :])  
 
         elbo_i = log_p_yt_given_xt + log_p_xt_given_zt + log_p_zt_given_zt1_xt1 - \
                     log_q_xt_given_xt1_y - log_q_zt_given_zt1_x_K
