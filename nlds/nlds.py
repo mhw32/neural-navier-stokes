@@ -140,6 +140,7 @@ class RSSNLDS(nn.Module):
                  z_emission_dim, x_emission_dim, z_transition_dim, x_transition_dim, 
                  x_rnn_dim, y_rnn_dim, x_rnn_dropout_rate=0.0, y_rnn_dropout_rate=0.0):
         super(RSSNLDS, self).__init__()
+        assert z_dim == 1, 'we do not support a categorical variable with more than 1 dimension.'
         self.categorical_dim = categorical_dim
         self.z_dim = z_dim
         self.x_dim = x_dim
@@ -243,7 +244,7 @@ class RSSNLDS(nn.Module):
         # reshape into (batch_size, T, x_rnn_dim * categorical_dim)
         x_rnn_output_K = torch.cat(x_rnn_output_K, dim=2)
 
-        # initialize categorical distribution
+        # initialize gumbel distribution
         z_prev_logits = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
         # use gumble softmax to reparameterize
         z_prev = self.reparameterize(z_prev_logits, temperature)
@@ -301,15 +302,18 @@ class RSSNLDS(nn.Module):
             q_x_mu_K.append(q_x_mu)
             q_x_logvar_K.append(q_x_logvar)
 
-        z_prev = self.z_0.expand(batch_size, self.z_0.size(0))
+        # initialize gumbel distribution
+        z_logits = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
+        # use gumble softmax to reparameterize
+        z_prev = self.reparameterize(z_logits, temperature)
 
         # build 0th x_prev element by element depending on the dynamic system
         t = 0; x_prev = []
         for i in xrange(batch_size):
-            z_t_i = z_prev[i].view(self.z_dim, self.categorical_dim)
-            z_t_i = z_t_i[0]  # b/c z_dim == 1 y assumption
-            z_t_i = np.where(z_t_i.cpu().detach().numpy() == 1)[0][0]
-            x_prev_i = q_x_K[z_t_i][i, t, :]
+            k = z_prev[i].view(self.z_dim, self.categorical_dim)
+            k = k[0]  # b/c z_dim == 1 y assumption
+            k = np.where(k.cpu().detach().numpy() == 1)[0][0]
+            x_prev_i = q_x_K[k][i, t, :]
             x_prev.append(x_prev_i)
         x_prev = torch.stack(x_prev)
 
@@ -326,12 +330,12 @@ class RSSNLDS(nn.Module):
             q_x_t, q_x_mu_t, q_x_logvar_t = [], [], []
 
             for i in xrange(batch_size):
-                z_t_i = z_prev[i].view(self.z_dim, self.categorical_dim)
-                z_t_i = z_t_i[0]  # b/c z_dim == 1 y assumption
-                z_t_i = np.where(z_t_i.cpu().detach().numpy() == 1)[0][0]
-                q_x_t.append(q_x_K[z_t_i][i, t - 1, :])
-                q_x_mu_t.append(q_x_mu_K[z_t_i][i, t - 1, :])
-                q_x_logvar_t.append(q_x_logvar_K[z_t_i][i, t - 1, :])
+                k = z_t[i].view(self.z_dim, self.categorical_dim)
+                k = k[0]  # b/c z_dim == 1 y assumption
+                k = np.where(k.cpu().detach().numpy() == 1)[0][0]
+                q_x_t.append(q_x_K[k][i, t - 1, :])
+                q_x_mu_t.append(q_x_mu_K[k][i, t - 1, :])
+                q_x_logvar_t.append(q_x_logvar_K[k][i, t - 1, :])
 
             q_x_t = torch.stack(q_x_t)
             q_x_mu_t = torch.stack(q_x_mu_t)
@@ -357,6 +361,7 @@ class RSSNLDS(nn.Module):
         batch_size, T, _ = data.size()
         q_z, q_z_logit, q_x, q_x_mu, q_x_logvar = self.inference_network(data, temperature)
         p_z, p_z_logit, p_x, p_x_mu, p_x_logvar = self.generative_model(batch_size, T, temperature)
+        import pdb; pdb.set_trace()
 
         y_emission_probs = []
         x_emission_mu, x_emission_logvar = [], []
