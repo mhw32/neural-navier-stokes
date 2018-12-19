@@ -37,7 +37,7 @@ if __name__ == "__main__":
         os.makedirs(args.out_dir)
 
     train_dataset = BernoulliLorenz(100, 1000, dt=0.015)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=25, shuffle=True)
 
     model = RSSNLDS(5, 1, 10, 100, 10, 10, 20, 20, 64, 64)
     model = model.to(device)
@@ -60,12 +60,10 @@ if __name__ == "__main__":
             optimizer.step()
 
             print('step %d: loss = %.4f (temp = %.6f)' % (step, elbo.item(), temp))
-
-            if step % 10 == 0:
-                temp = np.maximum(temp * np.exp(-temp_anneal_rate * step), temp_min)
+            temp = np.maximum(temp * np.exp(-temp_anneal_rate * step), temp_min)
 
             if elbo.item() < best_elbo:
                 best_elbo = elbo.item()
-                torch.save(model.state_dict(), './params.pt')
+                torch.save(model.state_dict(), os.path.join(args.out_dir, 'params.pt'))
 
             step += 1
