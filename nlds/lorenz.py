@@ -43,7 +43,7 @@ if __name__ == "__main__":
     temp, temp_min, temp_anneal_rate = 1.0, 0.1, 0.00003
 
     step = 0
-    best_elbo = 0
+    best_elbo = sys.maxint
     for i in xrange(10):
         for batch_idx, data in enumerate(train_loader):
             batch_size = len(data)
