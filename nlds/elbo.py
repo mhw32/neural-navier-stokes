@@ -39,10 +39,10 @@ def evidence_lower_bound(data, output):
         log_q_zt_given_zt1_x_K = categorical_log_pdf(q_z_t, output['q_z_logit'][:, t, :])  
 
         elbo_i = log_p_yt_given_xt + log_p_xt_given_zt + log_p_zt_given_zt1_xt1 - \
-                    log_q_xt_given_xt1_y - log_q_zt_given_zt1_x_K
+                 log_q_xt_given_xt1_y - log_q_zt_given_zt1_x_K
 
 
-        # print(torch.abs(torch.max(elbo_i)).item())
+        # print(torch.max(torch.abs(elbo_i)).item())
         elbo += elbo_i
    
     elbo = torch.mean(elbo)
