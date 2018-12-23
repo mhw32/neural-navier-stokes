@@ -57,7 +57,7 @@ if __name__ == "__main__":
             elbo.backward()
             optimizer.step()
 
-            if step % 10 == 0:
+            if step % 1 == 0:
                 print('step %d: loss = %.4f (temp = %.2f)' % (step, elbo.item(), temp))
 
             if step % 10 == 0:

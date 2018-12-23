@@ -33,9 +33,10 @@ class BernoulliEmitter(nn.Module):
         r"""Given the latent x at a particular time step t we return the vector of
         probabilities `ps` that parameterizes the bernoulli distribution `p(y_t|x_t)`
         """
-        h1 = self.relu(self.lin_x_to_hidden(x_t))
-        h2 = self.relu(self.lin_hidden_to_hidden(h1))
-        ps = torch.sigmoid(self.lin_hidden_to_input(h2))
+        h1 = self.lin_x_to_hidden(x_t)
+        #h2 = self.relu(self.lin_hidden_to_hidden(h1))
+        #ps = torch.sigmoid(self.lin_hidden_to_input(h2))
+        ps = torch.sigmoid(self.lin_hidden_to_input(h1))
         return ps
 
 
@@ -187,7 +188,7 @@ class LDM(nn.Module):
 
         for t in xrange(1, T + 1):
             x_mu = self.trans(x_prev) # Linear transform of previous state
-            x_logvar = torch.ones(x_mu.size()) # Set variance to 1 for now TODO
+            x_logvar = torch.ones(x_mu.size())*(-5.) # Set variance to 0 for now TODO
             x_t = self.reparameterize(x_mu, x_logvar)
 
             x_sample_T.append(x_t)

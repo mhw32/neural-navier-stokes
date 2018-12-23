@@ -49,7 +49,7 @@ class CategoricalCombiner(nn.Module):
     This is highly modeled after the Combiner in ./dmm.py
 
     z := categorical variable in NLDS
-    x := gaussian latent variable from DMM
+    x := gaussian latent variable from LDM
 
     @param categorical_dim: integer
                             number of categories
@@ -222,6 +222,7 @@ class RSLDS(nn.Module):
 
         for i in xrange(self.categorical_dim):
             system_i = self.systems[i]
+            # q_x: (batch_size, T, x_dim)
             q_x, q_x_mu, q_x_logvar = system_i.inference_network(data)
             q_x_reversed = system_i.reverse_data(q_x)
 
@@ -333,8 +334,13 @@ class RSLDS(nn.Module):
                 k = z_t[i].view(self.z_dim, self.categorical_dim)
                 k = k[0]  # b/c z_dim == 1 y assumption
                 k = np.where(k.cpu().detach().numpy() == 1)[0][0]
-                q_x_t.append(q_x_K[k][i, t-1, :])
-                q_x_mu_t.append(q_x_mu_K[k][i, t-1, :])
+                system_k = self.systems[k]
+                x_next = system_k.trans(x_prev[i,:])
+                q_x_t.append(x_next)
+                q_x_mu_t.append(x_next)
+
+                #q_x_t.append(q_x_K[k][i, t-1, :])
+                #q_x_mu_t.append(q_x_mu_K[k][i, t-1, :])
                 q_x_logvar_t.append(q_x_logvar_K[k][i, t-1, :])
 
             q_x_t = torch.stack(q_x_t)
@@ -366,10 +372,9 @@ class RSLDS(nn.Module):
         x_emission_mu, x_emission_logvar = [], []
 
         for t in xrange(1, T + 1):
-            z_t = q_z[:, t - 1]
-            x_emission_mu_t, x_emission_logvar_t = self.x_emitter(z_t)
-            x_emission_t = self.gaussian_reparameterize(
-                x_emission_mu_t, x_emission_logvar_t)
+            z_t = p_z[:, t - 1]
+            #x_emission_mu_t, x_emission_logvar_t = self.x_emitter(z_t)
+            #x_emission_t = self.gaussian_reparameterize(x_emission_mu_t, x_emission_logvar_t)
 
             y_emission_probs_t = []
             for i in xrange(batch_size):
@@ -377,12 +382,16 @@ class RSLDS(nn.Module):
                 k = k[0]  # b/c z_dim == 1 y assumption
                 k = np.where(k.cpu().detach().numpy() == 1)[0][0]
                 system_i = self.systems[k]
-                y_emission_probs_t_i = system_i.emitter(x_emission_t)[i]
+                #y_emission_probs_t_i = system_i.emitter(x_emission_t)[i]
+                y_emission_probs_t_i = system_i.emitter(p_x[i,t-1,:])
                 y_emission_probs_t.append(y_emission_probs_t_i)
             y_emission_probs_t = torch.stack(y_emission_probs_t)
 
-            x_emission_mu.append(x_emission_mu_t)
-            x_emission_logvar.append(x_emission_logvar_t)
+            x_emission_mu.append(p_x_mu[:,t-1,:])
+            x_emission_logvar.append(p_x_logvar[:,t-1,:])
+            #x_emission_mu.append(x_emission_mu_t)
+            #x_emission_logvar.append(x_emission_logvar_t)
+
             y_emission_probs.append(y_emission_probs_t)
 
         y_emission_probs = torch.stack(y_emission_probs)
