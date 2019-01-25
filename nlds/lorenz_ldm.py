@@ -1,26 +1,26 @@
+r"""Learn a (single) linear system to capture the Lorenz behavior.
+(unlikely to work!)
+"""
+
 from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
 
 import os
-import sys
 import numpy as np
-from tqdm import tqdm
 
 import torch
 import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
-from torch.optim import lr_scheduler
 
 from datasets import BernoulliLorenz
-from elbo import ldm_evidence_lower_bound
+from elbo import single_system_evidence_lower_bound
 from ldm import LDM
 from utils import AverageMeter
 
 
 if __name__ == "__main__":
-
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--out-dir', type=str, default='./')
@@ -53,7 +53,7 @@ if __name__ == "__main__":
             data = data.to(device)
 
             output = model(data)
-            elbo = ldm_evidence_lower_bound(data, output)
+            elbo = single_system_evidence_lower_bound(data, output)
             elbo_meter.update(elbo.item(), batch_size)
 
             optimizer.zero_grad()
@@ -65,6 +65,6 @@ if __name__ == "__main__":
 
             if elbo.item() < best_elbo:
                 best_elbo = elbo.item()
-                torch.save(model.state_dict(), './params.pt')
+                torch.save(model.state_dict(), os.path.join(args.out_dir, 'params.pt'))
 
             step += 1

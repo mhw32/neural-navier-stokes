@@ -15,7 +15,7 @@ from utils import (
 )
 
 
-def evidence_lower_bound(data, output):
+def many_systems_evidence_lower_bound(data, output):
     r"""Lower bound on log p(y).
 
     @param data: this is the input data
@@ -51,7 +51,7 @@ def evidence_lower_bound(data, output):
     return elbo
 
 
-def ldm_evidence_lower_bound(data, output):
+def single_system_evidence_lower_bound(data, output):
     elbo = 0
     T = data.size(1)
 

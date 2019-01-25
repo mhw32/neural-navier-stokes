@@ -1,21 +1,23 @@
+r"""Learn a (single) non-linear system to capture the Lorenz behavior.
+(should work?)
+"""
+
 from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
 
 import os
-import sys
 import numpy as np
-from tqdm import tqdm
 
 import torch
 import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
-from torch.optim import lr_scheduler
 
 from datasets import BernoulliLorenz
-from elbo import evidence_lower_bound
-from nlds import RSSNLDS
+from elbo import single_system_evidence_lower_bound
+from dmm import DMM
+from utils import AverageMeter
 
 
 if __name__ == "__main__":
@@ -33,34 +35,33 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    if not os.path.isdir(args.out_dir):
-        os.makedirs(args.out_dir)
+    train_dataset = BernoulliLorenz(100, 1000, dt=0.01)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True)
 
-    train_dataset = BernoulliLorenz(100, 1000, dt=0.015)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=25, shuffle=True)
-
-    model = RSSNLDS(2, 1, 10, 100, 10, 10, 20, 20, 64, 64)
+    model = DMM(100, 10, 100, 10, 20)
     model = model.to(device)
-    
+
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
-    temp, temp_min, temp_anneal_rate = 1.0, 0.1, 0.00003
 
     step = 0
-    best_elbo = sys.maxint
-    for i in xrange(1000):
+    best_elbo = 0
+    elbo_meter = AverageMeter()
+
+    for i in xrange(10):
         for batch_idx, data in enumerate(train_loader):
             batch_size = len(data)
             data = data.to(device)
 
-            output = model(data, temp)
-            elbo = evidence_lower_bound(data, output)
+            output = model(data)
+            elbo = single_system_evidence_lower_bound(data, output)
+            elbo_meter.update(elbo.item(), batch_size)
 
             optimizer.zero_grad()
             elbo.backward()
             optimizer.step()
 
-            print('step %d: loss = %.4f (temp = %.6f)' % (step, elbo.item(), temp))
-            temp = np.maximum(temp * np.exp(-temp_anneal_rate * step), temp_min)
+            if step % 1 == 0:
+                print('step %d: loss = %.4f' % (step, elbo_meter.avg))
 
             if elbo.item() < best_elbo:
                 best_elbo = elbo.item()
