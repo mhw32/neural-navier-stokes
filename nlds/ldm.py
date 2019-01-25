@@ -26,16 +26,13 @@ class BernoulliEmitter(nn.Module):
         self.lin_x_to_hidden = nn.Linear(x_dim, emission_dim)
         self.lin_hidden_to_hidden = nn.Linear(emission_dim, emission_dim)
         self.lin_hidden_to_input = nn.Linear(emission_dim, y_dim)
-        # initialize the two non-linearities used in the neural network
-        self.relu = nn.ReLU()
 
     def forward(self, x_t):
         r"""Given the latent x at a particular time step t we return the vector of
         probabilities `ps` that parameterizes the bernoulli distribution `p(y_t|x_t)`
         """
         h1 = self.lin_x_to_hidden(x_t)
-        #h2 = self.relu(self.lin_hidden_to_hidden(h1))
-        #ps = torch.sigmoid(self.lin_hidden_to_input(h2))
+        h2 = self.lin_hidden_to_hidden(h1)
         ps = torch.sigmoid(self.lin_hidden_to_input(h1))
         return ps
 

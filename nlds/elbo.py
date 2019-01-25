@@ -50,3 +50,23 @@ def evidence_lower_bound(data, output):
 
     return elbo
 
+
+def ldm_evidence_lower_bound(data, output):
+    elbo = 0
+    T = data.size(1)
+
+    for t in xrange(T):
+        log_p_yt_given_xt = bernoulli_log_pdf(data[:, t, :], output['y_emission_probs'][:, t, :])
+        log_q_xt_given_xt1_y = gaussian_log_pdf(output['q_x'][:, t, :], 
+                                                output['q_x_mu'][:, t, :],
+                                                output['q_x_logvar'][:, t, :])
+        log_p_xt_given_xt1 = gaussian_log_pdf(output['p_x'][:, t, :], 
+                                              output['p_x_mu'][:, t, :],
+                                              output['p_x_logvar'][:, t, :])
+        elbo_i = log_p_yt_given_xt + log_p_xt_given_xt1 - log_q_xt_given_xt1_y
+        elbo += elbo_i
+
+    elbo = torch.mean(elbo)
+    elbo = -elbo  # turn into a minimization problem
+
+    return elbo
