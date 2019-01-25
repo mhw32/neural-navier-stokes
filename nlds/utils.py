@@ -15,13 +15,14 @@ import torch.nn.functional as F
 LOG2PI = float(np.log(2.0 * math.pi))
 
 
-def sample_gumbel(shape, eps=1e-20):
-    U = torch.rand(shape).cuda()
+def sample_gumbel(device, shape, eps=1e-20):
+    U = torch.rand(shape)
+    U = U.to(device)
     return -torch.log(-torch.log(U + eps) + eps)
 
 
 def gumbel_softmax_sample(logits, temperature):
-    y = logits + sample_gumbel(logits.size())
+    y = logits + sample_gumbel(logits.device, logits.size())
     return F.softmax(y / temperature, dim=-1)
 
 

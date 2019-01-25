@@ -188,7 +188,8 @@ class LDM(nn.Module):
 
         for t in xrange(1, T + 1):
             x_mu = self.trans(x_prev) # Linear transform of previous state
-            x_logvar = torch.ones(x_mu.size())*(-5.) # Set variance to 0 for now TODO
+            x_logvar = torch.zeros(x_mu.size()) # Set variance to 0 for now TODO
+            x_logvar = x_logvar.to(x_mu.device)
             x_t = self.reparameterize(x_mu, x_logvar)
 
             x_sample_T.append(x_t)
@@ -203,32 +204,6 @@ class LDM(nn.Module):
 
         return x_sample_T, x_mu_T, x_logvar_T
 
-#    def forward(self, data):
-#        batch_size, T, _ = data.size()
-#        q_x, q_x_mu, q_x_logvar = self.inference_network(data)
-#        p_x, p_x_mu, p_x_logvar = self.generative_model(batch_size, T)
-#
-#        y_emission_probs = []
-#        for t in xrange(1, T + 1):
-#            x_t = q_x[:, t]
-#            # define a generative model p(y_{1:T}|x_{1:T})
-#            y_emission_probs_t = self.emitter(x_t)
-#            y_emission_probs.append(y_emission_probs_t)
-#
-#        y_emission_probs = torch.stack(y_emission_probs)
-#        y_emission_probs = y_emission_probs.permute(1, 0, 2)
-#
-#        output = {
-#            'q_x': q_x,
-#            'q_x_mu': q_x_mu,
-#            'q_x_logvar': q_x_logvar,
-#            'p_x': p_x,
-#            'p_x_mu': p_x_mu,
-#            'p_x_logvar': p_x_logvar,
-#            'y_emission_probs': y_emission_probs,
-#        }
-#        
-#        return output
 
 # this function takes a torch mini-batch and reverses each sequence
 # (w.r.t. the temporal axis, i.e. axis=1)
