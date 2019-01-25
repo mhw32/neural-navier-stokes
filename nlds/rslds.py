@@ -8,9 +8,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils import gumbel_softmax
+from utils import gumbel_softmax_sample, gumbel_softmax
 from ldm import LDM
 from ldm import reverse_sequences_torch
+
 
 class GaussianEmitter(nn.Module):
     r"""Parameterizes the gaussian observation likelihood `p(x_t | z_t)`
@@ -202,7 +203,7 @@ class RSLDS(nn.Module):
     def reparameterize(self, logit, temperature):
         b, n = logit.size(0), logit.size(1)
         logit = logit.view(b, n // self.categorical_dim, self.categorical_dim)
-        return gumbel_softmax(logit, temperature)
+        return gumbel_softmax_sample(logit, temperature).squeeze(1)
 
     def gaussian_reparameterize(self, mu, logvar):
         std = torch.exp(0.5*logvar)
@@ -262,8 +263,6 @@ class RSLDS(nn.Module):
 
             for i in xrange(batch_size):
                 z_t_i = z_t[i].view(self.z_dim, self.categorical_dim)
-                z_t_i = z_t_i[0]  # b/c z_dim == 1 y assumption
-                z_t_i = np.where(z_t_i.cpu().detach().numpy() == 1)[0][0]
                 q_x_t.append(q_x_K[z_t_i][i, t-1, :])
                 q_x_mu_t.append(q_x_mu_K[z_t_i][i, t-1, :])
                 q_x_logvar_t.append(q_x_logvar_K[z_t_i][i, t-1, :])
