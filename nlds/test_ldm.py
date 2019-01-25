@@ -16,6 +16,7 @@ from torch.optim import lr_scheduler
 from datasets import BernoulliLorenz
 from elbo import ldm_evidence_lower_bound
 from ldm import LDM
+from utils import AverageMeter
 
 
 if __name__ == "__main__":
@@ -44,6 +45,8 @@ if __name__ == "__main__":
 
     step = 0
     best_elbo = 0
+    elbo_meter = AverageMeter()
+
     for i in xrange(10):
         for batch_idx, data in enumerate(train_loader):
             batch_size = len(data)
@@ -51,13 +54,14 @@ if __name__ == "__main__":
 
             output = model(data)
             elbo = ldm_evidence_lower_bound(data, output)
+            elbo_meter.update(elbo.item(), batch_size)
 
             optimizer.zero_grad()
             elbo.backward()
             optimizer.step()
 
             if step % 1 == 0:
-                print('step %d: loss = %.4f (temp = %.2f)' % (step, elbo.item(), temp))
+                print('step %d: loss = %.4f' % (step, elbo_meter.avg))
 
             if elbo.item() < best_elbo:
                 best_elbo = elbo.item()
