@@ -265,7 +265,7 @@ class DMM(nn.Module):
 
         y_emission_probs = []
         for t in xrange(1, T + 1):
-            x_t = q_x[:, t]
+            x_t = q_x[:, t - 1]
             # define a generative model p(y_{1:T}|x_{1:T})
             y_emission_probs_t = self.emitter(x_t)
             y_emission_probs.append(y_emission_probs_t)

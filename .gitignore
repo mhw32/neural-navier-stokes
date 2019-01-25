@@ -104,3 +104,4 @@ venv.bak/
 .mypy_cache/
 notebooks/
 nlds/data/
+**params.pt
