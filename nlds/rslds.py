@@ -424,7 +424,7 @@ class RSLDS(nn.Module):
             y_emission_probs_t = torch.stack(y_emission_probs_t)
 
             x_emission_mu.append(x_emission_mu_t)
-            x_emission_logvar.append(px_emission_logvar_t)
+            x_emission_logvar.append(x_emission_logvar_t)
             y_emission_probs.append(y_emission_probs_t)
 
         y_emission_probs = torch.stack(y_emission_probs)
