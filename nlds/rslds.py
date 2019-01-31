@@ -330,11 +330,15 @@ class RSLDS(nn.Module):
         # build 0th x_prev element by element depending on the dynamic system
         t = 0; x_prev = []
         for i in xrange(batch_size):
-            k = z_prev[i].view(self.z_dim, self.categorical_dim)
-            k = k[0]  # b/c z_dim == 1 y assumption
-            k = np.where(k.cpu().detach().numpy() == 1)[0][0]
-            x_prev_i = q_x_K[k][i, t, :]
+            weights_ti = z_prev[i]
+            samples_ti = [q_x_K[j][i, t, :] for j in xrange(self.categorical_dim)]
+            means_ti = [q_x_mu_K[j][i, t, :] for j in xrange(self.categorical_dim)]
+            logvars_ti = [q_x_logvar_K[j][i, t, :] for j in xrange(self.categorical_dim)]
+            samples_mix_ti, _, _ = self.build_gaussian_mixture(
+                weights_ti, samples_ti, means_ti, logvars_ti)
+            x_prev_i = samples_mix_ti
             x_prev.append(x_prev_i)
+
         x_prev = torch.stack(x_prev)
 
         z_sample_T, z_logit_T = [], []
@@ -350,14 +354,15 @@ class RSLDS(nn.Module):
             q_x_t, q_x_mu_t, q_x_logvar_t = [], [], []
 
             for i in xrange(batch_size):
-                k = z_t[i].view(self.z_dim, self.categorical_dim)
-                k = k[0]  # b/c z_dim == 1 y assumption
-                k = np.where(k.cpu().detach().numpy() == 1)[0][0]
-                system_k = self.systems[k]
-                x_next = system_k.trans(x_prev[i,:])
-                q_x_t.append(x_next)
-                q_x_mu_t.append(x_next)
-                q_x_logvar_t.append(q_x_logvar_K[k][i, t-1, :])
+                weights_ti = z_t[i]
+                samples_ti = [q_x_K[j][i, t - 1, :] for j in xrange(self.categorical_dim)]
+                means_ti = [q_x_mu_K[j][i, t - 1, :] for j in xrange(self.categorical_dim)]
+                logvars_ti = [q_x_logvar_K[j][i, t - 1, :] for j in xrange(self.categorical_dim)]
+                samples_mix_ti, means_mix_ti, logvars_mix_ti = self.build_gaussian_mixture(
+                    weights_ti, samples_ti, means_ti, logvars_ti)
+                q_x_t.append(samples_mix_ti)
+                q_x_mu_t.append(means_mix_ti)
+                q_x_logvar_t.append(logvars_mix_ti)
 
             q_x_t = torch.stack(q_x_t)
             q_x_mu_t = torch.stack(q_x_mu_t)
@@ -392,11 +397,12 @@ class RSLDS(nn.Module):
             y_emission_probs_t = []
             
             for i in xrange(batch_size):
-                k = z_t[i].view(self.z_dim, self.categorical_dim)
-                k = k[0]  # b/c z_dim == 1 y assumption
-                k = np.where(k.cpu().detach().numpy() == 1)[0][0]
-                system_i = self.systems[k]
-                y_emission_probs_t_i = system_i.emitter(p_x[i,t-1,:])
+                weights_ti = z_t[i]
+                y_emission_probs_t_i = 0
+                
+                for j in xrange(self.categorical_dim):
+                    y_emission_probs_t_i += (weights_ti[j] * self.systems[j].emitter(p_x[i,t-1,:])
+
                 y_emission_probs_t.append(y_emission_probs_t_i)
             y_emission_probs_t = torch.stack(y_emission_probs_t)
 
