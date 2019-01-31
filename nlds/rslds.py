@@ -327,24 +327,36 @@ class RSLDS(nn.Module):
         # use gumble softmax to reparameterize
         z_prev = self.reparameterize(z_logits, temperature)
 
+        z_sample_T, z_logit_T = [], []
+        x_sample_T, x_mu_T, x_logvar_T = [], [], []
+
+        z_sample_T.append(z_prev)
+        z_logit_T.append(z_logits)
+
         # build 0th x_prev element by element depending on the dynamic system
-        t = 0; x_prev = []
+        t = 0; q_x_t, q_x_mu_t, q_x_logvar_t = [], [], []
         for i in xrange(batch_size):
             weights_ti = z_prev[i]
             samples_ti = [q_x_K[j][i, t, :] for j in xrange(self.categorical_dim)]
             means_ti = [q_x_mu_K[j][i, t, :] for j in xrange(self.categorical_dim)]
             logvars_ti = [q_x_logvar_K[j][i, t, :] for j in xrange(self.categorical_dim)]
-            samples_mix_ti, _, _ = self.build_gaussian_mixture(
+            samples_mix_ti, means_mix_ti, logvars_mix_ti = self.build_gaussian_mixture(
                 weights_ti, samples_ti, means_ti, logvars_ti)
-            x_prev_i = samples_mix_ti
-            x_prev.append(x_prev_i)
+            q_x_t.append(samples_mix_ti)
+            q_x_mu_t.append(means_mix_ti)
+            q_x_logvar_t.append(logvars_mix_ti)
 
-        x_prev = torch.stack(x_prev)
+        q_x_t = torch.stack(q_x_t)
+        q_x_mu_t = torch.stack(q_x_mu_t)
+        q_x_logvar_t = torch.stack(q_x_logvar_t)
 
-        z_sample_T, z_logit_T = [], []
-        x_sample_T, x_mu_T, x_logvar_T = [], [], []
+        x_sample_T.append(q_x_t)
+        x_mu_T.append(q_x_mu_t)
+        x_logvar_T.append(q_x_logvar_t)
 
-        for t in xrange(1, T + 1):
+        x_prev = q_x_t
+
+        for t in xrange(1, T):
             z_logit = self.z_trans(z_prev, x_prev)
             z_t = self.reparameterize(z_logit, temperature)
 
