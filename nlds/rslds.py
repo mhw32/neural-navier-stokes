@@ -210,6 +210,21 @@ class RSLDS(nn.Module):
         eps = torch.randn_like(std)
         return eps.mul(std).add_(mu)
 
+    def build_gaussian_mixture(self, weights, samples, means, logvars):
+        assert len(samples) == len(means)
+        assert len(means) == len(logvars)
+        K = len(samples)
+        mixture_samples = 0
+        mixture_mean = 0
+        mixture_var = 0
+        for i in xrange(K):
+            mixture_samples += (weights[i] * samples[i])
+            mixture_mean += (weights[i] * means[i])
+            mixture_var += (weights[i]**2 * torch.exp(logvars[i])**2)
+        mixture_logvar = torch.log(mixture_var)
+        
+        return mixture_samples, mixture_mean, mixture_logvar
+
     def inference_network(self, data, temperature):
         # data := y (batch_size, time_steps, dimension)
         batch_size = data.size(0)
@@ -262,10 +277,15 @@ class RSLDS(nn.Module):
             q_x_t, q_x_mu_t, q_x_logvar_t = [], [], []
 
             for i in xrange(batch_size):
-                z_t_i = z_t[i].view(self.z_dim, self.categorical_dim)
-                q_x_t.append(q_x_K[z_t_i][i, t-1, :])
-                q_x_mu_t.append(q_x_mu_K[z_t_i][i, t-1, :])
-                q_x_logvar_t.append(q_x_logvar_K[z_t_i][i, t-1, :])
+                weights_ti = z_t[i]
+                samples_ti = [q_x_K[j][i, t-1, :] for j in xrange(self.categorical_dim)]
+                means_ti = [q_x_mu_K[j][i, t-1, :] for j in xrange(self.categorical_dim)]
+                logvars_ti = [q_x_logvar_K[j][i, t-1, :] for j in xrange(self.categorical_dim)]
+                samples_mix_ti, means_mix_ti, logvars_mix_ti = self.build_gaussian_mixture(
+                    weights_ti, samples_ti, means_ti, logvars_ti)
+                q_x_t.append(samples_mix_ti)
+                q_x_mu_t.append(means_mix_ti)
+                q_x_logvar_t.append(logvars_mix_ti)
 
             q_x_t = torch.stack(q_x_t)
             q_x_mu_t = torch.stack(q_x_mu_t)
