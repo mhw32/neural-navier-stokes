@@ -401,7 +401,7 @@ class RSLDS(nn.Module):
                 y_emission_probs_t_i = 0
                 
                 for j in xrange(self.categorical_dim):
-                    y_emission_probs_t_i += (weights_ti[j] * self.systems[j].emitter(p_x[i,t-1,:])
+                    y_emission_probs_t_i += (weights_ti[j] * self.systems[j].emitter(p_x[i,t-1,:]))
 
                 y_emission_probs_t.append(y_emission_probs_t_i)
             y_emission_probs_t = torch.stack(y_emission_probs_t)
