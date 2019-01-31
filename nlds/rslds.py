@@ -94,7 +94,7 @@ class CategoricalGatedTransition(nn.Module):
         z_t_1 = self.lin_compress_x_z_to_z(z_x_t_1)
         _proposed_mean = self.lin_proposed_mean_z_to_hidden(z_t_1)
         proposed_mean = self.lin_proposed_mean_hidden_to_z(_proposed_mean)
-        z_t_logit = s proposed_mean
+        z_t_logit = proposed_mean
         # note: logit means no gumble-softmax-reparameterization yet
 
         return z_t_logit
