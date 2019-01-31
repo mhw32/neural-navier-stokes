@@ -37,7 +37,8 @@ class GaussianEmitter(nn.Module):
         h2 = self.relu(self.lin_hidden_to_hidden(h1))
         x_mu = self.lin_hidden_to_mu(h2)
         x_logvar = self.lin_hidden_to_logvar(h2)
-        
+        x_logvar = torch.tanh(x_logvar)  # HACK
+
         return x_mu, x_logvar
 
 
@@ -222,7 +223,7 @@ class RSLDS(nn.Module):
             mixture_mean += (weights[i] * means[i])
             mixture_var += (weights[i]**2 * torch.exp(logvars[i])**2)
         mixture_logvar = torch.log(mixture_var)
-        
+     
         return mixture_samples, mixture_mean, mixture_logvar
 
     def inference_network(self, data, temperature):

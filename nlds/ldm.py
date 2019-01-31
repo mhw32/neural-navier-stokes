@@ -70,6 +70,7 @@ class GaussianCombiner(nn.Module):
         x_t_mu = self.lin_hidden_to_mu(h_combined)
         # use the combined hidden state to compute the scale used to sample z_t
         x_t_logvar = self.lin_hidden_to_logvar(h_combined)
+        x_t_logvar = torch.tanh(x_t_logvar)  # HACK
         # return parameters of normal distribution
         return x_t_mu, x_t_logvar
 
