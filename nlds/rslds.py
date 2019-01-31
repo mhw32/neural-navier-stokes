@@ -368,9 +368,9 @@ class RSLDS(nn.Module):
 
             for i in xrange(batch_size):
                 weights_ti = z_t[i]
-                samples_ti = [q_x_K[j][i, t - 1, :] for j in xrange(self.categorical_dim)]
-                means_ti = [q_x_mu_K[j][i, t - 1, :] for j in xrange(self.categorical_dim)]
-                logvars_ti = [q_x_logvar_K[j][i, t - 1, :] for j in xrange(self.categorical_dim)]
+                samples_ti = [q_x_K[j][i, t, :] for j in xrange(self.categorical_dim)]
+                means_ti = [q_x_mu_K[j][i, t, :] for j in xrange(self.categorical_dim)]
+                logvars_ti = [q_x_logvar_K[j][i, t, :] for j in xrange(self.categorical_dim)]
                 samples_mix_ti, means_mix_ti, logvars_mix_ti = self.build_gaussian_mixture(
                     weights_ti, samples_ti, means_ti, logvars_ti)
                 q_x_t.append(samples_mix_ti)
@@ -406,7 +406,11 @@ class RSLDS(nn.Module):
         x_emission_mu, x_emission_logvar = [], []
 
         for t in xrange(1, T + 1):
-            z_t = p_z[:, t - 1]
+            z_t = q_z[:, t - 1]
+            x_emission_mu_t, x_emission_logvar_t = self.x_emitter(z_t)
+            x_emission_t = self.gaussian_reparameterize(
+                x_emission_mu_t, x_emission_logvar_t)
+            
             y_emission_probs_t = []
             
             for i in xrange(batch_size):
@@ -414,13 +418,13 @@ class RSLDS(nn.Module):
                 y_emission_probs_t_i = 0
                 
                 for j in xrange(self.categorical_dim):
-                    y_emission_probs_t_i += (weights_ti[j] * self.systems[j].emitter(p_x[i,t-1,:]))
+                    y_emission_probs_t_i += (weights_ti[j] * self.systems[j].emitter(x_emission_t)[i])
 
                 y_emission_probs_t.append(y_emission_probs_t_i)
             y_emission_probs_t = torch.stack(y_emission_probs_t)
 
-            x_emission_mu.append(p_x_mu[:,t-1,:])
-            x_emission_logvar.append(p_x_logvar[:,t-1,:])
+            x_emission_mu.append(x_emission_mu_t)
+            x_emission_logvar.append(px_emission_logvar_t)
             y_emission_probs.append(y_emission_probs_t)
 
         y_emission_probs = torch.stack(y_emission_probs)
