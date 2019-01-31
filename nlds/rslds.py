@@ -30,11 +30,10 @@ class GaussianEmitter(nn.Module):
         self.lin_hidden_to_hidden = nn.Linear(emission_dim, emission_dim)
         self.lin_hidden_to_mu = nn.Linear(emission_dim, x_dim)
         self.lin_hidden_to_logvar = nn.Linear(emission_dim, x_dim)
-        self.relu = nn.ReLU()
 
     def forward(self, z_t):
-        h1 = self.relu(self.lin_z_to_hidden(z_t))
-        h2 = self.relu(self.lin_hidden_to_hidden(h1))
+        h1 = self.lin_z_to_hidden(z_t)
+        h2 = self.lin_hidden_to_hidden(h1)
         x_mu = self.lin_hidden_to_mu(h2)
         x_logvar = self.lin_hidden_to_logvar(h2)
         x_logvar = torch.tanh(x_logvar)  # HACK
@@ -65,10 +64,9 @@ class CategoricalCombiner(nn.Module):
         super(CategoricalCombiner, self).__init__()
         self.lin_z_to_hidden = nn.Linear(z_dim * categorical_dim, rnn_dim)
         self.lin_hidden_to_loc = nn.Linear(rnn_dim, z_dim * categorical_dim)
-        self.tanh = nn.Tanh()
 
     def forward(self, z_t_1, x_rnn):
-        h_combined = 0.5 * (self.tanh(self.lin_z_to_hidden(z_t_1)) + x_rnn)
+        h_combined = self.lin_z_to_hidden(z_t_1) + x_rnn
         z_t_logit = self.lin_hidden_to_loc(h_combined)
 
         return z_t_logit
@@ -88,27 +86,15 @@ class CategoricalGatedTransition(nn.Module):
     def __init__(self, categorical_dim, z_dim, x_dim, transition_dim):
         super(CategoricalGatedTransition, self).__init__()
         self.lin_compress_x_z_to_z = nn.Linear(z_dim * categorical_dim + x_dim, z_dim * categorical_dim)
-        self.lin_gate_z_to_hidden = nn.Linear(z_dim * categorical_dim, transition_dim)
-        self.lin_gate_hidden_to_z = nn.Linear(transition_dim, z_dim * categorical_dim)
         self.lin_proposed_mean_z_to_hidden = nn.Linear(z_dim * categorical_dim, transition_dim)
         self.lin_proposed_mean_hidden_to_z = nn.Linear(transition_dim, z_dim * categorical_dim)
-        self.lin_z_to_loc = nn.Linear(z_dim, z_dim * categorical_dim)
-
-        self.lin_z_to_loc.weight.data = torch.eye(z_dim * categorical_dim)
-        self.lin_z_to_loc.bias.data = torch.zeros(z_dim * categorical_dim)
-        self.relu = nn.ReLU()
 
     def forward(self, z_t_1, x_t_1):
         z_x_t_1 = torch.cat([z_t_1, x_t_1], dim=1)
-        z_t_1 = self.relu(self.lin_compress_x_z_to_z(z_x_t_1))
-
-        _gate = self.relu(self.lin_gate_z_to_hidden(z_t_1))
-        gate = torch.sigmoid(self.lin_gate_hidden_to_z(_gate))
-
-        _proposed_mean = self.relu(self.lin_proposed_mean_z_to_hidden(z_t_1))
+        z_t_1 = self.lin_compress_x_z_to_z(z_x_t_1)
+        _proposed_mean = self.lin_proposed_mean_z_to_hidden(z_t_1)
         proposed_mean = self.lin_proposed_mean_hidden_to_z(_proposed_mean)
-
-        z_t_logit = (1 - gate) * self.lin_z_to_loc(z_t_1) + gate * proposed_mean
+        z_t_logit = s proposed_mean
         # note: logit means no gumble-softmax-reparameterization yet
 
         return z_t_logit
@@ -271,7 +257,7 @@ class RSLDS(nn.Module):
         x_sample_T, x_mu_T, x_logvar_T = [], [], []
         
         for t in xrange(1, T + 1):
-            x_rnn_output = F.relu(self.z_cat_combiner(x_rnn_output_K[:, t - 1, :]))
+            x_rnn_output = self.z_cat_combiner(x_rnn_output_K[:, t - 1, :])
             z_logit = self.z_combiner(z_prev, x_rnn_output)
             z_t = self.reparameterize(z_logit, temperature)
 
