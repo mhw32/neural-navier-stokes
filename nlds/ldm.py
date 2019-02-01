@@ -33,6 +33,7 @@ class BernoulliEmitter(nn.Module):
         """
         h1 = self.lin_x_to_hidden(x_t)
         h2 = self.lin_hidden_to_hidden(h1)
+        # this is fully linear besides sigmoid
         ps = torch.sigmoid(self.lin_hidden_to_input(h1))
         return ps
 
@@ -56,8 +57,7 @@ class GaussianCombiner(nn.Module):
         self.lin_x_to_hidden = nn.Linear(x_dim, rnn_dim)
         self.lin_hidden_to_mu = nn.Linear(rnn_dim, x_dim)
         self.lin_hidden_to_logvar = nn.Linear(rnn_dim, x_dim)
-        # initialize the two non-linearities used in the neural network
-        self.tanh = nn.Tanh()
+        # fully linear!
 
     def forward(self, x_t_1, h_rnn):
         r"""Given the latent x at at a particular time step t-1 as well as the hidden
@@ -65,11 +65,12 @@ class GaussianCombiner(nn.Module):
         parameterize the (diagonal) gaussian distribution `q(x_t | x_{t-1}, y_{t:T})`
         """
         # combine the rnn hidden state with a transformed version of z_t_1
-        h_combined = 0.5 * (self.tanh(self.lin_x_to_hidden(x_t_1)) + h_rnn)
+        h_combined = self.lin_x_to_hidden(x_t_1) + h_rnn
         # use the combined hidden state to compute the mean used to sample z_t
         x_t_mu = self.lin_hidden_to_mu(h_combined)
         # use the combined hidden state to compute the scale used to sample z_t
         x_t_logvar = self.lin_hidden_to_logvar(h_combined)
+        x_t_logvar = torch.tanh(x_t_logvar)  # HACK
         # return parameters of normal distribution
         return x_t_mu, x_t_logvar
 

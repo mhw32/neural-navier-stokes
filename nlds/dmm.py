@@ -89,6 +89,7 @@ class GaussianGatedTransition(nn.Module):
         # compute the scale used to sample x_t, using the proposed mean from
         # above as input the softplus ensures that scale is positive
         x_t_logvar = self.lin_x_to_logvar(self.relu(proposed_mean))
+        x_t_logvar = torch.tanh(x_t_logvar)  # HACK
         # return parameters of normal distribution
         return x_t_mu, x_t_logvar
 
@@ -126,6 +127,7 @@ class GaussianCombiner(nn.Module):
         x_t_mu = self.lin_hidden_to_mu(h_combined)
         # use the combined hidden state to compute the scale used to sample z_t
         x_t_logvar = self.lin_hidden_to_logvar(h_combined)
+        x_t_logvar = torch.tanh(x_t_logvar)  # HACK
         # return parameters of normal distribution
         return x_t_mu, x_t_logvar
 
