@@ -212,6 +212,7 @@ class RSLDS(nn.Module):
      
         return mixture_samples, mixture_mean, mixture_logvar
 
+    # q(z_t | z_{t-1}, x_1, ... x_K)
     def inference_network(self, data, temperature):
         # data := y (batch_size, time_steps, dimension)
         batch_size = data.size(0)
@@ -296,7 +297,7 @@ class RSLDS(nn.Module):
         
         return z_sample_T, z_logit_T, x_sample_T, x_mu_T, x_logvar_T
 
-    # Define a generative model over p(z_{t} | z_{t-1})
+    # Define a generative model over p(z_{t} | z_{t-1}, x_{t-1})
     def generative_model(self, batch_size, T, temperature):
         # shape: list of length K; each element is (batch_size, T, x_dim)
         q_x_K, q_x_mu_K, q_x_logvar_K = [], [], []
