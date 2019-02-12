@@ -17,6 +17,7 @@ from datasets import BernoulliLorenz
 from elbo import many_systems_evidence_lower_bound
 from rslds import RSLDS
 
+from plot_latent_space import plot_inference, plot_generator
 
 if __name__ == "__main__":
 
@@ -34,10 +35,14 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    train_dataset = BernoulliLorenz(100, 1000, dt=0.01)
+    num_timesteps = 1000
+    train_dataset = BernoulliLorenz(100, num_timesteps, dt=0.01)
+    test_dataset = BernoulliLorenz(1, num_timesteps, dt=0.01)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False)
 
-    model = RSLDS(2, 1, 10, 100, 10, 10, 1, 20, 20)
+    #model = RSLDS(2, 1, 10, 100, 10, 10, 1, 20, 20)
+    model = RSLDS(2, 1, 3, 100, 10, 3, 1, 20, 20)
     model = model.to(device)
     
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
@@ -62,6 +67,11 @@ if __name__ == "__main__":
 
             if step % 10 == 0:
                 temp = np.maximum(temp * np.exp(-temp_anneal_rate * step), temp_min)
+
+                for _, test_data in enumerate(test_loader):
+                    test_data = test_data.to(device)
+                    plot_inference(model, test_data, temp, step)
+                    plot_generator(model, num_timesteps, temp, step)
 
             if elbo.item() < best_elbo:
                 best_elbo = elbo.item()
