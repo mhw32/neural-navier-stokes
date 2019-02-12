@@ -75,6 +75,7 @@ if __name__ == "__main__":
 
             if elbo.item() < best_elbo:
                 best_elbo = elbo.item()
-                torch.save(model.state_dict(), './params.pt')
+                torch.save(model.state_dict(), os.path.join(args.out_dir, 'params.pt'))
 
             step += 1
+
