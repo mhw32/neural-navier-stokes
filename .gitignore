@@ -105,3 +105,8 @@ venv.bak/
 notebooks/
 nlds/data/
 **params.pt
+
+# Output dump
+outs/
+plots/
+plots_nl/

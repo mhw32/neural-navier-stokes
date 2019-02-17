@@ -238,7 +238,7 @@ def reverse_sequences_torch(mini_batch, seq_lengths):
     reversed_mini_batch = mini_batch.new_zeros(mini_batch.size())
     for b in range(mini_batch.size(0)):
         T = seq_lengths[b]
-        time_slice = np.arange(T - 1, -1, -1)
+        time_slice = torch.arange(T - 1, -1, -1, device=T.device)
         time_slice = torch.cuda.LongTensor(time_slice) if 'cuda' in mini_batch.data.type() \
             else torch.LongTensor(time_slice)
         reversed_sequence = torch.index_select(mini_batch[b, :, :], 0, time_slice)
