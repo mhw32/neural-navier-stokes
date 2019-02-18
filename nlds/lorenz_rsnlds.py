@@ -59,9 +59,9 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=1e-5)
     temp, temp_min, temp_anneal_rate = 1.0, 0.1, 0.00003
 
-    step = 0
     best_elbo = sys.maxint
     for i in xrange(5000):
+        step = 0
         for batch_idx, data in enumerate(train_loader):
             batch_size = len(data)
             data = data.to(device)
@@ -73,17 +73,17 @@ if __name__ == "__main__":
             elbo.backward()
             optimizer.step()
 
-            print('step %d: loss = %.4f (temp = %.6f)' % (step, elbo.item(), temp))
+            print('epoch: %d step %d: loss = %.4f (temp = %.6f)' % (i+1, step+1, elbo.item(), temp))
             temp = np.maximum(temp * np.exp(-temp_anneal_rate * step), temp_min)
 
-            for _, test_data in enumerate(test_loader):
-                test_data = test_data.to(device)
-                plot_inference(model, test_data, temp, step, args.plot_dir)
-                plot_generator(model, test_num_timesteps, temp, step, args.plot_dir)
+#            for _, test_data in enumerate(test_loader):
+#                test_data = test_data.to(device)
+#                plot_inference(model, test_data, temp, step, args.plot_dir)
+#                plot_generator(model, test_num_timesteps, temp, step, args.plot_dir)
 
             if elbo.item() < best_elbo:
                 best_elbo = elbo.item()
-                torch.save(model.state_dict(), os.path.join(args.out_dir, 'epoch_{}_params.pth'.format(i+1)))
+                torch.save(model.state_dict(), os.path.join(args.out_dir, 'epoch_{}_step_{}_params.pth'.format(i+1, step+1)))
 
             step += 1
 

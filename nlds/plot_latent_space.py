@@ -4,18 +4,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-def plot_generator(model, T, temp, iteration_num, save_dir):
+def plot_generator(model, T, temp, fname, save_dir):
     z_sample, p_z_logit, x_sample, p_x_mu, p_x_logvar = model.generative_model(1, T, temp)
 
-    fname = save_dir + "/generative_iteration_{}.png".format(iteration_num)
+    fname = save_dir + '/' + fname
     x_sample = np.squeeze(x_sample.detach().cpu().numpy())
     z_sample = np.squeeze(z_sample.detach().cpu().numpy())
     plot_latent_space(x_sample, z_sample, fname=fname)
 
-def plot_inference(model, data, temp, iteration_num, save_dir):
+def plot_inference(model, data, temp, fname, save_dir):
     z_sample, z_logit, x_sample, x_mu, x_logvar = model.inference_network(data, temp)
 
-    fname = save_dir + "/inference_iteration_{}.png".format(iteration_num)
+    fname = save_dir + '/' + fname
     x_sample = np.squeeze(x_sample.detach().cpu().numpy())
     z_sample = np.squeeze(z_sample.detach().cpu().numpy())
     plot_latent_space(x_sample, z_sample, fname=fname)
