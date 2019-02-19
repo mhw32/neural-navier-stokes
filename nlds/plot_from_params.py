@@ -7,7 +7,7 @@ from datasets import BernoulliLorenz
 from plot_latent_space import plot_inference, plot_generator
 
 
-def main(params_path, model, epoch, plot_dir):
+def main(params_path, model, epoch, model_type, plot_dir):
     params = torch.load(params_path)
     model.load_state_dict(params)
     model.eval()
@@ -19,11 +19,11 @@ def main(params_path, model, epoch, plot_dir):
     # Plot inference network
     for _, test_data in enumerate(test_loader):
         test_data = test_data.to(device)
-        fname = "epoch_{}_inference.png".format(epoch)
+        fname = "epoch_{}_inference_{}.png".format(epoch, model_type)
         plot_inference(model, test_data, 0.1, fname, plot_dir)
 
     # Plot generator network
-    fname = "epoch_{}_generative.png".format(epoch)
+    fname = "epoch_{}_generative_{}.png".format(epoch, model_type)
     plot_generator(model, 2000, 0.1, fname, plot_dir)
 
 
@@ -53,6 +53,6 @@ if __name__ == "__main__":
         model = RSSNLDS(2, 1, 3, 100, 10, 10, 20, 20, 64, 64)
         model = model.to(device)
 
-    main(path_to_params, model, args.epoch, args.plot_dir)
+    main(path_to_params, model, args.epoch, args.model, args.plot_dir)
 
 

@@ -28,10 +28,16 @@ def plot_latent_space(x, z, fname=None):
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
+    colours = list()
     for i in range(timesteps):
         # RGB
-        c = (1.*z[i,0],0.,1.*z[i,1])
-        ax.scatter(x[i,0], x[i,1], x[i,2], color=c)
+        #c = (1.*z[i,0],0.,1.*z[i,1])
+        c=plt.cm.jet(z[i,0])
+        colours.append(c)
+
+    colours = np.array(colours)
+    ax.scatter(x[:,0], x[:,1], x[:,2], color=colours)
+    #ax.plot(x[:,0], x[:,1], x[:,2])
 
     if fname is not None:
         plt.savefig(fname)
