@@ -139,7 +139,7 @@ class RSLDS(nn.Module):
                 num_layers = 1,
                 dropout = self.x_rnn_dropout_rate
             )
-            for _ in xrange(self.categorical_dim)
+            for _ in range(self.categorical_dim)
         ])
 
         # Parameterize p(z_t | z_{t-1}, x_{t-1})
@@ -171,7 +171,7 @@ class RSLDS(nn.Module):
 
         # Define a (trainable) parameter for the initial hidden state of each RNN
         self.h_0s = nn.ParameterList([
-            nn.Parameter(torch.zeros(1, 1, self.x_rnn_dim)) for _ in xrange(self.categorical_dim)
+            nn.Parameter(torch.zeros(1, 1, self.x_rnn_dim)) for _ in range(self.categorical_dim)
         ])
 
         # Define linear dynamical systems for each state
@@ -184,7 +184,7 @@ class RSLDS(nn.Module):
                 self.y_rnn_dim,
                 rnn_dropout_rate=self.y_rnn_dropout_rate
             )
-            for _ in xrange(self.categorical_dim)
+            for _ in range(self.categorical_dim)
         ])
 
     def reparameterize(self, logit, temperature):
@@ -204,7 +204,7 @@ class RSLDS(nn.Module):
         mixture_samples = 0
         mixture_mean = 0
         mixture_var = 0
-        for i in xrange(K):
+        for i in range(K):
             mixture_samples += (weights[i] * samples[i])
             mixture_mean += (weights[i] * means[i])
             mixture_var += (weights[i]**2 * torch.exp(logvars[i])**2)
@@ -224,13 +224,13 @@ class RSLDS(nn.Module):
         # shape: list of length K; each element is (batch_size, T, x_dim)
         q_x_K, q_x_mu_K, q_x_logvar_K = [], [], []
 
-        for i in xrange(self.categorical_dim):
+        for i in range(self.categorical_dim):
             system_i = self.systems[i]
             # q_x: (batch_size, T, x_dim)
             q_x, q_x_mu, q_x_logvar = system_i.inference_network(data)
             q_x_reversed = system_i.reverse_data(q_x)
 
-            q_x_seq_lengths = [T for _ in xrange(batch_size)]
+            q_x_seq_lengths = [T for _ in range(batch_size)]
             q_x_seq_lengths = np.array(q_x_seq_lengths)
             q_x_seq_lengths = torch.from_numpy(q_x_seq_lengths).long()
             q_x_seq_lengths = q_x_seq_lengths.to(data.device)
@@ -257,18 +257,18 @@ class RSLDS(nn.Module):
         z_sample_T, z_logit_T = [], []
         x_sample_T, x_mu_T, x_logvar_T = [], [], []
         
-        for t in xrange(1, T + 1):
+        for t in range(1, T + 1):
             x_rnn_output = self.z_cat_combiner(x_rnn_output_K[:, t - 1, :])
             z_logit = self.z_combiner(z_prev, x_rnn_output)
             z_t = self.reparameterize(z_logit, temperature)
 
             q_x_t, q_x_mu_t, q_x_logvar_t = [], [], []
 
-            for i in xrange(batch_size):
+            for i in range(batch_size):
                 weights_ti = z_t[i]
-                samples_ti = [q_x_K[j][i, t-1, :] for j in xrange(self.categorical_dim)]
-                means_ti = [q_x_mu_K[j][i, t-1, :] for j in xrange(self.categorical_dim)]
-                logvars_ti = [q_x_logvar_K[j][i, t-1, :] for j in xrange(self.categorical_dim)]
+                samples_ti = [q_x_K[j][i, t-1, :] for j in range(self.categorical_dim)]
+                means_ti = [q_x_mu_K[j][i, t-1, :] for j in range(self.categorical_dim)]
+                logvars_ti = [q_x_logvar_K[j][i, t-1, :] for j in range(self.categorical_dim)]
                 samples_mix_ti, means_mix_ti, logvars_mix_ti = self.build_gaussian_mixture(
                     weights_ti, samples_ti, means_ti, logvars_ti)
                 q_x_t.append(samples_mix_ti)
@@ -302,7 +302,7 @@ class RSLDS(nn.Module):
         # shape: list of length K; each element is (batch_size, T, x_dim)
         q_x_K, q_x_mu_K, q_x_logvar_K = [], [], []
 
-        for i in xrange(self.categorical_dim):
+        for i in range(self.categorical_dim):
             system_i = self.systems[i]
             q_x, q_x_mu, q_x_logvar = system_i.generative_model(batch_size, T)
 
@@ -323,11 +323,11 @@ class RSLDS(nn.Module):
 
         # build 0th x_prev element by element depending on the dynamic system
         t = 0; q_x_t, q_x_mu_t, q_x_logvar_t = [], [], []
-        for i in xrange(batch_size):
+        for i in range(batch_size):
             weights_ti = z_prev[i]
-            samples_ti = [q_x_K[j][i, t, :] for j in xrange(self.categorical_dim)]
-            means_ti = [q_x_mu_K[j][i, t, :] for j in xrange(self.categorical_dim)]
-            logvars_ti = [q_x_logvar_K[j][i, t, :] for j in xrange(self.categorical_dim)]
+            samples_ti = [q_x_K[j][i, t, :] for j in range(self.categorical_dim)]
+            means_ti = [q_x_mu_K[j][i, t, :] for j in range(self.categorical_dim)]
+            logvars_ti = [q_x_logvar_K[j][i, t, :] for j in range(self.categorical_dim)]
             samples_mix_ti, means_mix_ti, logvars_mix_ti = self.build_gaussian_mixture(
                 weights_ti, samples_ti, means_ti, logvars_ti)
             q_x_t.append(samples_mix_ti)
@@ -344,7 +344,7 @@ class RSLDS(nn.Module):
 
         x_prev = q_x_t
 
-        for t in xrange(1, T):
+        for t in range(1, T):
             z_logit = self.z_trans(z_prev, x_prev)
             z_t = self.reparameterize(z_logit, temperature)
 
@@ -353,11 +353,11 @@ class RSLDS(nn.Module):
 
             q_x_t, q_x_mu_t, q_x_logvar_t = [], [], []
 
-            for i in xrange(batch_size):
+            for i in range(batch_size):
                 weights_ti = z_t[i]
-                samples_ti = [q_x_K[j][i, t, :] for j in xrange(self.categorical_dim)]
-                means_ti = [q_x_mu_K[j][i, t, :] for j in xrange(self.categorical_dim)]
-                logvars_ti = [q_x_logvar_K[j][i, t, :] for j in xrange(self.categorical_dim)]
+                samples_ti = [q_x_K[j][i, t, :] for j in range(self.categorical_dim)]
+                means_ti = [q_x_mu_K[j][i, t, :] for j in range(self.categorical_dim)]
+                logvars_ti = [q_x_logvar_K[j][i, t, :] for j in range(self.categorical_dim)]
                 samples_mix_ti, means_mix_ti, logvars_mix_ti = self.build_gaussian_mixture(
                     weights_ti, samples_ti, means_ti, logvars_ti)
                 q_x_t.append(samples_mix_ti)
@@ -392,7 +392,7 @@ class RSLDS(nn.Module):
         y_emission_probs = []
         x_emission_mu, x_emission_logvar = [], []
 
-        for t in xrange(1, T + 1):
+        for t in range(1, T + 1):
             z_t = q_z[:, t - 1]
             x_emission_mu_t, x_emission_logvar_t = self.x_emitter(z_t)
             x_emission_t = self.gaussian_reparameterize(
@@ -400,11 +400,11 @@ class RSLDS(nn.Module):
             
             y_emission_probs_t = []
             
-            for i in xrange(batch_size):
+            for i in range(batch_size):
                 weights_ti = z_t[i]
                 y_emission_probs_t_i = 0
                 
-                for j in xrange(self.categorical_dim):
+                for j in range(self.categorical_dim):
                     y_emission_probs_t_i += (weights_ti[j] * self.systems[j].emitter(x_emission_t)[i])
 
                 y_emission_probs_t.append(y_emission_probs_t_i)

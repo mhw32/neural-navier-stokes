@@ -143,7 +143,7 @@ class LDM(nn.Module):
         data_reversed = self.reverse_data(data)
 
         # compute sequence lengths
-        data_seq_lengths = [T for _ in xrange(batch_size)]
+        data_seq_lengths = [T for _ in range(batch_size)]
         data_seq_lengths = np.array(data_seq_lengths)
         data_seq_lengths = torch.from_numpy(data_seq_lengths).long()
         data_seq_lengths = data_seq_lengths.to(data.device)
@@ -160,7 +160,7 @@ class LDM(nn.Module):
         # store all z's in here
         x_sample_T, x_mu_T, x_logvar_T = [], [], []
 
-        for t in xrange(1, T + 1):
+        for t in range(1, T + 1):
             # the next two lines assemble the distribution q(x_t|x_{t-1},y_{t:T})
             x_mu, x_logvar = self.combiner(x_prev, rnn_output[:, t - 1, :])
             x_t = self.reparameterize(x_mu, x_logvar)
@@ -184,7 +184,7 @@ class LDM(nn.Module):
         x_sample_T, x_mu_T, x_logvar_T = [], [], []
         x_prev = self.x_0.expand(batch_size, self.x_0.size(0))
 
-        for t in xrange(1, T + 1):
+        for t in range(1, T + 1):
             x_mu = self.trans(x_prev) # Linear transform of previous state
             x_logvar = torch.zeros(x_mu.size()) # Set variance to 0 for now TODO
             x_logvar = x_logvar.to(x_mu.device)
@@ -208,7 +208,7 @@ class LDM(nn.Module):
         p_x, p_x_mu, p_x_logvar = self.generative_model(batch_size, T)
 
         y_emission_probs = []
-        for t in xrange(1, T + 1):
+        for t in range(1, T + 1):
             x_t = q_x[:, t - 1]
             # define a generative model p(y_{1:T}|x_{1:T})
             y_emission_probs_t = self.emitter(x_t)
