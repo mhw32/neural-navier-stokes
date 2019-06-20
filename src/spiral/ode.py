@@ -126,11 +126,11 @@ def get_parser():
     parser.add_argument('--niters', type=int, default=2000)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--out-dir', type=str)
+    parser.add_argument('--out-dir', type=str, default='./trained_models')
     return parser
 
 
-def visualize(ode, samp_trajs, orig_ts):
+def visualize(ode, orig_trajs, samp_trajs, orig_ts):
     with torch.no_grad():
         device = samp_trajs.device
         z0, _, _ = ode.infer(samp_trajs)
@@ -192,7 +192,7 @@ if __name__ == '__main__':
     tqdm_pbar.close()
 
     if not os.path.isdir(args.out_dir):
-        os.makedir(args.out_dir)
+        os.makedirs(args.out_dir)
     checkpoint_path = os.path.join(args.out_dir, 'checkpoint.pth.tar')
     torch.save({
         'state_dict': ode.state_dict(),
@@ -203,4 +203,3 @@ if __name__ == '__main__':
         'samp_ts': samp_ts,
     }, checkpoint_path)
     
-    visualize(ode, samp_trajs, orig_ts)
