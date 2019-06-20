@@ -147,7 +147,6 @@ if __name__ == '__main__':
         analytic_kl = normal_kl(qz0_mean, qz0_logvar,
                                 pz0_mean, pz0_logvar).sum(-1)
         loss = torch.mean(-logpx + analytic_kl, dim=0)
-        import pdb; pdb.set_trace()
         loss.backward()
         optimizer.step()
         loss_meter.update(loss.item())
