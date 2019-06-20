@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import numpy as np
 from tqdm import tqdm
@@ -125,6 +126,7 @@ def get_parser():
     parser.add_argument('--niters', type=int, default=2000)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--gpu', type=int, default=0)
+    parser.add_argument('--out-dir', type=str)
     return parser
 
 
@@ -164,7 +166,6 @@ def visualize(ode, samp_trajs, orig_ts):
 if __name__ == '__main__':
     parser = get_parser()
     args = parser.parse_args()
-
     device = torch.device('cuda:' + str(args.gpu)
                           if torch.cuda.is_available() else 'cpu')
 
@@ -176,7 +177,7 @@ if __name__ == '__main__':
 
     ode = NeuralODE(4, 2, 20, 25, 1000).to(device)
     optimizer = optim.Adam(ode.parameters(), lr=args.lr)
-    
+  
     loss_meter = AverageMeter()
     tqdm_pbar = tqdm(total=args.niters)
     for itr in range(1, args.niters + 1):
@@ -190,4 +191,16 @@ if __name__ == '__main__':
         tqdm_pbar.update()
     tqdm_pbar.close()
 
+    if not os.path.isdir(args.out_dir):
+        os.makedir(args.out_dir)
+    checkpoint_path = os.path.join(args.out_dir, 'checkpoint.pth.tar')
+    torch.save({
+        'state_dict': ode.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'orig_trajs': orig_trajs,
+        'samp_trajs': samp_trajs,
+        'orig_ts': orig_ts,
+        'samp_ts': samp_ts,
+    }, checkpoint_path)
+    
     visualize(ode, samp_trajs, orig_ts)
