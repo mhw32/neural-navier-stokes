@@ -110,3 +110,5 @@ nlds/data/
 outs/
 plots/
 plots_nl/
+
+**.png

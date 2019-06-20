@@ -14,6 +14,53 @@ from src.spiral.dataset import generate_spiral2d
 from src.spiral.utils import AverageMeter
 
 
+class NeuralODE(nn.Module):
+    def __init__(self, latent_dim=4, obs_dim=2, nhidden=20, rnnhidden=25, nbatch=1):
+        self.func = LatentODEfunc(latent_dim=latent_dim, nhidden=nhidden)
+        self.rec = RecognitionRNN(latent_dim=latent_dim, obs_dim=obs_dim, 
+                                  nhidden=rnnhidden, nbatch=nbatch)
+        self.dec = Decoder(latent_dim=latent_dim, obs_dim=obs_dim, 
+                           nhidden=nhidden)
+        self.latent_dim = latent_dim
+        self.obs_dim = obs_dim
+        self.nhidden = nhidden
+        self.rnnhidden = rnnhidden
+        self.nbatch = nbatch
+    
+    def forward(self, samp_trajs, samp_ts):
+        device = samp_trajs.device
+        # backward in time to infer q(z_0)
+        h = self.rec.initHidden().to(device)
+        
+        for t in reversed(range(samp_trajs.size(1))):
+            obs = samp_trajs[:, t, :]
+            out, h = self.rec.forward(obs, h)
+        
+        # reparameterize
+        qz0_mean, qz0_logvar = out[:, :4], out[:, 4:]
+        epsilon = torch.randn(qz0_mean.size()).to(device)
+        z0 = epsilon * torch.exp(.5 * qz0_logvar) + qz0_mean
+
+        # forward in time and solve ode for reconstructions
+        pred_z = odeint(self.func, z0, samp_ts).permute(1, 0, 2)
+        pred_x = self.dec(pred_z)
+
+        return pred_x, z0, qz0_mean, qz0_logvar
+
+    def compute_loss(self, pred_x, z0, qz0_mean, qz0_logvar):
+        device = pred_x.device
+        noise_std_ = torch.zeros(pred_x.size()).to(device) + .3  # hardcoded logvar
+        noise_logvar = 2. * torch.log(noise_std_).to(device)
+
+        logpx = log_normal_pdf(samp_trajs, pred_x, noise_logvar)
+        logpx = logpx.sum(-1).sum(-1)
+        pz0_mean = pz0_logvar = torch.zeros(z0.size()).to(device)
+        analytic_kl = normal_kl(qz0_mean, qz0_logvar,
+                                pz0_mean, pz0_logvar).sum(-1)
+        loss = torch.mean(-logpx + analytic_kl, dim=0)
+        return loss
+
+
 class LatentODEfunc(nn.Module):
     def __init__(self, latent_dim=4, nhidden=20):
         super(LatentODEfunc, self).__init__()
@@ -96,102 +143,24 @@ if __name__ == '__main__':
     device = torch.device('cuda:' + str(args.gpu)
                           if torch.cuda.is_available() else 'cpu')
 
-    # generate toy spiral data
-    print('-- creating dataset')
     orig_trajs, samp_trajs, orig_ts, samp_ts = generate_spiral2d(
-        nspiral=1000,
-        start=0.,
-        stop=6 * np.pi,
-        noise_std=.3,
-        a=0., b=.3
-    )
+        nspiral=1000, start=0., stop=6 * np.pi, noise_std=.3, a=0., b=.3)
     orig_trajs = torch.from_numpy(orig_trajs).float().to(device)
     samp_trajs = torch.from_numpy(samp_trajs).float().to(device)
     samp_ts = torch.from_numpy(samp_ts).float().to(device)
 
-    print('-- initializing model')
-    func = LatentODEfunc(4, 20).to(device)
-    rec = RecognitionRNN(4, 2, 25, 1000).to(device)
-    dec = Decoder(4, 2, 20).to(device)
-
-    params = (list(func.parameters()) + list(dec.parameters()) + 
-              list(rec.parameters()))
-    optimizer = optim.Adam(params, lr=args.lr)
+    ode = NeuralODE(4, 2, 20, 25, 1000).to(device)
+    optimizer = optim.Adam(ode.parameters(), lr=args.lr)
     
     loss_meter = AverageMeter()
-
-    print('-- begin training')
-    for itr in tqdm(range(1, args.niters + 1)):
+    tqdm_pbar = tqdm(total=args.n_iters, desc="[Iteration {}]".format(1))
+    for itr in range(1, args.niters + 1):
         optimizer.zero_grad()
-        # backward in time to infer q(z_0)
-        h = rec.initHidden().to(device)
-        for t in reversed(range(samp_trajs.size(1))):
-            obs = samp_trajs[:, t, :]
-            out, h = rec.forward(obs, h)
-        
-        # reparameterize
-        qz0_mean, qz0_logvar = out[:, :4], out[:, 4:]
-        epsilon = torch.randn(qz0_mean.size()).to(device)
-        z0 = epsilon * torch.exp(.5 * qz0_logvar) + qz0_mean
-
-        # forward in time and solve ode for reconstructions
-        pred_z = odeint(func, z0, samp_ts).permute(1, 0, 2)
-        pred_x = dec(pred_z)
-
-        # compute loss
-        noise_std_ = torch.zeros(pred_x.size()).to(device) + .3
-        noise_logvar = 2. * torch.log(noise_std_).to(device)
-        logpx = log_normal_pdf(
-            samp_trajs, pred_x, noise_logvar).sum(-1).sum(-1)
-        pz0_mean = pz0_logvar = torch.zeros(z0.size()).to(device)
-        analytic_kl = normal_kl(qz0_mean, qz0_logvar,
-                                pz0_mean, pz0_logvar).sum(-1)
-        loss = torch.mean(-logpx + analytic_kl, dim=0)
+        pred_x, z0, qz0_mean, qz0_logvar = ode(samp_trajs, samp_ts)
+        loss = ode.compute_loss(pred_x, z0, qz0_mean, qz0_logvar)
         loss.backward()
         optimizer.step()
         loss_meter.update(loss.item())
-
-        print('Iter: {}, running avg elbo: {:.4f}'.format(itr, -loss_meter.avg))
-
-    # with torch.no_grad():
-    #     # sample from trajectorys' approx. posterior
-    #     h = rec.initHidden().to(device)
-    #     for t in reversed(range(samp_trajs.size(1))):
-    #         obs = samp_trajs[:, t, :]
-    #         out, h = rec.forward(obs, h)
-    #     qz0_mean, qz0_logvar = out[:, :latent_dim], out[:, latent_dim:]
-    #     epsilon = torch.randn(qz0_mean.size()).to(device)
-    #     z0 = epsilon * torch.exp(.5 * qz0_logvar) + qz0_mean
-    #     orig_ts = torch.from_numpy(orig_ts).float().to(device)
-
-    #     # take first trajectory for visualization
-    #     z0 = z0[0]
-
-    #     ts_pos = np.linspace(0., 2. * np.pi, num=2000)
-    #     ts_neg = np.linspace(-np.pi, 0., num=2000)[::-1].copy()
-    #     ts_pos = torch.from_numpy(ts_pos).float().to(device)
-    #     ts_neg = torch.from_numpy(ts_neg).float().to(device)
-
-    #     zs_pos = odeint(func, z0, ts_pos)
-    #     zs_neg = odeint(func, z0, ts_neg)
-
-    #     xs_pos = dec(zs_pos)
-    #     xs_neg = torch.flip(dec(zs_neg), dims=[0])
-
-    # xs_pos = xs_pos.cpu().numpy()
-    # xs_neg = xs_neg.cpu().numpy()
-    # orig_traj = orig_trajs[0].cpu().numpy()
-    # samp_traj = samp_trajs[0].cpu().numpy()
-
-    # plt.figure()
-    # plt.plot(orig_traj[:, 0], orig_traj[:, 1],
-    #         'g', label='true trajectory')
-    # plt.plot(xs_pos[:, 0], xs_pos[:, 1], 'r',
-    #         label='learned trajectory (t>0)')
-    # plt.plot(xs_neg[:, 0], xs_neg[:, 1], 'c',
-    #         label='learned trajectory (t<0)')
-    # plt.scatter(samp_traj[:, 0], samp_traj[
-    #             :, 1], label='sampled data', s=3)
-    # plt.legend()
-    # plt.savefig('./vis.png', dpi=500)
-    # print('Saved visualization figure at {}'.format('./vis.png'))
+        tqdm_pbar.set_postfix({"elbo": -loss_meter.avg})
+        tqdm_pbar.update()
+    tqdm_pbar.close()
