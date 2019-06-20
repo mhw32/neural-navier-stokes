@@ -13,6 +13,10 @@ from torchdiffeq import odeint
 from src.spiral.dataset import generate_spiral2d
 from src.spiral.utils import AverageMeter, log_normal_pdf, normal_kl
 
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 
 class NeuralODE(nn.Module):
     def __init__(self, latent_dim=4, obs_dim=2, nhidden=20, rnnhidden=25, nbatch=1):
@@ -28,7 +32,7 @@ class NeuralODE(nn.Module):
         self.rnnhidden = rnnhidden
         self.nbatch = nbatch
     
-    def forward(self, samp_trajs, samp_ts):
+    def infer(self, samp_trajs):
         device = samp_trajs.device
         # backward in time to infer q(z_0)
         h = self.rec.initHidden().to(device)
@@ -41,7 +45,10 @@ class NeuralODE(nn.Module):
         qz0_mean, qz0_logvar = out[:, :4], out[:, 4:]
         epsilon = torch.randn(qz0_mean.size()).to(device)
         z0 = epsilon * torch.exp(.5 * qz0_logvar) + qz0_mean
+        return z0, qz0_mean, qz0_logvar
 
+    def forward(self, samp_trajs, samp_ts):
+        z0, qz0_mean, qz0_logvar = self.infer(samp_trajs)
         # forward in time and solve ode for reconstructions
         pred_z = odeint(self.func, z0, samp_ts).permute(1, 0, 2)
         pred_x = self.dec(pred_z)
@@ -121,6 +128,39 @@ def get_parser():
     return parser
 
 
+def visualize(ode, samp_trajs, orig_ts):
+    with torch.no_grad():
+        device = samp_trajs.device
+        z0, _, _ = ode.infer(samp_trajs)
+        orig_ts = torch.from_numpy(orig_ts).float().to(device)
+        z0 = z0[0]  # take first trajectory for visualization
+
+        ts_pos = np.linspace(0., 2. * np.pi, num=2000)
+        ts_neg = np.linspace(-np.pi, 0., num=2000)[::-1].copy()
+        ts_pos = torch.from_numpy(ts_pos).float().to(device)
+        ts_neg = torch.from_numpy(ts_neg).float().to(device)
+
+        zs_pos = odeint(ode.func, z0, ts_pos)
+        zs_neg = odeint(ode.func, z0, ts_neg)
+
+        xs_pos = ode.dec(zs_pos)
+        xs_neg = torch.flip(ode.dec(zs_neg), dims=[0])
+
+    xs_pos = xs_pos.cpu().numpy()
+    xs_neg = xs_neg.cpu().numpy()
+    orig_traj = orig_trajs[0].cpu().numpy()
+    samp_traj = samp_trajs[0].cpu().numpy()
+
+    plt.figure()
+    plt.plot(orig_traj[:, 0], orig_traj[:, 1], 'g', label='true trajectory')
+    plt.plot(xs_pos[:, 0], xs_pos[:, 1], 'r', label='learned trajectory (t>0)')
+    plt.plot(xs_neg[:, 0], xs_neg[:, 1], 'c', label='learned trajectory (t<0)')
+    plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
+    plt.legend()
+    plt.savefig('./vis.png', dpi=500)
+    print('Saved visualization figure at {}'.format('./vis.png'))
+
+
 if __name__ == '__main__':
     parser = get_parser()
     args = parser.parse_args()
@@ -149,3 +189,5 @@ if __name__ == '__main__':
         tqdm_pbar.set_postfix({"elbo": -loss_meter.avg})
         tqdm_pbar.update()
     tqdm_pbar.close()
+
+    visualize(ode, samp_trajs, orig_ts)
