@@ -16,6 +16,7 @@ from src.spiral.utils import AverageMeter
 
 class NeuralODE(nn.Module):
     def __init__(self, latent_dim=4, obs_dim=2, nhidden=20, rnnhidden=25, nbatch=1):
+        super(NeuralODE, self).__init__()
         self.func = LatentODEfunc(latent_dim=latent_dim, nhidden=nhidden)
         self.rec = RecognitionRNN(latent_dim=latent_dim, obs_dim=obs_dim, 
                                   nhidden=rnnhidden, nbatch=nbatch)
@@ -153,7 +154,7 @@ if __name__ == '__main__':
     optimizer = optim.Adam(ode.parameters(), lr=args.lr)
     
     loss_meter = AverageMeter()
-    tqdm_pbar = tqdm(total=args.n_iters, desc="[Iteration {}]".format(1))
+    tqdm_pbar = tqdm(total=args.niters)
     for itr in range(1, args.niters + 1):
         optimizer.zero_grad()
         pred_x, z0, qz0_mean, qz0_logvar = ode(samp_trajs, samp_ts)
