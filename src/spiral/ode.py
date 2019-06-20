@@ -56,7 +56,7 @@ class NeuralODE(nn.Module):
 
         return pred_x, z0, qz0_mean, qz0_logvar
 
-    def compute_loss(self, pred_x, z0, qz0_mean, qz0_logvar):
+    def compute_loss(self, samp_trajs, pred_x, z0, qz0_mean, qz0_logvar):
         device = pred_x.device
         noise_std_ = torch.zeros(pred_x.size()).to(device) + .3  # hardcoded logvar
         noise_logvar = 2. * torch.log(noise_std_).to(device)
@@ -183,7 +183,7 @@ if __name__ == '__main__':
     for itr in range(1, args.niters + 1):
         optimizer.zero_grad()
         pred_x, z0, qz0_mean, qz0_logvar = ode(samp_trajs, samp_ts)
-        loss = ode.compute_loss(pred_x, z0, qz0_mean, qz0_logvar)
+        loss = ode.compute_loss(samp_trajs, pred_x, z0, qz0_mean, qz0_logvar)
         loss.backward()
         optimizer.step()
         loss_meter.update(loss.item())
