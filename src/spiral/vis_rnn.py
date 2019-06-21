@@ -16,5 +16,5 @@ if __name__ == '__main__':
     rnn = rnn.eval()
 
     visualize(rnn, checkpoint['orig_trajs'], checkpoint['orig_ts'],
-              checkpoint['samp_trajs'], checkpoint['samp_ts'])
+              checkpoint['samp_trajs'])
 

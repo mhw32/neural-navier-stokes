@@ -55,31 +55,32 @@ class RNN(nn.Module):
         return loss
 
 
-def visualize(rnn, orig_trajs, orig_ts, teacher_forcing=True):
+def visualize(rnn, orig_trajs, orig_ts, samp_trajs):
     device = orig_trajs.device
     orig_ts = torch.from_numpy(orig_ts).float().to(device)
 
     with torch.no_grad():
-        if teacher_forcing:
-            recon_trajs, _ = rnn(orig_trajs, orig_ts)
-        else:
-            n = len(orig_ts)
-            recon_trajs = []
-            trajs = orig_trajs[:, 0, :]  # take first sample
-            hiddens = None
-            for i in range(n):
-                trajs, hiddens = rnn(trajs, orig_ts[i].unsqueeze(0), hiddens=hiddens) 
-                recon_trajs.append(trajs)
-            recon_trajs = torch.cat(recon_trajs, dim=1)
+        recon_trajs, _ = rnn(orig_trajs, orig_ts)
+        
+        n = len(orig_ts)
+        extra_trajs = []
+        trajs = orig_trajs[:, 0, :].unsqueeze(1)  # take first sample
+        hiddens = None
+        for i in range(n):
+            trajs, hiddens = rnn(trajs, orig_ts[i].unsqueeze(0), hiddens=hiddens) 
+            extra_trajs.append(trajs)
+        extra_trajs = torch.cat(extra_trajs, dim=1)
 
     # just take the first index
     orig_traj = orig_trajs[0].cpu().numpy()
     samp_traj = samp_trajs[0].cpu().numpy()
     recon_traj = recon_trajs[0].cpu().numpy()
+    extra_traj = extra_trajs[0].cpu().numpy()
 
     plt.figure()
     plt.plot(orig_traj[:, 0], orig_traj[:, 1], 'g', label='true trajectory')
-    plt.plot(recon_traj[:, 0], recon_traj[:, 1], 'r', label='learned trajectory')
+    plt.plot(recon_traj[:, 0], recon_traj[:, 1], 'r', label='learned trajectory (teacher-forcing)')
+    plt.plot(extra_traj[:, 0], extra_traj[:, 1], 'c', label='learned trajectory (generated)')
     plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
     plt.legend()
     plt.savefig('./vis_rnn.png', dpi=500)
