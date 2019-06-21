@@ -135,7 +135,7 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts):
         device = samp_trajs.device
         z0, _, _ = ode.infer(samp_trajs)
         orig_ts = torch.from_numpy(orig_ts).float().to(device)
-        z0 = z0[0]  # take first trajectory for visualization
+        z0 = z0[5]  # take first trajectory for visualization
 
         ts_pos = np.linspace(0., 3. * np.pi, num=4000)
         ts_neg = np.linspace(-2. * np.pi, 0., num=4000)[::-1].copy()
@@ -159,6 +159,8 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts):
     plt.plot(xs[:, 0], xs[:, 1], 'r', label='learned trajectory')
     plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
     plt.legend()
+    plt.xlim(0, 10)
+    plt.ylim(-10, 10)
     plt.savefig('./vis_ode.png', dpi=500)
 
 

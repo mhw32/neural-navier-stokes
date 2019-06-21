@@ -83,6 +83,8 @@ def visualize(rnn, orig_trajs, orig_ts, samp_trajs):
     plt.plot(extra_traj[:, 0], extra_traj[:, 1], 'c', label='learned trajectory (generated)')
     plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
     plt.legend()
+    plt.xlim(0, 10)
+    plt.ylim(-10, 10)
     plt.savefig('./vis_rnn.png', dpi=500)
 
 
