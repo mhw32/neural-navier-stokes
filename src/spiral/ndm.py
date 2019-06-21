@@ -27,6 +27,9 @@ class NDM(LDM):
     Equivalent to LDM but transition and emission transformations
     are governed by nonlinear functions.
 
+    THis is also equivalent to a deep markov model (DMM).
+    https://arxiv.org/abs/1609.09869
+
     y_dim := integer
             number of input dimensions
     x_dim := integer
