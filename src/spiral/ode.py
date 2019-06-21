@@ -150,13 +150,13 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts):
 
     xs_pos = xs_pos.cpu().numpy()
     xs_neg = xs_neg.cpu().numpy()
+    xs = np.concatenate((xs_pos, xs_neg), axis=0)
     orig_traj = orig_trajs[0].cpu().numpy()
     samp_traj = samp_trajs[0].cpu().numpy()
 
     plt.figure()
     plt.plot(orig_traj[:, 0], orig_traj[:, 1], 'g', label='true trajectory')
-    plt.plot(xs_pos[:, 0], xs_pos[:, 1], 'r', label='learned trajectory (t>0)')
-    plt.plot(xs_neg[:, 0], xs_neg[:, 1], 'c', label='learned trajectory (t<0)')
+    plt.plot(xs[:, 0], xs[:, 1], 'r', label='learned trajectory')
     plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
     plt.legend()
     plt.savefig('./vis_ode.png', dpi=500)
