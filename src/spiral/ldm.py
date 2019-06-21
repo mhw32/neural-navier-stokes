@@ -1,0 +1,245 @@
+"""Neural Linear dynamical model"""
+
+import os
+import sys
+import argparse
+import numpy as np
+from tqdm import tqdm
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+
+from src.spiral.dataset import generate_spiral2d
+from src.spiral.utils import AverageMeter, log_normal_pdf, normal_kl
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+
+class LDM(nn.Module):
+    """
+    Linear Dynamical Model parameterizes by neural networks.
+
+    y_dim := integer
+            number of input dimensions
+    x_dim := integer
+             number of latent dimensions
+    x_emission_dim := integer
+                      hidden dimension from y_dim -> x_dim
+    x_transition_dim := integer
+                        hidden dimension from x_dim -> x_dim
+    rnn_dim := integer
+               hidden dimension for RNN over y
+    rnn_dropout_rate := float [default: 0.]
+                        dropout over nodes in RNN
+    """
+    def __init__(self, y_dim, x_dim, x_emission_dim, x_transition_dim,
+                 rnn_dim, rnn_dropout_rate=0.):
+        super().__init__()
+        # p(x_t|x_t-1)
+        self.trans = nn.Linear(x_dim, x_transition_dim)
+        # p(y_t|x_t)
+        self.emitter = Emitter(y_dim, x_dim, x_emission_dim)
+        # q(x_t|x_t-1,y_t:T)
+        self.combiner = Combiner(x_dim, rnn_dim)
+        # rnn over y
+        self.rnn = nn.RNN(y_dim, rnn_dim, nonlinearity='relu', 
+                          batch_first=True, dropout=rnn_dropout_rate)
+        self.x_0 = nn.Parameter(torch.zeros(x_dim))    # p(x_1)
+        self.x_q_0 = nn.Parameter(torch.zeros(x_dim))  # q(x_1|y_{1:T})
+        self.h_0 = nn.Parameter(torch.zeros(1, 1, rnn_dim))
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5*logvar)
+        eps = torch.randn_like(std)
+        return eps.mul(std).add_(mu)
+
+    def reverse_data(self, data):
+        data_npy = data.cpu().detach().numpy()
+        data_reversed_npy = data_npy[:, ::-1, :]
+        # important to copy as pytorch does not work with negative numpy strides
+        data_reversed = torch.from_numpy(data_reversed_npy.copy())
+        data_reversed = data_reversed.to(data.device)
+        return data_reversed
+
+    def inference_network(self, data):
+        # data: (batch_size, time_steps, dimension)
+        batch_size = data.size(0)
+        T = data.size(1)
+
+        # flip data as RNN takes data in opposing order
+        data_reversed = self.reverse_data(data)
+
+        # compute sequence lengths
+        seq_lengths = [T for _ in range(batch_size)]
+        seq_lengths = np.array(seq_lengths)
+        seq_lengths = torch.from_numpy(seq_lengths).long()
+        seq_lengths = seq_lengths.to(data.device)
+
+        h_0 = self.h_0.expand(1, data.size(0), self.rnn.hidden_size)
+        h_0 = h_0.contiguous()
+
+        rnn_output, _ = self.rnn(data_reversed, h_0)
+        rnn_output = reverse_sequences_torch(rnn_output, seq_lengths)
+
+        # set x_prev = x_q_0 to setup the recursive conditioning in q(x_t |...)
+        x_prev = self.x_q_0.expand(batch_size, self.x_q_0.size(0))
+
+        x_sample_T, x_mu_T, x_logvar_T = [], [], []
+
+        for t in range(1, T + 1):
+            # build q(x_t|x_{t-1},y_{t:T})
+            x_mu, x_logvar = self.combiner(x_prev, rnn_output[:, t - 1, :])
+            x_t = self.reparameterize(x_mu, x_logvar)
+
+            x_sample_T.append(x_t)
+            x_mu_T.append(x_mu)
+            x_logvar_T.append(x_logvar)
+
+            x_prev = x_t
+        
+        x_sample_T = torch.stack(x_sample_T).permute(1, 0, 2)
+        x_mu_T = torch.stack(x_mu_T).permute(1, 0, 2)
+        x_logvar_T = torch.stack(x_logvar_T).permute(1, 0, 2)
+
+        return x_sample_T, x_mu_T, x_logvar_T
+
+    def prior_network(self, batch_size, T):
+        # prior distribution over p(x_t|x_t-1)
+        x_prev = self.x_0.expand(batch_size, self.x_0.size(0))
+
+        x_sample_T, x_mu_T, x_logvar_T = [], [], []
+        for t in range(1, T + 1):
+            x_mu = self.trans(x_prev)
+            x_logvar = torch.zeros(x_mu.size())
+            x_logvar = x_logvar.to(x_mu.device)
+            x_t = self.reparameterize(x_mu, x_logvar)
+
+            x_sample_T.append(x_t)
+            x_mu_T.append(x_mu)
+            x_logvar_T.append(x_logvar)
+
+            x_prev = x_t
+
+        x_sample_T = torch.stack(x_sample_T).permute(1, 0, 2) # (batch_size, T, x_dim)
+        x_mu_T = torch.stack(x_mu_T).permute(1, 0, 2)
+        x_logvar_T = torch.stack(x_logvar_T).permute(1, 0, 2)
+
+        return x_sample_T, x_mu_T, x_logvar_T
+
+    def forward(self, data):
+        batch_size, T, _ = data.size()
+        q_x, q_x_mu, q_x_logvar = self.inference_network(data)
+        p_x, p_x_mu, p_x_logvar = self.prior_network(batch_size, T)
+
+        y_probs = []
+        for t in range(1, T + 1):
+            x_t = q_x[:, t - 1]
+            # define `p(y_{1:T}|x_{1:T})`
+            y_probs_t = self.emitter(x_t)
+            y_probs.append(y_probs_t)
+
+        y_probs = torch.stack(y_probs).permute(1, 0, 2)
+        output = {'q_x': q_x, 'q_x_mu': q_x_mu, 'q_x_logvar': q_x_logvar,
+                  'p_x': p_x, 'p_x_mu': p_x_mu, 'p_x_logvar': p_x_logvar,
+                  'y_mu': y_probs}
+
+        return output
+
+    
+class Emitter(nn.Module):
+    """
+    Parameterizes `p(y_t | x_t)`.
+    
+    Args
+    ----
+    y_dim        := integer
+                    number of input dimensions
+    x_dim        := integer
+                    number of latent dimensions
+    emission_dim := integer
+                    number of hidden dimensions in output 
+    """
+    def __init__(self, y_dim, x_dim, emission_dim):
+        self.lin_x_to_hidden = nn.Linear(x_dim, emission_dim)
+        self.lin_hidden_to_hidden = nn.Linear(emission_dim, emission_dim)
+        self.lin_hidden_to_input = nn.Linear(emission_dim, y_dim)
+    
+    def forward(self, x_t):
+        h1 = self.lin_x_to_hidden(x_t)
+        h2 = self.lin_hidden_to_hidden(h1)
+        return self.lin_hidden_to_input(h2)
+
+
+class Combiner(nn.Module):
+    """
+    Parameterizes `q(x_t | x_{t-1}, y_{t:T})`, which is the basic 
+    building block of the guide (i.e. the variational distribution). 
+    The dependence on `y_{t:T}` is through the hidden state of the RNN 
+    (see the PyTorch module `rnn` below)
+
+    Args
+    ----
+    x_dim := integer
+             number of latent dimensions
+    rnn_dim := integer
+               hidden dimensions of RNN
+    """
+    def __init__(self, x_dim, rnn_dim):
+        super().__init__()
+        self.lin_x_to_hidden = nn.Linear(x_dim, rnn_dim)
+        self.lin_hidden_to_mu = nn.Linear(rnn_dim, x_dim)
+        self.lin_hidden_to_logvar = nn.Linear(rnn_dim, x_dim)
+
+    def forward(self, x_t_1, h_rnn):
+        # combine the rnn hidden state with a transformed version of z_t_1
+        h_combined = self.lin_x_to_hidden(x_t_1) + h_rnn
+        # use the combined hidden state to compute the mean used to sample z_t
+        x_t_mu = self.lin_hidden_to_mu(h_combined)
+        # use the combined hidden state to compute the scale used to sample z_t
+        x_t_logvar = self.lin_hidden_to_logvar(h_combined)
+        x_t_logvar = torch.tanh(x_t_logvar)  # HACK
+        # return parameters of normal distribution
+        return x_t_mu, x_t_logvar
+
+
+def reverse_sequences_torch(mini_batch, seq_lengths):
+    """
+    This function takes a torch mini-batch and reverses 
+    each sequence w.r.t. the temporal axis, i.e. axis=1.
+    """
+    reversed_mini_batch = mini_batch.new_zeros(mini_batch.size())
+    for b in range(mini_batch.size(0)):
+        T = seq_lengths[b]
+        time_slice = torch.arange(T - 1, -1, -1, device=mini_batch.device)
+        time_slice = time_slice.long()
+        reversed_sequence = torch.index_select(
+            mini_batch[b, :, :], 0, time_slice)
+        reversed_mini_batch[b, 0:T, :] = reversed_sequence
+    return reversed_mini_batch
+
+
+def get_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--niters', type=int, default=2000)
+    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--gpu', type=int, default=0)
+    parser.add_argument('--out-dir', type=str, default='./')
+    return parser
+
+
+
+if __name__ == '__main__':
+    parser = get_parser()
+    args = parser.parse_args()
+    device = torch.device('cuda:' + str(args.gpu)
+                          if torch.cuda.is_available() else 'cpu')
+
+    orig_trajs, samp_trajs, orig_ts, samp_ts = generate_spiral2d(
+        nspiral=1000, start=0., stop=6 * np.pi, noise_std=.3, a=0., b=.3)
+    orig_trajs = torch.from_numpy(orig_trajs).float().to(device)
+    samp_trajs = torch.from_numpy(samp_trajs).float().to(device)
+    samp_ts = torch.from_numpy(samp_ts).float().to(device)
