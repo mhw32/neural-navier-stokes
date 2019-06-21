@@ -293,7 +293,7 @@ def visualize(ldm, orig_trajs, orig_ts, samp_trajs, index=0):
         # first, get reconstructions with teacher forcing
         inputs = merge_inputs(orig_trajs, orig_ts)
         outputs = ldm(inputs)
-        recon_trajs = outputs['y_mu']
+        recon_trajs = outputs['y_mu'][:, :, :2]  # ignore time dim
 
         # TODO: extrapolations by sequential generation
 
