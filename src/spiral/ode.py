@@ -137,8 +137,8 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts):
         orig_ts = torch.from_numpy(orig_ts).float().to(device)
         z0 = z0[0]  # take first trajectory for visualization
 
-        ts_pos = np.linspace(0., 2. * np.pi, num=2000)
-        ts_neg = np.linspace(-np.pi, 0., num=2000)[::-1].copy()
+        ts_pos = np.linspace(0., 3. * np.pi, num=4000)
+        ts_neg = np.linspace(-2. * np.pi, 0., num=4000)[::-1].copy()
         ts_pos = torch.from_numpy(ts_pos).float().to(device)
         ts_neg = torch.from_numpy(ts_neg).float().to(device)
 
