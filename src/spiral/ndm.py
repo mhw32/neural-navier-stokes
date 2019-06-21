@@ -13,7 +13,7 @@ import torch.nn.functional as F
 
 from src.spiral.dataset import generate_spiral2d
 from src.spiral.utils import AverageMeter, log_normal_pdf, normal_kl
-from src.spiral.ldm import LDM, merge_inputs
+from src.spiral.ldm import LDM, merge_inputs, get_parser
 
 import matplotlib
 matplotlib.use('Agg')
@@ -133,7 +133,7 @@ class Combiner(nn.Module):
         # combine the rnn hidden state with a transformed version of z_t_1
         x_input = F.relu(self.lin_x_to_hidden(x_t_1))
         x_input = self.lin_hidden_to_hidden(x_input)
-        h_combined = 0.5 * (self.tanh(x_input) + h_rnn)
+        h_combined = 0.5 * (torch.tanh(x_input) + h_rnn)
         # use the combined hidden state to compute the mean used to sample z_t
         x_t_mu = self.lin_hidden_to_mu(h_combined)
         # use the combined hidden state to compute the scale used to sample z_t
