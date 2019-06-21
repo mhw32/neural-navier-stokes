@@ -29,14 +29,18 @@ class RNN(nn.Module):
     def init_hiddens(self, batch_size):
         return torch.zeros(1, batch_size, self.rnnhidden)
 
-    def forward(self, samp_trajs, samp_ts):
+    def forward(self, samp_trajs, samp_ts, hiddens=None):
         n = samp_trajs.size(0)
         device = samp_trajs.device
+
         samp_ts = samp_ts.unsqueeze(0).unsqueeze(2)
         samp_ts = samp_ts.repeat(n, 1, 1)
         inputs = torch.cat((samp_trajs, samp_ts), dim=2)
-        hiddens = self.init_hiddens(n)
-        hiddens = hiddens.to(device)
+
+        if hiddens is None:
+            hiddens = self.init_hiddens(n)
+            hiddens = hiddens.to(device)
+        
         out, hiddens = self.gru(inputs, hiddens)
         pred_x = self.dec(out)
         return pred_x, hiddens
@@ -52,32 +56,48 @@ class RNN(nn.Module):
 
 
 def visualize(rnn, orig_trajs, orig_ts, samp_trajs, samp_ts):
-    import pdb; pdb.set_trace()
     device = samp_trajs.device
     orig_ts_npy = orig_ts.flatten()
     samp_ts_npy = samp_ts.cpu().numpy().flatten()
     orig_ts = torch.from_numpy(orig_ts).float().to(device)
 
     max_ts = max(samp_ts_npy)  # find max one from training
-    index = np.where(orig_ts_npy == max_ts)
+    index = np.where(orig_ts_npy < max_ts + 1e-4)  # add a bit
+    index = max(index[0]) + 1
 
     # parts for reconstruction
     recon_trajs = orig_trajs[:, :index, :] 
     recon_ts = orig_ts[:index]
 
     # parts for extrapolation
-    extra_trajs = orig_trajs[:, index:, :]
+    # extra_trajs = orig_trajs[:, index:, :]
     extra_ts = orig_ts[index:]
 
     with torch.no_grad():
-        pass
+        # pass all the reconstruction stuff into RNN
+        # we don't need to go one by one here.
+        # -- important to store the hiddens we will use them in generation
+        recon_preds, hiddens = rnn(recon_trajs, recon_ts)
+
+        # now we go one by one and pretend like we don't know the real entry
+        trajs = recon_preds[:, -1, :].unsqueeze(1)
+
+        extra_preds = []
+        for i in range(len(extra_ts)):
+            trajs, hiddens = rnn(trajs, extra_ts[i].unsqueeze(0), hiddens=hiddens) 
+            extra_preds.append(trajs)
+        extra_preds = torch.cat(extra_preds, dim=1)
 
     # just take the first index
     orig_traj = orig_trajs[0].cpu().numpy()
     samp_traj = samp_trajs[0].cpu().numpy()
+    recon_traj = recon_preds[0].cpu().numpy()
+    extra_traj = extra_preds[0].cpu().numpy()
 
     plt.figure()
     plt.plot(orig_traj[:, 0], orig_traj[:, 1], 'g', label='true trajectory')
+    plt.plot(recon_traj[:, 0], recon_traj[:, 1], 'r', label='learned trajectory (t>0)')
+    plt.plot(extra_traj[:, 0], extra_traj[:, 1], 'c', label='learned trajectory (t<0)')
     plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
     plt.legend()
     plt.savefig('./vis.png', dpi=500)
