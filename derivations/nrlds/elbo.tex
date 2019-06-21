@@ -46,7 +46,7 @@ From Fig.~\ref{mode}, we can extract the following factorizations:
 \begin{align}
     p(\vec{y}|\vec{x}) &= \prod_{t=1}^{T} p(y_t|x_t) \\
     p(\vec{x}|\vec{z}) &= \prod_{t=1}^{T} p(x_t|z_t) \\
-    p(\vec{z}) &= p(z_1)\prod_{t=2}^{T} p(z_t|z_{t-1}) \\
+    p(\vec{z}) &= p(z_1)\prod_{t=2}^{T} p(z_t|z_{t-1},x_{t-1}) \\
     q(\vec{x}|\vec{y}) &= q(x_1|\vec{y})\prod_{t=2}^{T} q(x_t|x_{t-1},\vec{y}) \\
     q(\vec{z}|\vec{x}_1, ..., \vec{x}_K) &= q(z_1|\vec{x}_1, ..., \vec{x}_K)\prod_{t=2}^{T} q(z_t|z_{t-1},\vec{x}_1, ..., \vec{x}_K)
 \end{align}
@@ -54,7 +54,7 @@ where $T$ is the sequence length, and $K$ is the domain of $\vec{z}$ (number of 
 
 \begin{align}
     \sum_{z_1,...,z_T} \sum_{x_1,...x_T}[& \sum_{t=1}^T(\log p(y_t|x_t) + \log p(x_t|z_t)) \\
-    & + \sum_{t=2}^T (\log p(z_t|z_{t-1}) - \log q(x_t|x_{t-1},\vec{y}) - \log q(z_t|z_{t-1},\vec{x}_1, ..., \vec{x}_K)) \\
+    & + \sum_{t=2}^T (\log p(z_t|z_{t-1},x_{t-1}) - \log q(x_t|x_{t-1},\vec{y}) - \log q(z_t|z_{t-1},\vec{x}_1, ..., \vec{x}_K)) \\
     & + (\log p(z_1) - \log q(x_1|\vec{y}) - \log q(z_1|\vec{x}_1, ..., \vec{x}_K))]
 \end{align}
 where $x_1 \sim q(x_1|\vec{y})$, $x_t \sim q(x_t|x_{t-1},\vec{y})$, $z_1 \sim q(z_1|\vec{x}_1, ..., \vec{x}_K)$, $q_t \sim q(z_t|z_{t-1},\vec{x}_1, ..., \vec{x}_K)$, each of which are parameterized by an RNN (or $K$ RNNs) in reverse order. To optimize this, we use the Gumble-softmax relaxation of $\vec{z}$.
