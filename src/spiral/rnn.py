@@ -39,7 +39,7 @@ class RNN(nn.Module):
         hiddens = hiddens.to(device)
         out, hiddens = self.lstm(inputs, hiddens)
         pred_x = self.dec(out)
-        return pred_x
+        return pred_x, hiddens
 
     def compute_loss(self, samp_trajs, pred_x):
         device = pred_x.device
@@ -50,8 +50,11 @@ class RNN(nn.Module):
         loss = torch.mean(-logpx, dim=0)
         return loss
 
+    def generate(self, samp_trajs, hiddens):
+        pass
 
-def visualize(rnn, orig_trajs, samp_trajs, orig_ts):
+
+def visualize(rnn, orig_trajs, orig_ts, samp_trajs, samp_ts):
     with torch.no_grad():
         device = samp_trajs.device
         orig_ts = torch.from_numpy(orig_ts).float().to(device)
@@ -97,7 +100,7 @@ if __name__ == "__main__":
     tqdm_pbar = tqdm(total=args.niters)
     for itr in range(1, args.niters + 1):
         optimizer.zero_grad()
-        pred_x = rnn(samp_trajs, samp_ts)
+        pred_x, _ = rnn(samp_trajs, samp_ts)
         loss = rnn.compute_loss(samp_trajs, pred_x)
         loss.backward()
         optimizer.step()
