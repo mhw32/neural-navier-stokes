@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 class RNN(nn.Module):
     def __init__(self, in_dim=3, out_dim=2, nhidden=20, rnnhidden=25):
         super(RNN, self).__init__()
-        self.lstm = nn.GRU(in_dim, rnnhidden, batch_first=True)
+        self.gru = nn.GRU(in_dim, rnnhidden, batch_first=True)
         self.dec = Decoder(latent_dim=rnnhidden, obs_dim=out_dim, nhidden=nhidden)
         self.rnnhidden = rnnhidden
         self.nhidden = nhidden
@@ -37,7 +37,7 @@ class RNN(nn.Module):
         inputs = torch.cat((samp_trajs, samp_ts), dim=2)
         hiddens = self.init_hiddens(n)
         hiddens = hiddens.to(device)
-        out, hiddens = self.lstm(inputs, hiddens)
+        out, hiddens = self.gru(inputs, hiddens)
         pred_x = self.dec(out)
         return pred_x, hiddens
 
@@ -50,16 +50,29 @@ class RNN(nn.Module):
         loss = torch.mean(-logpx, dim=0)
         return loss
 
-    def generate(self, samp_trajs, hiddens):
-        pass
-
 
 def visualize(rnn, orig_trajs, orig_ts, samp_trajs, samp_ts):
-    with torch.no_grad():
-        device = samp_trajs.device
-        orig_ts = torch.from_numpy(orig_ts).float().to(device)
-        pred_trajs = rnn(orig_trajs, orig_ts)
+    import pdb; pdb.set_trace()
+    device = samp_trajs.device
+    orig_ts_npy = orig_ts.flatten()
+    samp_ts_npy = samp_ts.cpu().numpy().flatten()
+    orig_ts = torch.from_numpy(orig_ts).float().to(device)
 
+    max_ts = max(samp_ts_npy)  # find max one from training
+    index = np.where(orig_ts_npy == max_ts)
+
+    # parts for reconstruction
+    recon_trajs = orig_trajs[:, :index, :] 
+    recon_ts = orig_ts[:index]
+
+    # parts for extrapolation
+    extra_trajs = orig_trajs[:, index:, :]
+    extra_ts = orig_ts[index:]
+
+    with torch.no_grad():
+        pass
+
+    # just take the first index
     orig_traj = orig_trajs[0].cpu().numpy()
     samp_traj = samp_trajs[0].cpu().numpy()
 
