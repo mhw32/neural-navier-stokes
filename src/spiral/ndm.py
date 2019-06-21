@@ -13,7 +13,7 @@ import torch.nn.functional as F
 
 from src.spiral.dataset import generate_spiral2d
 from src.spiral.utils import AverageMeter, log_normal_pdf, normal_kl
-from src.spiral.ldm import LDM, merge_inputs
+from src.spiral.ldm import LDM, merge_inputs, get_parser
 
 import matplotlib
 matplotlib.use('Agg')
