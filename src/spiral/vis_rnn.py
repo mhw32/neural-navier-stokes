@@ -15,7 +15,6 @@ if __name__ == '__main__':
     rnn.load_state_dict(checkpoint['state_dict'])
     rnn = rnn.eval()
 
-    import pdb; pdb.set_trace()
     visualize(rnn, checkpoint['orig_trajs'], checkpoint['orig_ts'],
               checkpoint['samp_trajs'], checkpoint['samp_ts'])
 

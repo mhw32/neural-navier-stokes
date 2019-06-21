@@ -159,7 +159,7 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts):
     plt.plot(xs_neg[:, 0], xs_neg[:, 1], 'c', label='learned trajectory (t<0)')
     plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
     plt.legend()
-    plt.savefig('./vis.png', dpi=500)
+    plt.savefig('./vis_ode.png', dpi=500)
     print('Saved visualization figure at {}'.format('./vis.png'))
 
 

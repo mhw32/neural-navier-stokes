@@ -100,7 +100,7 @@ def visualize(rnn, orig_trajs, orig_ts, samp_trajs, samp_ts):
     plt.plot(extra_traj[:, 0], extra_traj[:, 1], 'c', label='learned trajectory (t<0)')
     plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
     plt.legend()
-    plt.savefig('./vis.png', dpi=500)
+    plt.savefig('./vis_rnn.png', dpi=500)
     print('Saved visualization figure at {}'.format('./vis.png'))
 
 
