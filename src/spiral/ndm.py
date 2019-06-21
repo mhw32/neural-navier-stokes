@@ -179,4 +179,5 @@ if __name__ == '__main__':
         'samp_trajs': samp_trajs,
         'orig_ts': orig_ts,
         'samp_ts': samp_ts,
+        'model_name': 'ndm',
     }, checkpoint_path)
