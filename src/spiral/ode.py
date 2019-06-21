@@ -126,7 +126,7 @@ def get_parser():
     parser.add_argument('--niters', type=int, default=2000)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--out-dir', type=str, default='./trained_models')
+    parser.add_argument('--out-dir', type=str, default='./')
     return parser
 
 

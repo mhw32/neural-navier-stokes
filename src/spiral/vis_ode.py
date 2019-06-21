@@ -4,7 +4,7 @@ from src.spiral.ode import visualize, NeuralODE
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--checkpoint-path', type=str)
+    parser.add_argument('checkpoint_path', type=str)
     parser.add_argument('--gpu', type=int, default=0)
     args = parser.parse_args()
     device = torch.device('cuda:' + str(args.gpu)
