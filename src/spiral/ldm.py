@@ -40,7 +40,7 @@ class LDM(nn.Module):
                  rnn_dim, rnn_dropout_rate=0.):
         super().__init__()
         # p(x_t|x_t-1)
-        self.trans = nn.Linear(x_dim, x_transition_dim)
+        self.transistor = Transistor(x_dim, x_transition_dim)
         # p(y_t|x_t)
         self.emitter = Emitter(y_dim, x_dim, x_emission_dim)
         # q(x_t|x_t-1,y_t:T)
@@ -113,9 +113,7 @@ class LDM(nn.Module):
 
         x_sample_T, x_mu_T, x_logvar_T = [], [], []
         for t in range(1, T + 1):
-            x_mu = self.trans(x_prev)
-            x_logvar = torch.zeros(x_mu.size())
-            x_logvar = x_logvar.to(x_mu.device)
+            x_mu, x_logvar = self.transistor(x_prev)
             x_t = self.reparameterize(x_mu, x_logvar)
 
             x_sample_T.append(x_t)
@@ -176,14 +174,15 @@ class Emitter(nn.Module):
     
     Args
     ----
-    y_dim        := integer
-                    number of input dimensions
-    x_dim        := integer
-                    number of latent dimensions
+    y_dim := integer
+             number of input dimensions
+    x_dim := integer
+             number of latent dimensions
     emission_dim := integer
                     number of hidden dimensions in output 
     """
     def __init__(self, y_dim, x_dim, emission_dim):
+        super().__init__()
         self.lin_x_to_hidden = nn.Linear(x_dim, emission_dim)
         self.lin_hidden_to_hidden = nn.Linear(emission_dim, emission_dim)
         self.lin_hidden_to_input = nn.Linear(emission_dim, y_dim)
@@ -192,6 +191,30 @@ class Emitter(nn.Module):
         h1 = self.lin_x_to_hidden(x_t)
         h2 = self.lin_hidden_to_hidden(h1)
         return self.lin_hidden_to_input(h2)
+
+
+class Transistor(nn.Module):
+    """
+    Parameterizes `p(x_t | x_{t-1})`.
+
+    Args
+    ----
+    x_dim := integer
+             number of latent dimensions
+    transition_dim := integer
+                      number of hidden dimensions in transistor
+    """
+    def __init__(self, x_dim, transition_dim):
+        super().__init__()
+        self.lin_x_to_hidden = nn.Linear(x_dim, transition_dim)
+        self.lin_hidden_to_mu = nn.Linear(transition_dim, x_dim)
+        self.lin_hidden_to_logvar = nn.Linear(transition_dim, x_dim)
+    
+    def forward(self, x_t_1):
+        h1 = self.lin_x_to_hidden(x_t_1)
+        mu = self.lin_hidden_to_mu(h1)
+        logvar = self.lin_hidden_to_logvar(h1)
+        return mu, logvar
 
 
 class Combiner(nn.Module):
@@ -221,7 +244,6 @@ class Combiner(nn.Module):
         x_t_mu = self.lin_hidden_to_mu(h_combined)
         # use the combined hidden state to compute the scale used to sample z_t
         x_t_logvar = self.lin_hidden_to_logvar(h_combined)
-        x_t_logvar = torch.tanh(x_t_logvar)  # HACK
         # return parameters of normal distribution
         return x_t_mu, x_t_logvar
 
