@@ -160,7 +160,6 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts):
     plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
     plt.legend()
     plt.savefig('./vis_ode.png', dpi=500)
-    print('Saved visualization figure at {}'.format('./vis.png'))
 
 
 if __name__ == '__main__':

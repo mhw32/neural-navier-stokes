@@ -55,53 +55,34 @@ class RNN(nn.Module):
         return loss
 
 
-def visualize(rnn, orig_trajs, orig_ts, samp_trajs, samp_ts):
-    device = samp_trajs.device
-    orig_ts_npy = orig_ts.flatten()
-    samp_ts_npy = samp_ts.cpu().numpy().flatten()
+def visualize(rnn, orig_trajs, orig_ts, teacher_forcing=True):
+    device = orig_trajs.device
     orig_ts = torch.from_numpy(orig_ts).float().to(device)
 
-    max_ts = max(samp_ts_npy)  # find max one from training
-    index = np.where(orig_ts_npy < max_ts + 1e-4)  # add a bit
-    index = max(index[0]) + 1
-
-    # parts for reconstruction
-    recon_trajs = orig_trajs[:, :index, :] 
-    recon_ts = orig_ts[:index]
-
-    # parts for extrapolation
-    # extra_trajs = orig_trajs[:, index:, :]
-    extra_ts = orig_ts[index:]
-
     with torch.no_grad():
-        # pass all the reconstruction stuff into RNN
-        # we don't need to go one by one here.
-        # -- important to store the hiddens we will use them in generation
-        recon_preds, hiddens = rnn(recon_trajs, recon_ts)
-
-        # now we go one by one and pretend like we don't know the real entry
-        trajs = recon_preds[:, -1, :].unsqueeze(1)
-
-        extra_preds = []
-        for i in range(len(extra_ts)):
-            trajs, hiddens = rnn(trajs, extra_ts[i].unsqueeze(0), hiddens=hiddens) 
-            extra_preds.append(trajs)
-        extra_preds = torch.cat(extra_preds, dim=1)
+        if teacher_forcing:
+            recon_trajs, _ = rnn(orig_trajs, orig_ts)
+        else:
+            n = len(orig_ts)
+            recon_trajs = []
+            trajs = orig_trajs[:, 0, :]  # take first sample
+            hiddens = None
+            for i in range(n):
+                trajs, hiddens = rnn(trajs, orig_ts[i].unsqueeze(0), hiddens=hiddens) 
+                recon_trajs.append(trajs)
+            recon_trajs = torch.cat(recon_trajs, dim=1)
 
     # just take the first index
     orig_traj = orig_trajs[0].cpu().numpy()
     samp_traj = samp_trajs[0].cpu().numpy()
-    recon_traj = recon_preds[0].cpu().numpy()
-    extra_traj = extra_preds[0].cpu().numpy()
+    recon_traj = recon_trajs[0].cpu().numpy()
 
     plt.figure()
     plt.plot(orig_traj[:, 0], orig_traj[:, 1], 'g', label='true trajectory')
-    plt.plot(recon_traj[:, 0], recon_traj[:, 1], 'r', label='learned trajectory (t>0)')
-    plt.plot(extra_traj[:, 0], extra_traj[:, 1], 'c', label='learned trajectory (t<0)')
+    plt.plot(recon_traj[:, 0], recon_traj[:, 1], 'r', label='learned trajectory')
     plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
     plt.legend()
     plt.savefig('./vis_rnn.png', dpi=500)
-    print('Saved visualization figure at {}'.format('./vis.png'))
 
 
 def get_parser():
