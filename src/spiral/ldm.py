@@ -149,7 +149,27 @@ class LDM(nn.Module):
 
         return output
 
-    
+    def compute_loss(self, data, output):
+        T = data.size(1)
+        device = data.device
+
+        noise_std_ = torch.zeros(output['y_mu'].size()).to(device) + .3  # hardcoded logvar
+        noise_logvar = 2. * torch.log(noise_std_)
+
+        elbo = 0
+        for t in range(1, T + 1):
+            log_p_yt_given_xt = log_normal_pdf(data[:, t - 1, :], output['y_mu'][:, t - 1, :], noise_logvar)
+            log_p_xt_given_xt1 = log_normal_pdf(output['q_x'][:, t - 1, :],  output['q_x_mu'][:, t - 1, :],
+                                                output['q_x_logvar'][:, t - 1, :])
+            log_q_xt_given_xt1_y = log_normal_pdf(output['q_x'][:, t - 1, :], output['q_x_mu'][:, t - 1, :],
+                                                  output['q_x_logvar'][:, t - 1, :])
+            elbo_t = log_p_yt_given_xt + log_p_xt_given_xt1 - log_q_xt_given_xt1_y
+            elbo += elbo_t
+        
+        elbo = torch.mean(elbo)
+        return -elbo
+
+
 class Emitter(nn.Module):
     """
     Parameterizes `p(y_t | x_t)`.
@@ -231,6 +251,13 @@ def get_parser():
     return parser
 
 
+def merge_inputs(samp_trajs, samp_ts):
+    n = len(samp_trajs)
+    samp_ts = samp_ts.unsqueeze(0).unsqueeze(2)
+    samp_ts = samp_ts.repeat(n, 1, 1)
+    inputs = torch.cat((samp_trajs, samp_ts), dim=2)
+    return inputs
+
 
 if __name__ == '__main__':
     parser = get_parser()
@@ -243,3 +270,32 @@ if __name__ == '__main__':
     orig_trajs = torch.from_numpy(orig_trajs).float().to(device)
     samp_trajs = torch.from_numpy(samp_trajs).float().to(device)
     samp_ts = torch.from_numpy(samp_ts).float().to(device)
+
+    ldm = LDM(3, 4, 20, 20, 25).to(device)
+    optimizer = optim.Adam(ldm.parameters(), lr=args.lr)
+
+    loss_meter = AverageMeter()
+    tqdm_pbar = tqdm(total=args.niters)
+    for itr in range(1, args.niters + 1):
+        optimizer.zero_grad()
+        inputs = merge_inputs(samp_trajs, samp_ts)
+        outputs = ldm(inputs)
+        loss = ldm.compute_loss(inputs, outputs)
+        loss.backward()
+        optimizer.step()
+        loss_meter.update(loss.item())
+        tqdm_pbar.set_postfix({"loss": -loss_meter.avg})
+        tqdm_pbar.update()
+    tqdm_pbar.close()
+
+    if not os.path.isdir(args.out_dir):
+        os.makedirs(args.out_dir)
+    checkpoint_path = os.path.join(args.out_dir, 'checkpoint.pth.tar')
+    torch.save({
+        'state_dict': rnn.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'orig_trajs': orig_trajs,
+        'samp_trajs': samp_trajs,
+        'orig_ts': orig_ts,
+        'samp_ts': samp_ts,
+    }, checkpoint_path)
