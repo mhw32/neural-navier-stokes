@@ -285,6 +285,31 @@ def merge_inputs(samp_trajs, samp_ts):
     return inputs
 
 
+def visualize(ldm, orig_trajs, orig_ts, samp_trajs, index=0):
+    device = orig_trajs.device
+    orig_ts = torch.from_numpy(orig_ts).float().to(device)
+
+    with torch.no_grad():
+        # first, get reconstructions with teacher forcing
+        inputs = merge_inputs(orig_trajs, orig_ts)
+        outputs = ldm(inputs)
+        recon_trajs = outputs['y_mu']
+
+        # TODO: extrapolations by sequential generation
+
+    # just take the first index
+    orig_traj = orig_trajs[index].cpu().numpy()
+    samp_traj = samp_trajs[index].cpu().numpy()
+    recon_traj = recon_trajs[index].cpu().numpy()
+
+    plt.figure()
+    plt.plot(orig_traj[:, 0], orig_traj[:, 1], 'g', label='true trajectory')
+    plt.plot(recon_traj[:, 0], recon_traj[:, 1], 'r', label='learned trajectory (teacher-forcing)')
+    plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
+    plt.legend()
+    plt.savefig('./vis_ldm.png', dpi=500)
+
+
 if __name__ == '__main__':
     parser = get_parser()
     args = parser.parse_args()
@@ -318,7 +343,7 @@ if __name__ == '__main__':
         os.makedirs(args.out_dir)
     checkpoint_path = os.path.join(args.out_dir, 'checkpoint.pth.tar')
     torch.save({
-        'state_dict': rnn.state_dict(),
+        'state_dict': ldm.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'orig_trajs': orig_trajs,
         'samp_trajs': samp_trajs,
