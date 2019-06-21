@@ -55,7 +55,7 @@ class RNN(nn.Module):
         return loss
 
 
-def visualize(rnn, orig_trajs, orig_ts, samp_trajs):
+def visualize(rnn, orig_trajs, orig_ts, samp_trajs, index=0):
     device = orig_trajs.device
     orig_ts = torch.from_numpy(orig_ts).float().to(device)
 
@@ -72,10 +72,10 @@ def visualize(rnn, orig_trajs, orig_ts, samp_trajs):
         extra_trajs = torch.cat(extra_trajs, dim=1)
 
     # just take the first index
-    orig_traj = orig_trajs[0].cpu().numpy()
-    samp_traj = samp_trajs[0].cpu().numpy()
-    recon_traj = recon_trajs[0].cpu().numpy()
-    extra_traj = extra_trajs[0].cpu().numpy()
+    orig_traj = orig_trajs[index].cpu().numpy()
+    samp_traj = samp_trajs[index].cpu().numpy()
+    recon_traj = recon_trajs[index].cpu().numpy()
+    extra_traj = extra_trajs[index].cpu().numpy()
 
     plt.figure()
     plt.plot(orig_traj[:, 0], orig_traj[:, 1], 'g', label='true trajectory')
@@ -83,8 +83,6 @@ def visualize(rnn, orig_trajs, orig_ts, samp_trajs):
     plt.plot(extra_traj[:, 0], extra_traj[:, 1], 'c', label='learned trajectory (generated)')
     plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
     plt.legend()
-    plt.xlim(0, 10)
-    plt.ylim(-10, 10)
     plt.savefig('./vis_rnn.png', dpi=500)
 
 

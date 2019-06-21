@@ -130,12 +130,12 @@ def get_parser():
     return parser
 
 
-def visualize(ode, orig_trajs, samp_trajs, orig_ts):
+def visualize(ode, orig_trajs, samp_trajs, orig_ts, index=0):
     with torch.no_grad():
         device = samp_trajs.device
         z0, _, _ = ode.infer(samp_trajs)
         orig_ts = torch.from_numpy(orig_ts).float().to(device)
-        z0 = z0[5]  # take first trajectory for visualization
+        z0 = z0[index]  # take first trajectory for visualization
 
         ts_pos = np.linspace(0., 3. * np.pi, num=4000)
         ts_neg = np.linspace(-2. * np.pi, 0., num=4000)[::-1].copy()
@@ -151,16 +151,14 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts):
     xs_pos = xs_pos.cpu().numpy()
     xs_neg = xs_neg.cpu().numpy()
     xs = np.concatenate((xs_pos, xs_neg), axis=0)
-    orig_traj = orig_trajs[0].cpu().numpy()
-    samp_traj = samp_trajs[0].cpu().numpy()
+    orig_traj = orig_trajs[index].cpu().numpy()
+    samp_traj = samp_trajs[index].cpu().numpy()
 
     plt.figure()
     plt.plot(orig_traj[:, 0], orig_traj[:, 1], 'g', label='true trajectory')
     plt.plot(xs[:, 0], xs[:, 1], 'r', label='learned trajectory')
     plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
     plt.legend()
-    plt.xlim(0, 10)
-    plt.ylim(-10, 10)
     plt.savefig('./vis_ode.png', dpi=500)
 
 

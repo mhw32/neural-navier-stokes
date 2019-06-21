@@ -5,6 +5,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('checkpoint_path', type=str)
+    parser.add_argument('--index', type=int, default=0)
     parser.add_argument('--gpu', type=int, default=0)
     args = parser.parse_args()
     device = torch.device('cuda:' + str(args.gpu)
@@ -16,5 +17,5 @@ if __name__ == '__main__':
     rnn = rnn.eval()
 
     visualize(rnn, checkpoint['orig_trajs'], checkpoint['orig_ts'],
-              checkpoint['samp_trajs'])
+              checkpoint['samp_trajs'], index=args.index)
 
