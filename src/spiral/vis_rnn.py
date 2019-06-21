@@ -11,10 +11,10 @@ if __name__ == '__main__':
                           if torch.cuda.is_available() else 'cpu')
 
     checkpoint = torch.load(args.checkpoint_path)
-    rnn = RNN(3, 2, 20, 25)to(device)
+    rnn = RNN(3, 2, 20, 25).to(device)
     rnn.load_state_dict(checkpoint['state_dict'])
     rnn = rnn.eval()
 
-    visualize(ode, checkpoint['orig_trajs'], checkpoint['orig_ts'],
+    visualize(rnn, checkpoint['orig_trajs'], checkpoint['orig_ts'],
               checkpoint['samp_trajs'], checkpoint['samp_ts'])
 
