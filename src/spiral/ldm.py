@@ -1,4 +1,4 @@
-"""Neural Linear dynamical model"""
+"""Neural Linear Dynamical Model"""
 
 import os
 import sys
