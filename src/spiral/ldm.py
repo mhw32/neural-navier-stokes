@@ -151,17 +151,19 @@ class LDM(nn.Module):
         T = data.size(1)
         device = data.device
 
+        # fixed standard deviation in the output dimension
         noise_std_ = torch.zeros(output['y_mu'].size()).to(device) + .3  # hardcoded logvar
         noise_logvar = 2. * torch.log(noise_std_)
 
         elbo = 0
         for t in range(1, T + 1):
-            log_p_yt_given_xt = log_normal_pdf(data[:, t - 1, :], output['y_mu'][:, t - 1, :], noise_logvar)
-            log_p_xt_given_xt1 = log_normal_pdf(output['q_x'][:, t - 1, :],  output['q_x_mu'][:, t - 1, :],
-                                                output['q_x_logvar'][:, t - 1, :])
+            log_p_yt_given_xt = log_normal_pdf(data[:, t - 1, :], output['y_mu'][:, t - 1, :], noise_logvar[:, t - 1, :])
+            log_p_xt_given_xt1 = log_normal_pdf(output['p_x'][:, t - 1, :],  output['p_x_mu'][:, t - 1, :],
+                                                output['p_x_logvar'][:, t - 1, :])
             log_q_xt_given_xt1_y = log_normal_pdf(output['q_x'][:, t - 1, :], output['q_x_mu'][:, t - 1, :],
                                                   output['q_x_logvar'][:, t - 1, :])
-            elbo_t = log_p_yt_given_xt + log_p_xt_given_xt1 - log_q_xt_given_xt1_y
+            
+            elbo_t = log_p_yt_given_xt.sum(1) + log_p_xt_given_xt1.sum(1) - log_q_xt_given_xt1_y.sum(1)
             elbo += elbo_t
         
         elbo = torch.mean(elbo)
@@ -213,7 +215,8 @@ class Transistor(nn.Module):
     def forward(self, x_t_1):
         h1 = self.lin_x_to_hidden(x_t_1)
         mu = self.lin_hidden_to_mu(h1)
-        logvar = self.lin_hidden_to_logvar(h1)
+        logvar = torch.zeros_like(mu)
+        # logvar = self.lin_hidden_to_logvar(h1)
         return mu, logvar
 
 
@@ -243,7 +246,8 @@ class Combiner(nn.Module):
         # use the combined hidden state to compute the mean used to sample z_t
         x_t_mu = self.lin_hidden_to_mu(h_combined)
         # use the combined hidden state to compute the scale used to sample z_t
-        x_t_logvar = self.lin_hidden_to_logvar(h_combined)
+        x_t_logvar = torch.zeros_like(x_t_mu) 
+        # x_t_logvar = self.lin_hidden_to_logvar(h_combined)
         # return parameters of normal distribution
         return x_t_mu, x_t_logvar
 
