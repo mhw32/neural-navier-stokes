@@ -33,8 +33,6 @@ class SLDM(nn.Module):
             number of input dimensions
     x_dim := integer
              number of latent dimensions
-    z_dim := integer
-             number of space dimensions
     x_emission_dim := integer
                       hidden dimension from y_dim -> x_dim
     z_emission_dim := integer
@@ -52,15 +50,17 @@ class SLDM(nn.Module):
     x_rnn_dropout_rate := float [default: 0.]
                           dropout over nodes in RNN
     """
-    def __init__(self, n_states, y_dim, x_dim, z_dim, x_emission_dim, z_emission_dim, 
+    def __init__(self, n_states, y_dim, x_dim, x_emission_dim, z_emission_dim, 
                  x_transition_dim, z_transition_dim, y_rnn_dim, x_rnn_dim, 
                  y_rnn_dropout_rate=0., x_rnn_dropout_rate=0.):
         super().__init__()
+        self.n_states = n_states  # can also call this z_dim
+        self.y_dim, self.x_dim = y_dim, x_dim
 
         # Define (trainable) parameters z_0 and z_q_0 that help define
         # the probability distributions p(z_1) and q(z_1)
-        self.z_0 = nn.Parameter(torch.zeros(z_dim * n_states))
-        self.z_q_0 = nn.Parameter(torch.zeros(z_dim * n_states))
+        self.z_0 = nn.Parameter(torch.randn(n_states))
+        self.z_q_0 = nn.Parameter(torch.randn(n_states))
 
         # Define a (trainable) parameter for the initial hidden state of each RNN
         self.h_0s = nn.ParameterList([nn.Parameter(torch.zeros(1, 1, x_rnn_dim))
@@ -74,12 +74,12 @@ class SLDM(nn.Module):
         ])
 
         # p(z_t|z_t-1)
-        self.state_transistor = StateTransistor(z_dim, z_transition_dim)
+        self.state_transistor = StateTransistor(n_states, z_transition_dim)
         # p(x_t|z_t)
-        self.state_emitter = StateEmitter(x_dim, z_dim, z_emission_dim)
+        self.state_emitter = StateEmitter(x_dim, n_states, z_emission_dim)
         # q(z_t|z_t-1,x_t:T)
-        self.state_combiner = StateCombiner(z_dim, x_rnn_dim)
-
+        self.state_combiner = StateCombiner(n_states, x_rnn_dim)
+        
         self.state_downsampler = StateDownsampler(x_rnn_dim, n_states)
 
         # initialize a bunch of systems
@@ -89,7 +89,7 @@ class SLDM(nn.Module):
             for _ in range(n_states)
         ])
 
-    def gumbel_softmax_reparameterize(self, logits, temperature):
+    def gumbel_softmax_reparameterize(self, logits, temperature, hard=False):
         """Pathwise derivatives through a soft approximation for 
         Categorical variables (i.e. Gumbel-Softmax).
 
@@ -99,10 +99,11 @@ class SLDM(nn.Module):
                     pre-softmax vectors for Categorical
         temperature := "softness" hyperparameter
                        for Gumbel-Softmax
+        hard := boolean [default: False]
+                if True, return hard sample (all weight in one class)
         """
         batch_size = logits.size(0)
-        logits = logits.view(batch_size, self.z_dim, self.n_states)
-        z = gumbel_softmax(logits, temperature)
+        z = gumbel_softmax(logits, temperature, hard=hard)
         return z
 
     def gaussian_reparameterize(self, mu, logvar):
@@ -171,7 +172,6 @@ class SLDM(nn.Module):
         z_prev_logits = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
         z_prev = self.gumbel_softmax_reparameterize(z_prev_logits, temperature)
 
-        import pdb; pdb.set_trace()
         x_sample, z_sample, z_logits_1_to_T = [], [], []
         for t in range(1, T + 1):
             x_summary = self.state_downsampler(x_summary_1_to_K[:, t - 1, :])
@@ -182,7 +182,7 @@ class SLDM(nn.Module):
             # z_t is a soft-indexing function, we generate the final sample as the weighted
             # sum of samples from each system. Note that as temperature -> 0, this will be
             # a real sample from the mixture.
-            x_t = torch.sum(z_t * q_x_1_to_K, dim=2) 
+            x_t = torch.sum(z_t.unsqueeze(2).unsqueeze(3) * q_x_1_to_K, dim=1) 
 
             x_sample.append(x_t)
             z_sample.append(z_t)
@@ -318,19 +318,15 @@ class StateCombiner(nn.Module):
     """
     def __init__(self, z_dim, rnn_dim):
         super().__init__()
-        self.lin_x_to_hidden = nn.Linear(z_dim, rnn_dim)
-        self.lin_hidden_to_mu = nn.Linear(rnn_dim, z_dim)
-        self.lin_hidden_to_logvar = nn.Linear(rnn_dim, z_dim)
+        self.lin_z_to_hidden = nn.Linear(z_dim, rnn_dim)
+        self.lin_hidden_to_logits = nn.Linear(rnn_dim, z_dim)
 
     def forward(self, z_t_1, h_rnn):
         # combine the rnn hidden state with a transformed version of z_t_1
-        h_combined = self.lin_x_to_hidden(z_t_1) + h_rnn
+        h_combined = self.lin_z_to_hidden(z_t_1) + h_rnn
         # use the combined hidden state to compute the mean used to sample z_t
-        x_t_mu = self.lin_hidden_to_mu(h_combined)
-        # use the combined hidden state to compute the scale used to sample z_t
-        x_t_logvar = torch.zeros_like(x_t_mu) 
-        # x_t_logvar = self.lin_hidden_to_logvar(h_combined)
-        return x_t_mu, x_t_logvar
+        z_t_logits = self.lin_hidden_to_logits(h_combined)
+        return z_t_logits
 
 
 class StateDownsampler(nn.Module):
@@ -364,7 +360,7 @@ if __name__ == '__main__':
     samp_trajs = torch.from_numpy(samp_trajs).float().to(device)
     samp_ts = torch.from_numpy(samp_ts).float().to(device)
 
-    sldm = SLDM(2, 3, 4, 4, 20, 20, 20, 20, 25, 25).to(device)
+    sldm = SLDM(2, 3, 4, 20, 20, 20, 20, 25, 25).to(device)
     optimizer = optim.Adam(sldm.parameters(), lr=args.lr)
     
     init_temp, min_temp, anneal_rate = 1.0, 0.5, 0.00003
@@ -379,7 +375,7 @@ if __name__ == '__main__':
         loss = sldm.compute_loss(inputs, outputs)
         loss.backward()
         optimizer.step()
-        if itr % 10 == 1:
+        if itr % 100 == 1:
             temp = np.maximum(temp * np.exp(-anneal_rate*batch_idx), min_temp)
         loss_meter.update(loss.item())
         tqdm_pbar.set_postfix({"loss": -loss_meter.avg})
