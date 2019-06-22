@@ -136,7 +136,7 @@ class LDM(nn.Module):
         y_probs = []
         for t in range(1, T + 1):
             x_t = q_x[:, t - 1]
-            # define `p(y_{1:T}|x_{1:T})`
+            # define `p(y_{1:T}|x_{1:T})`  <-- this is computing the remaining term in the loss!
             y_probs_t = self.emitter(x_t)
             y_probs.append(y_probs_t)
 

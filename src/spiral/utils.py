@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.autograd import Function 
 from torch.autograd.function import once_differentiable
 from torch.distributions import constraints, Categorical
@@ -312,3 +313,29 @@ class _MixDiagNormalSample(Function):
         scales_grad = sum_leftmost(prefactor * z_tilde, -2 - batch_dims)
 
         return locs_grad, scales_grad, logits_grad, None, None, None
+
+
+def sample_gumbel(shape, eps=1e-20):
+    U = torch.rand(shape).cuda()
+    return -torch.log(-torch.log(U + eps) + eps)
+
+
+def gumbel_softmax_sample(logits, temperature):
+    y = logits + sample_gumbel(logits.size())
+    return F.softmax(y / temperature, dim=-1)
+
+
+def gumbel_softmax(logits, temperature):
+    r"""ST-gumple-softmax
+
+    input: [*, n_class]
+    return: flatten --> [*, n_class] an one-hot vector
+    """
+    y = gumbel_softmax_sample(logits, temperature)
+    shape = y.size()
+    _, ind = y.max(dim=-1)
+    y_hard = torch.zeros_like(y).view(-1, shape[-1])
+    y_hard.scatter_(1, ind.view(-1, 1), 1)
+    y_hard = y_hard.view(*shape)
+    y_hard = (y_hard - y).detach() + y
+    return y_hard.view(-1, shape[1] * shape[2])

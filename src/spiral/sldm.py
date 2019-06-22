@@ -14,8 +14,7 @@ import torch.nn.functional as F
 from src.spiral.dataset import generate_spiral2d
 from src.spiral.ldm import reverse_sequences_torch
 from src.spiral.ldm import LDM, Combiner, Transistor, Emitter
-from src.spiral.utils import (AverageMeter, log_normal_pdf, normal_kl,
-                              Sparsemax, MixtureOfDiagNormals)
+from src.spiral.utils import AverageMeter, log_normal_pdf, normal_kl, gumbel_softmax
 
 
 class SLDM(nn.Module):
@@ -90,39 +89,37 @@ class SLDM(nn.Module):
             for _ in range(n_states)
         ])
 
-        self.sparsemax = Sparsemax()
-
-    def mixture_reparameterize(self, state_logits, component_mu, component_logvar):
-        """Reparameterization through a Mixture of Normals.
+    def gumbel_softmax_reparameterize(self, logits, temperature):
+        """Pathwise derivatives through a soft approximation for 
+        Categorical variables (i.e. Gumbel-Softmax).
 
         Args
         ----
-        state_logits     := batch_size x n_states
-                            logit over states
-        component_mu     := batch_size x n_states x z_dim
-                            mu for each Gaussian distribution
-        component_logvar := batch_size x n_states x z_dim
-                            logvar for each Gaussian distribution
-
-        Return
-        ------
-        z := batch_size x z_dim
-             sample from mixture of normals
+        logits   := torch.Tensor
+                    pre-softmax vectors for Categorical
+        temperature := "softness" hyperparameter
+                       for Gumbel-Softmax
         """
-        component_sigma = torch.exp(0.5 * component_logvar)
-        z = MixtureOfDiagNormals(
-            locs=component_mu.view(-1, self.n_states, self.z_dim),
-            coord_scale=component_sigma.view(-1, self.n_states, self.z_dim),
-            component_logits=state_logits,
-        ).rsample()
+        batch_size = logits.size(0)
+        logits = logits.view(batch_size, self.z_dim, self.n_states)
+        z = gumbel_softmax(logits, temperature)
         return z
 
     def gaussian_reparameterize(self, mu, logvar):
+        """Pathwise derivatives through Gaussian distribution.
+
+        Args
+        ----
+        mu     := torch.Tensor
+                  means of Gaussian distribution
+        logvar := torch.Tensor
+                  diagonal log variances of Gaussian distributions
+        """
         std = torch.exp(0.5*logvar)
         eps = torch.randn_like(std)
         return eps.mul(std).add_(mu)
 
-    def inference_network(self, data):
+    def inference_network(self, data, temperature):
         """Inference network for defining q(z_t|z_t-1,x^1_1:T,...,x^K_1:T)
                                       and q(x_t|x_t-1,y_1:T)
         Procedure:
@@ -133,19 +130,23 @@ class SLDM(nn.Module):
             - Initialize z(0), the first state. 
             - Define q(z_t|z_t-1,x^1_1:T,...,x^K_1:T) using the RNN summaries 
               for each system k
+
+        Note: we should slowly decay temperature from high to low (where a low
+              temperature will be closer to one-hotted.
         """
         batch_size = data.size(0)
         T = data.size(1)
         device = data.device
 
         # go though each system and get q(x_1:T|y_1:T)
-        q_x_mu_1_to_K, q_x_logvar_1_to_K = [], []
+        q_x_1_to_K, q_x_mu_1_to_K, q_x_logvar_1_to_K = [], [], []
         x_summary_1_to_K = []
 
         for i in range(self.n_states):
             ldm_i = self.ldms[i]
             q_x, q_x_mu, q_x_logvar = ldm_i.inference_network(data)
             q_x_reversed = ldm_i.reverse_data(q_x)
+            q_x_1_to_K.append(q_x.unsqueeze(1))
             q_x_mu_1_to_K.append(q_x_mu.unsqueeze(1))
             q_x_logvar_1_to_K.append(q_x_logvar.unsqueeze(1))
 
@@ -161,22 +162,27 @@ class SLDM(nn.Module):
 
         # q_x_mu_1_to_K     := batch_size x K x D
         # q_x_logvar_1_to_K := batch_size x K x D
+        q_x_1_to_K = torch.cat(q_x_1_to_K, dim=1)
         q_x_mu_1_to_K = torch.cat(q_x_mu_1_to_K, dim=1)
         q_x_logvar_1_to_K = torch.cat(q_x_logvar_1_to_K, dim=1)
         x_summary_1_to_K = torch.cat(x_summary_1_to_K, dim=2)  # batch_size x T x x_rnn_dim*n_states
         
         # start z_prev from learned initialization z_q_0
         z_prev_logits = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
+        z_prev = self.gumbel_softmax_reparameterize(z_prev_logits, temperature)
 
         x_sample, z_sample, z_logits_1_to_T = [], [], []
         for t in range(1, T + 1):
             x_summary = self.state_downsampler(x_summary_1_to_K[:, t - 1, :])
             # infer q(z_t|z_t-1,x^1_1:T,...,x^T_1:T)
-            #   we cant actually pass the sampled z_prev, only the logits...
-            z_t_logits = self.state_combiner(z_prev_logits, x_summary)
-            # sample from the mixture distribution
-            x_t = self.mixture_reparameterize(
-                self.sparsemax(z_t_logits), q_x_mu_1_to_K, q_x_logvar_1_to_K)
+            z_t_logits = self.state_combiner(z_prev, x_summary)
+            z_t = self.gumbel_softmax_reparameterize(z_t_logits, temperature)  # batch_size x z_dim x n_states
+            
+            # z_t is a soft-indexing function, we generate the final sample as the weighted
+            # sum of samples from each system. Note that as temperature -> 0, this will be
+            # a real sample from the mixture.
+            x_t = torch.sum(z_t * q_x_1_to_K, dim=2) 
+
             x_sample.append(x_t)
             z_sample.append(z_t)
             z_logits_1_to_T.append(z_t_logits)
@@ -188,11 +194,57 @@ class SLDM(nn.Module):
 
         return x_sample_1_to_T, q_x_mu_1_to_K, q_x_logvar_1_to_K, z_sample_1_to_T, z_logits_1_to_T
 
-    def prior_network(self, data):
-        pass
+    def prior_network(self, batch_size, T, temperature):
+        """Prior network for defining p(z_t | z_{t-1}). Note, unlike rsldm, this
+        is independent on x!
+        
+        Args
+        ----
+        batch_size := integer
+                      number of elements in a minibatch
+        T := integer
+             number of timesteps
+        temperature := integer
+                       hyperparameter for Gumbel-Softmax
+        """
+        # prior distribution over p(z_t|z_t-1)
+        z_logits = self.z_0.expand(batch_size, self.z_0.size(0))
+        z_prev = self.gumbel_softmax_reparameterize(z_logits, temperature)
 
-    def forward(self, data):
-        pass
+        z_sample_T, z_logits_T = [], []
+        for t in range(1, T + 1):
+            z_logits = self.state_transistor(z_prev)
+            z_t = self.gumbel_softmax_reparameterize(z_logits, temperature)
+
+            z_sample_T.append(z_t)
+            z_logits_T.append(z_logits)
+
+            z_prev = z_t
+
+        z_sample_T = torch.stack(z_sample_T).permute(1, 0, 2)  # (batch_size, T, x_dim)
+        z_logits_T = torch.stack(z_logits_T).permute(1, 0, 2)
+
+        return z_sample_T, z_logits_T
+
+    def forward(self, data, temperature):
+        batch_size, T, _ = data.size()
+        q_x, q_x_mu, q_x_logvar, q_z, q_z_logits = self.inference_network(data, temperature)
+        p_z, p_z_logits = self.generative_model(batch_size, T, temperature)
+
+        y_emission_mu = []
+        x_emission_mu, x_emission_logvar = [], []
+
+        for t in range(1, T + 1):
+            z_t = q_z[:, t - 1]
+            x_emission_mu_t, x_emission_logvar_t = self.state_emitter(z_t)
+            x_emission_t = self.gaussian_reparameterize(
+                x_emission_mu_t, x_emission_logvar_t)
+
+            y_emission_mu_t = []
+            for i in range(self.n_states):
+                y_emission_mu_t_state_i = self.ldms[i].emitter(x_emission_t)  # batch_size x T x y_dim
+                y_emission_mu_t.append(y_emission_mu_t)
+
 
     def compute_loss(self, data, output):
         pass
