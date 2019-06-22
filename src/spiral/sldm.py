@@ -12,8 +12,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from src.spiral.dataset import generate_spiral2d
-from src.spiral.ldm import reverse_sequences_torch, merge_inputs
-from src.spiral.ldm import LDM, Combiner, Transistor, Emitter
+from src.spiral.ldm import LDM, reverse_sequences_torch, merge_inputs
 from src.spiral.utils import (AverageMeter, log_normal_pdf, normal_kl, gumbel_softmax,
                               log_mixture_of_normals_pdf, log_gumbel_softmax_pdf)
 
@@ -22,9 +21,8 @@ class SLDM(nn.Module):
     """
     Switching-State Linear Dynamical Model parameterizes by neural networks.
 
-    We will only approximately be switching state: use SparseMax to sparsify
-    the categorical distribution over states. Reparameterize implicitly since
-    the underlying distribution is Gaussian.
+    We will only approximately be switching state by doing Gumbel-Softmax 
+    with a 1 dimensional categorical variable with n_states.
 
     We assume p(z_t | z_{t-1}), p(x_t | x_{t-1}), and p(y_t | x_t) are affine.
 

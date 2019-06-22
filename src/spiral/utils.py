@@ -346,10 +346,24 @@ def gumbel_softmax(logits, temperature, hard=False):
 def log_mixture_of_normals_pdf(x, logits, mus, logvars):
     """log PDF for Mixture of Gaussian with diagonal covariance.
 
-
+    Args
+    ----
+    x := torch.Tensor  (shape: batch_size x T x dim)
+         sample from mixture distribution
+    logits := torch.Tensor (shape: batch_size x T x n_states)
+              component mixtures (already softmax'd)
+    mus := torch.Tensor (shape: batch_size x n_states x T x dim)
+           means of each component Gaussian
+    logvars := torch.Tensor (shape: batch_size x n_states x T x dim)
+               log variances of each component Gaussian
     """
-    pass
+    sigmas = 0.5 * torch.exp(logvars)
+    dist = MixtureOfDiagNormals(mus, sigmas, logits)
+    return dist.log_prob(x)
 
 
 def log_gumbel_softmax_pdf(x, logits):
+    """Log PDF for sample from Gumbel Softmax distribution.
+    https://arxiv.org/pdf/1611.01144.pdf
+    """
     pass
