@@ -14,7 +14,8 @@ import torch.nn.functional as F
 from src.spiral.dataset import generate_spiral2d
 from src.spiral.ldm import reverse_sequences_torch, merge_inputs
 from src.spiral.ldm import LDM, Combiner, Transistor, Emitter
-from src.spiral.utils import AverageMeter, log_normal_pdf, normal_kl, gumbel_softmax
+from src.spiral.utils import (AverageMeter, log_normal_pdf, normal_kl, gumbel_softmax,
+                              log_mixture_of_normals_pdf, log_gumbel_softmax_pdf)
 
 
 class SLDM(nn.Module):
@@ -173,6 +174,7 @@ class SLDM(nn.Module):
         z_prev = self.gumbel_softmax_reparameterize(z_prev_logits, temperature)
 
         x_sample, z_sample, z_logits_1_to_T = [], [], []
+        q_x_mixture_comps_1_to_T = []  # save the mixture weights so we can compute pdf
         for t in range(1, T + 1):
             x_summary = self.state_downsampler(x_summary_1_to_K[:, t - 1, :])
             # infer q(z_t|z_t-1,x^1_1:T,...,x^T_1:T)
@@ -184,16 +186,19 @@ class SLDM(nn.Module):
             # a real sample from the mixture.
             x_t = torch.sum(z_t.unsqueeze(2) * q_x_1_to_K[:, :, t - 1, :], dim=1) 
 
+            q_x_mixture_comps_1_to_T.append(z_t)
             x_sample.append(x_t)
             z_sample.append(z_t)
             z_logits_1_to_T.append(z_t_logits)
             z_prev = z_t  # update for next iter
 
         x_sample_1_to_T = torch.stack(x_sample).permute(1, 0, 2)  # batch_size x T x x_dim
-        z_sample_1_to_T = torch.stack(z_sample).permute(1, 0, 2)  # batch_size x T x z_dim
+        z_sample_1_to_T = torch.stack(z_sample).permute(1, 0, 2)  # batch_size x T x n_states
         z_logits_1_to_T = torch.stack(z_logits_1_to_T).permute(1, 0, 2)
+        q_x_mixture_comps_1_to_T = torch.torch(q_x_mixture_comps_1_to_T).permute(1, 0, 2)
 
-        return x_sample_1_to_T, q_x_mu_1_to_K, q_x_logvar_1_to_K, z_sample_1_to_T, z_logits_1_to_T
+        return (x_sample_1_to_T, q_x_mu_1_to_K, q_x_logvar_1_to_K, q_x_mixture_comps_1_to_T, 
+                z_sample_1_to_T, z_logits_1_to_T)
 
     def prior_network(self, batch_size, T, temperature):
         """Prior network for defining p(z_t | z_{t-1}). Note, unlike rsldm, this
@@ -224,7 +229,8 @@ class SLDM(nn.Module):
 
     def forward(self, data, temperature):
         batch_size, T, _ = data.size()
-        q_x, q_x_mu, q_x_logvar, q_z, q_z_logits = self.inference_network(data, temperature)
+        q_x, q_x_mu, q_x_logvar, q_x_mixture_comps, q_z, q_z_logits = \
+            self.inference_network(data, temperature)
         p_z_logits = self.prior_network(batch_size, T, temperature)
 
         y_emission_mu = []
@@ -255,8 +261,8 @@ class SLDM(nn.Module):
 
         output = {'x_emission_mu': x_emission_mu, 'x_emission_logvar': x_emission_logvar,
                   'y_emission_mu': y_emission_mu, 'q_x': q_x, 'q_x_mu': q_x_mu, 
-                  'q_x_logvar': q_x_logvar, 'q_z': q_z, 'q_z_logits': q_z_logits,
-                  'p_z_logits': p_z_logits}
+                  'q_x_logvar': q_x_logvar, 'q_x_mixture_comps': q_x_mixture_comps,
+                  'q_z': q_z, 'q_z_logits': q_z_logits, 'p_z_logits': p_z_logits}
         return output
 
     def compute_loss(self, data, output):
@@ -268,17 +274,20 @@ class SLDM(nn.Module):
 
         elbo = 0
         for t in range(1, T + 1):
-            log_p_yt_given_xt = log_normal_pdf(data[:, t - 1, :], output['y_emission_mu'][:, t - 1, :], 
+            log_p_yt_given_xt = log_normal_pdf(data[:, t - 1, :], 
+                                               output['y_emission_mu'][:, t - 1, :], 
                                                noise_logvar[:, t - 1, :])
-            log_p_xt_given_zt = log_normal_pdf(output['q_x'][:, t - 1, :], output['x_emission_mu'][:, t - 1, :],
+            log_p_xt_given_zt = log_normal_pdf(output['q_x'][:, t - 1, :],
+                                               output['x_emission_mu'][:, t - 1, :],
                                                output['x_emission_logvar'][:, t - 1, :])
             log_p_zt_given_zt1 = log_gumbel_softmax_pdf(output['q_z'][:, t - 1, :],
                                                         output['p_z_logits'][:, t - 1, :])
-            log_q_xt_given_xt1_y = log_normal_pdf(output['q_x'][:, t - 1, :], output['q_x_mu'][:, t - 1, :],
-                                                  output['q_x_logvar'][:, t - 1, :])
+            log_q_xt_given_xt1_y = log_mixture_of_normals_pdf(output['q_x'][:, t - 1, :], 
+                                                              output['q_x_mixture_comps'][:, t - 1, :],
+                                                              output['q_x_mu'][:, t - 1, :],
+                                                              output['q_x_logvar'][:, t - 1, :])
             log_q_zt_given_zt1_x1toK = log_gumbel_softmax_pdf(output['q_z'][:, t - 1, :],
                                                               output['q_z_logits'][:, t - 1, :])
-
             elbo_t = log_p_yt_given_xt.sum(1) + log_p_xt_given_zt.sum(1) + log_p_zt_given_zt1.sum(1) \
                         - log_q_xt_given_xt1_y.sum(1) - log_q_zt_given_zt1_x1toK.sum(1)
             elbo += elbo_t

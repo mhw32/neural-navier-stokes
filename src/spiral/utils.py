@@ -341,3 +341,15 @@ def gumbel_softmax(logits, temperature, hard=False):
         y_hard = (y_hard - y).detach() + y
         return y_hard
     return y
+
+
+def log_mixture_of_normals_pdf(x, logits, mus, logvars):
+    """log PDF for Mixture of Gaussian with diagonal covariance.
+
+
+    """
+    pass
+
+
+def log_gumbel_softmax_pdf(x, logits):
+    pass
