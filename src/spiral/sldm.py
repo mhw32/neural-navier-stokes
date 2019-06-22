@@ -63,13 +63,13 @@ class SLDM(nn.Module):
         self.z_q_0 = nn.Parameter(torch.zeros(z_dim * n_states))
 
         # Define a (trainable) parameter for the initial hidden state of each RNN
-        self.h_0s = nn.ParameterList([nn.Parameter(torch.zeros(1, 1, self.x_rnn_dim))
+        self.h_0s = nn.ParameterList([nn.Parameter(torch.zeros(1, 1, x_rnn_dim))
                                       for _ in range(n_states)])
 
         # RNNs over continuous latent variables, x
         self.x_rnns = nn.ModuleList([
-            nn.RNN(self.x_dim, self.x_rnn_dim, nonlinearity='relu', 
-                   batch_first=True, dropout=self.x_rnn_dropout_rate)
+            nn.RNN(x_dim, x_rnn_dim, nonlinearity='relu', 
+                   batch_first=True, dropout=x_rnn_dropout_rate)
             for _ in range(n_states)
         ])
 
@@ -171,6 +171,7 @@ class SLDM(nn.Module):
         z_prev_logits = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
         z_prev = self.gumbel_softmax_reparameterize(z_prev_logits, temperature)
 
+        import pdb; pdb.set_trace()
         x_sample, z_sample, z_logits_1_to_T = [], [], []
         for t in range(1, T + 1):
             x_summary = self.state_downsampler(x_summary_1_to_K[:, t - 1, :])
@@ -181,7 +182,6 @@ class SLDM(nn.Module):
             # z_t is a soft-indexing function, we generate the final sample as the weighted
             # sum of samples from each system. Note that as temperature -> 0, this will be
             # a real sample from the mixture.
-            import pdb; pdb.set_trace()
             x_t = torch.sum(z_t * q_x_1_to_K, dim=2) 
 
             x_sample.append(x_t)
@@ -366,16 +366,21 @@ if __name__ == '__main__':
 
     sldm = SLDM(2, 3, 4, 4, 20, 20, 20, 20, 25, 25).to(device)
     optimizer = optim.Adam(sldm.parameters(), lr=args.lr)
+    
+    init_temp, min_temp, anneal_rate = 1.0, 0.5, 0.00003
 
     loss_meter = AverageMeter()
     tqdm_pbar = tqdm(total=args.niters)
+    temp = init_temp
     for itr in range(1, args.niters + 1):
         optimizer.zero_grad()
         inputs = merge_inputs(samp_trajs, samp_ts)
-        outputs = sldm(inputs)
+        outputs = sldm(inputs, temp)
         loss = sldm.compute_loss(inputs, outputs)
         loss.backward()
         optimizer.step()
+        if itr % 10 == 1:
+            temp = np.maximum(temp * np.exp(-anneal_rate*batch_idx), min_temp)
         loss_meter.update(loss.item())
         tqdm_pbar.set_postfix({"loss": -loss_meter.avg})
         tqdm_pbar.update()
@@ -391,5 +396,6 @@ if __name__ == '__main__':
         'samp_trajs': samp_trajs,
         'orig_ts': orig_ts,
         'samp_ts': samp_ts,
+        'temp': temp,
         'model_name': 'sldm',
     }, checkpoint_path)
