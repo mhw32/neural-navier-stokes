@@ -12,7 +12,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from src.spiral.dataset import generate_spiral2d
-from src.spiral.ldm import reverse_sequences_torch
+from src.spiral.ldm import reverse_sequences_torch, merge_inputs
 from src.spiral.ldm import LDM, Combiner, Transistor, Emitter
 from src.spiral.utils import AverageMeter, log_normal_pdf, normal_kl, gumbel_softmax
 
@@ -181,6 +181,7 @@ class SLDM(nn.Module):
             # z_t is a soft-indexing function, we generate the final sample as the weighted
             # sum of samples from each system. Note that as temperature -> 0, this will be
             # a real sample from the mixture.
+            import pdb; pdb.set_trace()
             x_t = torch.sum(z_t * q_x_1_to_K, dim=2) 
 
             x_sample.append(x_t)
@@ -340,3 +341,55 @@ class StateDownsampler(nn.Module):
     
     def forward(self, x):
         return self.lin(x)
+
+
+def get_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--niters', type=int, default=2000)
+    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--gpu', type=int, default=0)
+    parser.add_argument('--out-dir', type=str, default='./')
+    return parser
+
+
+if __name__ == '__main__':
+    parser = get_parser()
+    args = parser.parse_args()
+    device = torch.device('cuda:' + str(args.gpu)
+                          if torch.cuda.is_available() else 'cpu')
+
+    orig_trajs, samp_trajs, orig_ts, samp_ts = generate_spiral2d(
+        nspiral=1000, start=0., stop=6 * np.pi, noise_std=.3, a=0., b=.3)
+    orig_trajs = torch.from_numpy(orig_trajs).float().to(device)
+    samp_trajs = torch.from_numpy(samp_trajs).float().to(device)
+    samp_ts = torch.from_numpy(samp_ts).float().to(device)
+
+    sldm = SLDM(2, 3, 4, 4, 20, 20, 20, 20, 25, 25).to(device)
+    optimizer = optim.Adam(sldm.parameters(), lr=args.lr)
+
+    loss_meter = AverageMeter()
+    tqdm_pbar = tqdm(total=args.niters)
+    for itr in range(1, args.niters + 1):
+        optimizer.zero_grad()
+        inputs = merge_inputs(samp_trajs, samp_ts)
+        outputs = sldm(inputs)
+        loss = sldm.compute_loss(inputs, outputs)
+        loss.backward()
+        optimizer.step()
+        loss_meter.update(loss.item())
+        tqdm_pbar.set_postfix({"loss": -loss_meter.avg})
+        tqdm_pbar.update()
+    tqdm_pbar.close()
+
+    if not os.path.isdir(args.out_dir):
+        os.makedirs(args.out_dir)
+    checkpoint_path = os.path.join(args.out_dir, 'checkpoint.pth.tar')
+    torch.save({
+        'state_dict': sldm.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'orig_trajs': orig_trajs,
+        'samp_trajs': samp_trajs,
+        'orig_ts': orig_ts,
+        'samp_ts': samp_ts,
+        'model_name': 'sldm',
+    }, checkpoint_path)
