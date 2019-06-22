@@ -230,7 +230,7 @@ class SLDM(nn.Module):
     def forward(self, data, temperature):
         batch_size, T, _ = data.size()
         q_x, q_x_mu, q_x_logvar, q_z, q_z_logits = self.inference_network(data, temperature)
-        p_z, p_z_logits = self.generative_model(batch_size, T, temperature)
+        p_z, p_z_logits = self.prior_network(batch_size, T, temperature)
 
         y_emission_mu = []
         x_emission_mu, x_emission_logvar = [], []
@@ -243,7 +243,8 @@ class SLDM(nn.Module):
 
             y_emission_mu_t = []
             for i in range(self.n_states):
-                y_emission_mu_t_state_i = self.ldms[i].emitter(x_emission_t)  # batch_size x T x y_dim
+                # batch_size x T x y_dim
+                y_emission_mu_t_state_i = self.ldms[i].emitter(x_emission_t)
                 y_emission_mu_t.append(y_emission_mu_t)
 
 
@@ -292,15 +293,12 @@ class StateTransistor(nn.Module):
     def __init__(self, z_dim, transition_dim):
         super().__init__()
         self.lin_x_to_hidden = nn.Linear(z_dim, transition_dim)
-        self.lin_hidden_to_mu = nn.Linear(transition_dim, z_dim)
-        self.lin_hidden_to_logvar = nn.Linear(transition_dim, z_dim)
+        self.lin_hidden_to_logits = nn.Linear(transition_dim, z_dim)
 
     def forward(self, z_t_1):
         h1 = self.lin_x_to_hidden(z_t_1)
-        mu = self.lin_hidden_to_mu(h1)
-        logvar = torch.zeros_like(mu)
-        # logvar = self.lin_hidden_to_logvar(h1)
-        return mu, logvar
+        logits = self.lin_hidden_to_logits(h1)
+        return logits
 
 
 class StateCombiner(nn.Module):
