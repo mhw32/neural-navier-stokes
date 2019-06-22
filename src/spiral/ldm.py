@@ -111,27 +111,25 @@ class LDM(nn.Module):
         # prior distribution over p(x_t|x_t-1)
         x_prev = self.x_0.expand(batch_size, self.x_0.size(0))
 
-        x_sample_T, x_mu_T, x_logvar_T = [], [], []
+        x_sample_T, x_mu_T, x_logvar_T = [], []
         for t in range(1, T + 1):
             x_mu, x_logvar = self.transistor(x_prev)
             x_t = self.reparameterize(x_mu, x_logvar)
 
-            x_sample_T.append(x_t)
             x_mu_T.append(x_mu)
             x_logvar_T.append(x_logvar)
 
             x_prev = x_t
 
-        x_sample_T = torch.stack(x_sample_T).permute(1, 0, 2) # (batch_size, T, x_dim)
         x_mu_T = torch.stack(x_mu_T).permute(1, 0, 2)
         x_logvar_T = torch.stack(x_logvar_T).permute(1, 0, 2)
 
-        return x_sample_T, x_mu_T, x_logvar_T
+        return x_mu_T, x_logvar_T
 
     def forward(self, data):
         batch_size, T, _ = data.size()
         q_x, q_x_mu, q_x_logvar = self.inference_network(data)
-        p_x, p_x_mu, p_x_logvar = self.prior_network(batch_size, T)
+        p_x_mu, p_x_logvar = self.prior_network(batch_size, T)
 
         y_probs = []
         for t in range(1, T + 1):
@@ -142,8 +140,7 @@ class LDM(nn.Module):
 
         y_probs = torch.stack(y_probs).permute(1, 0, 2)
         output = {'q_x': q_x, 'q_x_mu': q_x_mu, 'q_x_logvar': q_x_logvar,
-                  'p_x': p_x, 'p_x_mu': p_x_mu, 'p_x_logvar': p_x_logvar,
-                  'y_mu': y_probs}
+                  'p_x_mu': p_x_mu, 'p_x_logvar': p_x_logvar, 'y_mu': y_probs}
 
         return output
 
@@ -158,7 +155,7 @@ class LDM(nn.Module):
         elbo = 0
         for t in range(1, T + 1):
             log_p_yt_given_xt = log_normal_pdf(data[:, t - 1, :], output['y_mu'][:, t - 1, :], noise_logvar[:, t - 1, :])
-            log_p_xt_given_xt1 = log_normal_pdf(output['p_x'][:, t - 1, :],  output['p_x_mu'][:, t - 1, :],
+            log_p_xt_given_xt1 = log_normal_pdf(output['q_x'][:, t - 1, :],  output['p_x_mu'][:, t - 1, :],
                                                 output['p_x_logvar'][:, t - 1, :])
             log_q_xt_given_xt1_y = log_normal_pdf(output['q_x'][:, t - 1, :], output['q_x_mu'][:, t - 1, :],
                                                   output['q_x_logvar'][:, t - 1, :])

@@ -212,39 +212,36 @@ class SLDM(nn.Module):
         z_logits = self.z_0.expand(batch_size, self.z_0.size(0))
         z_prev = self.gumbel_softmax_reparameterize(z_logits, temperature)
 
-        z_sample_T, z_logits_T = [], []
+        z_logits_T = []
         for t in range(1, T + 1):
             z_logits = self.state_transistor(z_prev)
             z_t = self.gumbel_softmax_reparameterize(z_logits, temperature)
-
-            z_sample_T.append(z_t)
             z_logits_T.append(z_logits)
-
             z_prev = z_t
 
-        z_sample_T = torch.stack(z_sample_T).permute(1, 0, 2)  # (batch_size, T, x_dim)
         z_logits_T = torch.stack(z_logits_T).permute(1, 0, 2)
-
-        return z_sample_T, z_logits_T
+        return z_logits_T
 
     def forward(self, data, temperature):
         batch_size, T, _ = data.size()
         q_x, q_x_mu, q_x_logvar, q_z, q_z_logits = self.inference_network(data, temperature)
-        p_z, p_z_logits = self.prior_network(batch_size, T, temperature)
+        p_z_logits = self.prior_network(batch_size, T, temperature)
 
         y_emission_mu = []
         x_emission_mu, x_emission_logvar = [], []
 
         for t in range(1, T + 1):
+            # NOTE: important to use samples from q(z,x|y)
             z_t = q_z[:, t - 1]
+            x_t = q_x[:, t - 1, :]
             x_emission_mu_t, x_emission_logvar_t = self.state_emitter(z_t)
-            x_emission_t = self.gaussian_reparameterize(
-                x_emission_mu_t, x_emission_logvar_t)
+            x_emission_mu.append(x_emission_mu_t)
+            x_emission_logvar.append(x_emission_logvar_t)
 
             y_emission_mu_t = []
             for i in range(self.n_states):
                 # batch_size x T x y_dim
-                y_emission_mu_t_state_i = self.ldms[i].emitter(x_emission_t)
+                y_emission_mu_t_state_i = self.ldms[i].emitter(x_t)
                 y_emission_mu_t.append(y_emission_mu_t_state_i)
             y_emission_mu_t = torch.stack(y_emission_mu_t)
             y_emission_mu_t = y_emission_mu_t.permute(1, 0, 2)
@@ -259,11 +256,35 @@ class SLDM(nn.Module):
         output = {'x_emission_mu': x_emission_mu, 'x_emission_logvar': x_emission_logvar,
                   'y_emission_mu': y_emission_mu, 'q_x': q_x, 'q_x_mu': q_x_mu, 
                   'q_x_logvar': q_x_logvar, 'q_z': q_z, 'q_z_logits': q_z_logits,
-                  'p_z': p_z, 'p_z_logits': p_z_logits}
+                  'p_z_logits': p_z_logits}
         return output
 
     def compute_loss(self, data, output):
-        pass
+        T, device = data.size(1), data.device
+
+        # fixed standard deviation in the output dimension
+        noise_std_ = torch.zeros(output['y_emission_mu'].size()).to(device) + .3
+        noise_logvar = 2. * torch.log(noise_std_)  # hardcoded logvar
+
+        elbo = 0
+        for t in range(1, T + 1):
+            log_p_yt_given_xt = log_normal_pdf(data[:, t - 1, :], output['y_emission_mu'][:, t - 1, :], 
+                                               noise_logvar[:, t - 1, :])
+            log_p_xt_given_zt = log_normal_pdf(output['q_x'][:, t - 1, :], output['x_emission_mu'][:, t - 1, :],
+                                               output['x_emission_logvar'][:, t - 1, :])
+            log_p_zt_given_zt1 = log_gumbel_softmax_pdf(output['q_z'][:, t - 1, :],
+                                                        output['p_z_logits'][:, t - 1, :])
+            log_q_xt_given_xt1_y = log_normal_pdf(output['q_x'][:, t - 1, :], output['q_x_mu'][:, t - 1, :],
+                                                  output['q_x_logvar'][:, t - 1, :])
+            log_q_zt_given_zt1_x1toK = log_gumbel_softmax_pdf(output['q_z'][:, t - 1, :],
+                                                              output['q_z_logits'][:, t - 1, :])
+
+            elbo_t = log_p_yt_given_xt.sum(1) + log_p_xt_given_zt.sum(1) + log_p_zt_given_zt1.sum(1) \
+                        - log_q_xt_given_xt1_y.sum(1) - log_q_zt_given_zt1_x1toK.sum(1)
+            elbo += elbo_t
+
+        elbo = torch.mean(elbo)  # across batch_size
+        return -elbo
 
 
 class StateEmitter(nn.Module):
