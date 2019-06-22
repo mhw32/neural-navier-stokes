@@ -245,8 +245,22 @@ class SLDM(nn.Module):
             for i in range(self.n_states):
                 # batch_size x T x y_dim
                 y_emission_mu_t_state_i = self.ldms[i].emitter(x_emission_t)
-                y_emission_mu_t.append(y_emission_mu_t)
+                y_emission_mu_t.append(y_emission_mu_t_state_i)
+            y_emission_mu_t = torch.stack(y_emission_mu_t)
+            y_emission_mu_t = y_emission_mu_t.permute(1, 0, 2)
+            # weighted against z_t
+            y_emission_mu_t = torch.sum(z_t.unsqueeze(2) * y_emission_mu_t, dim=1)
+            y_emission_mu.append(y_emission_mu_t)
 
+        x_emission_mu = torch.stack(x_emission_mu).permute(1, 0, 2)
+        x_emission_logvar = torch.stack(x_emission_logvar).permute(1, 0, 2)
+        y_emission_mu = torch.stack(y_emission_mu).permute(1, 0, 2)
+
+        output = {'x_emission_mu': x_emission_mu, 'x_emission_logvar': x_emission_logvar,
+                  'y_emission_mu': y_emission_mu, 'q_x': q_x, 'q_x_mu': q_x_mu, 
+                  'q_x_logvar': q_x_logvar, 'q_z': q_z, 'q_z_logits': q_z_logits,
+                  'p_z': p_z, 'p_z_logits': p_z_logits}
+        return output
 
     def compute_loss(self, data, output):
         pass
