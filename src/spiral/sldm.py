@@ -182,7 +182,7 @@ class SLDM(nn.Module):
             # z_t is a soft-indexing function, we generate the final sample as the weighted
             # sum of samples from each system. Note that as temperature -> 0, this will be
             # a real sample from the mixture.
-            x_t = torch.sum(z_t.unsqueeze(2).unsqueeze(3) * q_x_1_to_K, dim=1) 
+            x_t = torch.sum(z_t.unsqueeze(2) * q_x_1_to_K[:, :, t - 1, :], dim=1) 
 
             x_sample.append(x_t)
             z_sample.append(z_t)
