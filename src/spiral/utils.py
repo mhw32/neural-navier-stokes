@@ -184,6 +184,7 @@ class MixtureOfDiagNormals(TorchDistribution):
         self.dim = locs.size(-1)
         self.categorical = Categorical(logits=component_logits)
         self.probs = self.categorical.probs
+        self.log_probs = torch.nn.functional.log_softmax(self.categorical.logits, dim=1)
         super(MixtureOfDiagNormals, self).__init__(batch_shape=torch.Size(batch_shape),
                                                    event_shape=torch.Size((self.dim,)))
 
