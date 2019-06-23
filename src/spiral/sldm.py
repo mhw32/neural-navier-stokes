@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import torch.distributions as dist
 
 from src.spiral.dataset import generate_spiral2d
 from src.spiral.ldm import LDM, reverse_sequences_torch, merge_inputs
@@ -101,7 +102,9 @@ class SLDM(nn.Module):
         hard := boolean [default: False]
                 if True, return hard sample (all weight in one class)
         """
-        return gumbel_softmax(logits, temperature, hard=hard)
+        temperature = torch.Tensor([temperature])[0].to(logits.device)
+        posterior = dist.RelaxedOneHotCategorical(temperature, logits=logits)
+        return posterior.rsample()
 
     def gaussian_reparameterize(self, mu, logvar):
         """Pathwise derivatives through Gaussian distribution.
@@ -113,9 +116,9 @@ class SLDM(nn.Module):
         logvar := torch.Tensor
                   diagonal log variances of Gaussian distributions
         """
-        std = torch.exp(0.5*logvar)
-        eps = torch.randn_like(std)
-        return eps.mul(std).add_(mu)
+        sigma = 0.5 * torch.exp(logvar)
+        posterior = dist.Normal(mu, sigma)
+        return posterior.rsample()
 
     def inference_network(self, data, temperature):
         """Inference network for defining q(z_t|z_t-1,x^1_1:T,...,x^K_1:T)
