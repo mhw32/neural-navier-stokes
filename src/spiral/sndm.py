@@ -85,7 +85,7 @@ class SNDM(nn.Module):
         self.state_downsampler = StateDownsampler(x_rnn_dim, n_states)
 
         # initialize a bunch of systems
-        self.ldms = nn.ModuleList([
+        self.systems = nn.ModuleList([
             NDM(y_dim, x_dim, x_emission_dim, x_transition_dim,
                 y_rnn_dim, rnn_dropout_rate=y_rnn_dropout_rate)
             for _ in range(n_states)
@@ -185,3 +185,61 @@ class StateDownsampler(nn.Module):
     
     def forward(self, x):
         return self.net(x)
+
+
+def get_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--niters', type=int, default=2000)
+    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--gpu', type=int, default=0)
+    parser.add_argument('--out-dir', type=str, default='./')
+    return parser
+
+
+if __name__ == '__main__':
+    parser = get_parser()
+    args = parser.parse_args()
+    device = torch.device('cuda:' + str(args.gpu)
+                          if torch.cuda.is_available() else 'cpu')
+
+    orig_trajs, samp_trajs, orig_ts, samp_ts = generate_spiral2d(
+        nspiral=1000, start=0., stop=6 * np.pi, noise_std=.3, a=0., b=.3)
+    orig_trajs = torch.from_numpy(orig_trajs).float().to(device)
+    samp_trajs = torch.from_numpy(samp_trajs).float().to(device)
+    samp_ts = torch.from_numpy(samp_ts).float().to(device)
+
+    sndm = SNDM(2, 3, 4, 20, 20, 20, 20, 25, 25).to(device)
+    optimizer = optim.Adam(sndm.parameters(), lr=args.lr)
+    
+    init_temp, min_temp, anneal_rate = 1.0, 0.5, 0.00003
+
+    loss_meter = AverageMeter()
+    tqdm_pbar = tqdm(total=args.niters)
+    temp = init_temp
+    for itr in range(1, args.niters + 1):
+        optimizer.zero_grad()
+        inputs = merge_inputs(samp_trajs, samp_ts)
+        outputs = sndm(inputs, temp)
+        loss = sndm.compute_loss(inputs, outputs, temp)
+        loss.backward()
+        optimizer.step()
+        if itr % 100 == 1:
+            temp = np.maximum(temp * np.exp(-anneal_rate * itr), min_temp)
+        loss_meter.update(loss.item())
+        tqdm_pbar.set_postfix({"loss": -loss_meter.avg})
+        tqdm_pbar.update()
+    tqdm_pbar.close()
+
+    if not os.path.isdir(args.out_dir):
+        os.makedirs(args.out_dir)
+    checkpoint_path = os.path.join(args.out_dir, 'checkpoint.pth.tar')
+    torch.save({
+        'state_dict': sndm.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'orig_trajs': orig_trajs,
+        'samp_trajs': samp_trajs,
+        'orig_ts': orig_ts,
+        'samp_ts': samp_ts,
+        'temp': temp,
+        'model_name': 'sndm',
+    }, checkpoint_path)

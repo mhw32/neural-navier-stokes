@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.distributions as dist
 from torch.autograd import Function 
 from torch.autograd.function import once_differentiable
 from torch.distributions import constraints, Categorical
@@ -362,8 +363,9 @@ def log_mixture_of_normals_pdf(x, logits, mus, logvars):
     return dist.log_prob(x)
 
 
-def log_gumbel_softmax_pdf(x, logits):
+def log_gumbel_softmax_pdf(x, logits, temperature):
     """Log PDF for sample from Gumbel Softmax distribution.
     https://arxiv.org/pdf/1611.01144.pdf
     """
-    pass
+    gumbel = dist.RelaxedOneHotCategorical(temperature, logits=logits)
+    return gumbel.log_prob(x)

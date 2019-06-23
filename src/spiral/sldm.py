@@ -82,7 +82,7 @@ class SLDM(nn.Module):
         self.state_downsampler = StateDownsampler(x_rnn_dim, n_states)
 
         # initialize a bunch of systems
-        self.ldms = nn.ModuleList([
+        self.systems = nn.ModuleList([
             LDM(y_dim, x_dim, x_emission_dim, x_transition_dim,
                 y_rnn_dim, rnn_dropout_rate=y_rnn_dropout_rate)
             for _ in range(n_states)
@@ -101,9 +101,7 @@ class SLDM(nn.Module):
         hard := boolean [default: False]
                 if True, return hard sample (all weight in one class)
         """
-        batch_size = logits.size(0)
-        z = gumbel_softmax(logits, temperature, hard=hard)
-        return z
+        return gumbel_softmax(logits, temperature, hard=hard)
 
     def gaussian_reparameterize(self, mu, logvar):
         """Pathwise derivatives through Gaussian distribution.
@@ -143,9 +141,9 @@ class SLDM(nn.Module):
         x_summary_1_to_K = []
 
         for i in range(self.n_states):
-            ldm_i = self.ldms[i]
-            q_x, q_x_mu, q_x_logvar = ldm_i.inference_network(data)
-            q_x_reversed = ldm_i.reverse_data(q_x)
+            system_i = self.systems[i]
+            q_x, q_x_mu, q_x_logvar = system_i.inference_network(data)
+            q_x_reversed = system_i.reverse_data(q_x)
             q_x_1_to_K.append(q_x.unsqueeze(1))
             q_x_mu_1_to_K.append(q_x_mu.unsqueeze(1))
             q_x_logvar_1_to_K.append(q_x_logvar.unsqueeze(1))
@@ -245,7 +243,7 @@ class SLDM(nn.Module):
             y_emission_mu_t = []
             for i in range(self.n_states):
                 # batch_size x T x y_dim
-                y_emission_mu_t_state_i = self.ldms[i].emitter(x_t)
+                y_emission_mu_t_state_i = self.systems[i].emitter(x_t)
                 y_emission_mu_t.append(y_emission_mu_t_state_i)
             y_emission_mu_t = torch.stack(y_emission_mu_t)
             y_emission_mu_t = y_emission_mu_t.permute(1, 0, 2)
@@ -263,7 +261,7 @@ class SLDM(nn.Module):
                   'q_z': q_z, 'q_z_logits': q_z_logits, 'p_z_logits': p_z_logits}
         return output
 
-    def compute_loss(self, data, output):
+    def compute_loss(self, data, output, temperature):
         T, device = data.size(1), data.device
 
         # fixed standard deviation in the output dimension
@@ -279,13 +277,15 @@ class SLDM(nn.Module):
                                                output['x_emission_mu'][:, t - 1, :],
                                                output['x_emission_logvar'][:, t - 1, :])
             log_p_zt_given_zt1 = log_gumbel_softmax_pdf(output['q_z'][:, t - 1, :],
-                                                        output['p_z_logits'][:, t - 1, :])
+                                                        output['p_z_logits'][:, t - 1, :],
+                                                        temperature)
             log_q_xt_given_xt1_y = log_mixture_of_normals_pdf(output['q_x'][:, t - 1, :], 
                                                               output['q_x_mixture_comps'][:, t - 1, :],
                                                               output['q_x_mu'][:, t - 1, :],
                                                               output['q_x_logvar'][:, t - 1, :])
             log_q_zt_given_zt1_x1toK = log_gumbel_softmax_pdf(output['q_z'][:, t - 1, :],
-                                                              output['q_z_logits'][:, t - 1, :])
+                                                              output['q_z_logits'][:, t - 1, :],
+                                                              temperature)
             elbo_t = log_p_yt_given_xt.sum(1) + log_p_xt_given_zt.sum(1) + log_p_zt_given_zt1.sum(1) \
                         - log_q_xt_given_xt1_y.sum(1) - log_q_zt_given_zt1_x1toK.sum(1)
             elbo += elbo_t
@@ -412,11 +412,11 @@ if __name__ == '__main__':
         optimizer.zero_grad()
         inputs = merge_inputs(samp_trajs, samp_ts)
         outputs = sldm(inputs, temp)
-        loss = sldm.compute_loss(inputs, outputs)
+        loss = sldm.compute_loss(inputs, outputs, temp)
         loss.backward()
         optimizer.step()
         if itr % 100 == 1:
-            temp = np.maximum(temp * np.exp(-anneal_rate*batch_idx), min_temp)
+            temp = np.maximum(temp * np.exp(-anneal_rate * itr), min_temp)
         loss_meter.update(loss.item())
         tqdm_pbar.set_postfix({"loss": -loss_meter.avg})
         tqdm_pbar.update()
