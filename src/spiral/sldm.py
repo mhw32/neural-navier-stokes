@@ -416,10 +416,13 @@ if __name__ == '__main__':
         inputs = merge_inputs(samp_trajs, samp_ts)
         outputs = sldm(inputs, temp)
         loss = sldm.compute_loss(inputs, outputs, temp)
+        if np.isnan(loss.item()):
+            breakpoint();
         loss.backward()
         optimizer.step()
-        if itr % 100 == 1:
+        if itr % 10 == 1:
             temp = np.maximum(temp * np.exp(-anneal_rate * itr), min_temp)
+            print('temp set to {}'.format(temp))
         loss_meter.update(loss.item())
         tqdm_pbar.set_postfix({"loss": -loss_meter.avg})
         tqdm_pbar.update()

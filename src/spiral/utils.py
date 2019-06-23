@@ -14,11 +14,11 @@ import numpy as np
 
 
 def log_normal_pdf(x, mean, logvar):
-    sigma = 0.5 * torch.exp(logvar)
-    return dist.Normal(mean, sigma).log_prob(x)
-    # const = torch.from_numpy(np.array([2. * np.pi])).float().to(x.device)
-    # const = torch.log(const)
-    # return -.5 * (const + logvar + (x - mean) ** 2. / torch.exp(logvar))
+    # sigma = 0.5 * torch.exp(logvar)
+    # return dist.Normal(mean, sigma).log_prob(x)
+    const = torch.from_numpy(np.array([2. * np.pi])).float().to(x.device)
+    const = torch.log(const)
+    return -.5 * (const + logvar + (x - mean) ** 2. / torch.exp(logvar))
 
 
 def normal_kl(mu1, lv1, mu2, lv2):
