@@ -12,12 +12,14 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from src.spiral.dataset import generate_spiral2d
-from src.spiral.ldm import NDM, reverse_sequences_torch, merge_inputs
+from src.spiral.ldm import reverse_sequences_torch, merge_inputs
+from src.spiral.ndm import NDM
+from src.spiral.sldm import SLDM
 from src.spiral.utils import (AverageMeter, log_normal_pdf, normal_kl, gumbel_softmax,
                               log_mixture_of_normals_pdf, log_gumbel_softmax_pdf)
 
 
-class SNDM(nn.Module):
+class SNDM(SLDM):
     """
     Switching-State Nonlinear Dynamical Model parameterizes by neural networks.
 
@@ -55,7 +57,10 @@ class SNDM(nn.Module):
     def __init__(self, n_states, y_dim, x_dim, x_emission_dim, z_emission_dim, 
                  x_transition_dim, z_transition_dim, y_rnn_dim, x_rnn_dim, 
                  y_rnn_dropout_rate=0., x_rnn_dropout_rate=0.):
-        super().__init__()
+        super().__init__(n_states, y_dim, x_dim, x_emission_dim, z_emission_dim,
+                         x_transition_dim, z_transition_dim, y_rnn_dim, x_rnn_dim,
+                         y_rnn_dropout_rate=y_rnn_dropout_rate,
+                         x_rnn_dropout_rate=x_rnn_dropout_rate)
         self.n_states = n_states  # can also call this z_dim
         self.y_dim, self.x_dim = y_dim, x_dim
 
@@ -223,10 +228,10 @@ if __name__ == '__main__':
         loss = sndm.compute_loss(inputs, outputs, temp)
         loss.backward()
         optimizer.step()
-        if itr % 100 == 1:
+        if itr % 10 == 1:
             temp = np.maximum(temp * np.exp(-anneal_rate * itr), min_temp)
         loss_meter.update(loss.item())
-        tqdm_pbar.set_postfix({"loss": -loss_meter.avg})
+        tqdm_pbar.set_postfix({"loss": -loss_meter.avg, "temp": temp})
         tqdm_pbar.update()
     tqdm_pbar.close()
 

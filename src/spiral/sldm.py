@@ -422,9 +422,8 @@ if __name__ == '__main__':
         optimizer.step()
         if itr % 10 == 1:
             temp = np.maximum(temp * np.exp(-anneal_rate * itr), min_temp)
-            print('temp set to {}'.format(temp))
         loss_meter.update(loss.item())
-        tqdm_pbar.set_postfix({"loss": -loss_meter.avg})
+        tqdm_pbar.set_postfix({"loss": -loss_meter.avg, "temp": temp})
         tqdm_pbar.update()
     tqdm_pbar.close()
 
