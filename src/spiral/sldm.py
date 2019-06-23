@@ -281,13 +281,13 @@ class SLDM(nn.Module):
                                                         temperature)
             log_q_xt_given_xt1_y = log_mixture_of_normals_pdf(output['q_x'][:, t - 1, :], 
                                                               output['q_x_mixture_comps'][:, t - 1, :],
-                                                              output['q_x_mu'][:, t - 1, :],
-                                                              output['q_x_logvar'][:, t - 1, :])
+                                                              output['q_x_mu'][:, :, t - 1, :],
+                                                              output['q_x_logvar'][:, :, t - 1, :])
             log_q_zt_given_zt1_x1toK = log_gumbel_softmax_pdf(output['q_z'][:, t - 1, :],
                                                               output['q_z_logits'][:, t - 1, :],
                                                               temperature)
-            elbo_t = log_p_yt_given_xt.sum(1) + log_p_xt_given_zt.sum(1) + log_p_zt_given_zt1.sum(1) \
-                        - log_q_xt_given_xt1_y.sum(1) - log_q_zt_given_zt1_x1toK.sum(1)
+            elbo_t = log_p_yt_given_xt.sum(1) + log_p_xt_given_zt.sum(1) + log_p_zt_given_zt1 \
+                        - log_q_xt_given_xt1_y - log_q_zt_given_zt1_x1toK
             elbo += elbo_t
 
         elbo = torch.mean(elbo)  # across batch_size

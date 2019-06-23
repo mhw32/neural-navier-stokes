@@ -349,29 +349,18 @@ def log_mixture_of_normals_pdf(x, logits, mus, logvars):
 
     Args
     ----
-    x := torch.Tensor  (shape: batch_size x T x dim)
+    x := torch.Tensor  (shape: batch_size x dim)
          sample from mixture distribution
-    logits := torch.Tensor (shape: batch_size x T x n_states)
+    logits := torch.Tensor (shape: batch_size x n_states)
               component mixtures (already softmax'd)
-    mus := torch.Tensor (shape: batch_size x n_states x T x dim)
+    mus := torch.Tensor (shape: batch_size x n_states  x dim)
            means of each component Gaussian
-    logvars := torch.Tensor (shape: batch_size x n_states x T x dim)
+    logvars := torch.Tensor (shape: batch_size x n_states x dim)
                log variances of each component Gaussian
     """
-    batch_size, n_states, T, dim = mus.size()
-
-    mus = mus.permute(0, 2, 1, 3).contiguous()
-    logvars = logvars.permute(0, 2, 1, 3).contiguous()
-
-    mus = mus.view(batch_size * T, n_states, dim)
-    logvars = logvars.view(batch_size * T, n_states, dim)
-    logits = logits.view(batch_size * T, n_states)
-    x = x.view(batch_size * T, dim)
-
     sigmas = 0.5 * torch.exp(logvars)
     dist = MixtureOfDiagNormals(mus, sigmas, logits)
-    log_probs = dist.log_prob(x)
-    import pdb; pdb.set_trace()
+    return dist.log_prob(x)
 
 
 def log_gumbel_softmax_pdf(x, logits, temperature):
