@@ -191,7 +191,7 @@ class SLDM(nn.Module):
         x_sample_1_to_T = torch.stack(x_sample).permute(1, 0, 2)  # batch_size x T x x_dim
         z_sample_1_to_T = torch.stack(z_sample).permute(1, 0, 2)  # batch_size x T x n_states
         z_logits_1_to_T = torch.stack(z_logits_1_to_T).permute(1, 0, 2)
-        q_x_mixture_comps_1_to_T = torch.torch(q_x_mixture_comps_1_to_T).permute(1, 0, 2)
+        q_x_mixture_comps_1_to_T = torch.stack(q_x_mixture_comps_1_to_T).permute(1, 0, 2)
 
         return (x_sample_1_to_T, q_x_mu_1_to_K, q_x_logvar_1_to_K, q_x_mixture_comps_1_to_T, 
                 z_sample_1_to_T, z_logits_1_to_T)

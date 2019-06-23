@@ -367,5 +367,6 @@ def log_gumbel_softmax_pdf(x, logits, temperature):
     """Log PDF for sample from Gumbel Softmax distribution.
     https://arxiv.org/pdf/1611.01144.pdf
     """
+    temperature = torch.Tensor([temperature])[0].to(logits.device)
     gumbel = dist.RelaxedOneHotCategorical(temperature, logits=logits)
     return gumbel.log_prob(x)

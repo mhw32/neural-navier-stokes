@@ -111,7 +111,7 @@ class LDM(nn.Module):
         # prior distribution over p(x_t|x_t-1)
         x_prev = self.x_0.expand(batch_size, self.x_0.size(0))
 
-        x_sample_T, x_mu_T, x_logvar_T = [], []
+        x_mu_T, x_logvar_T = [], []
         for t in range(1, T + 1):
             x_mu, x_logvar = self.transistor(x_prev)
             x_t = self.reparameterize(x_mu, x_logvar)
