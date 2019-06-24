@@ -59,7 +59,7 @@ def generate_spiral2d(nspiral=1000,
         plt.plot(orig_traj_cw[:, 0], orig_traj_cw[:, 1], label='clock')
         plt.plot(orig_traj_cc[:, 0], orig_traj_cc[:, 1], label='counter clock')
         plt.legend()
-        plt.savefig('./ground_truth.png', dpi=500)
+        plt.savefig('./images/ground_truth.png', dpi=500)
         print('Saved ground truth spiral at {}'.format('./ground_truth.png'))
 
     # sample starting timestamps
