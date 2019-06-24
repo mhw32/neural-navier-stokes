@@ -74,7 +74,7 @@ class SLDM(nn.Module):
         ])
 
         # p(z_t|z_t-1)
-        self. , = StateTransistor(n_states, z_transition_dim)
+        self.state_transistor = StateTransistor(n_states, z_transition_dim)
         # p(x_t|z_t)
         self.state_emitter = StateEmitter(x_dim, n_states, z_emission_dim)
         # q(z_t|z_t-1,x_t:T)
@@ -209,7 +209,7 @@ class SLDM(nn.Module):
 
         z_logits_T = []
         for t in range(1, T + 1):
-            z_logits = self. ,(z_prev)
+            z_logits = self.state_transistor(z_prev)
             z_t = self.gumbel_softmax_reparameterize(z_logits, temperature)
             z_logits_T.append(z_logits)
             z_prev = z_t
@@ -233,17 +233,17 @@ class SLDM(nn.Module):
 
             y_emission_mu_t = []
             for i in range(self.n_states):
-                x_t = q_x[:, i, t, :]  # q_x has shape batch_size x n_states x T x dims
+                x_t = q_x[:, i, t - 1, :]  # q_x has shape batch_size x n_states x T x dims
                 # batch_size x T x y_dim
                 y_emission_mu_t_state_i = self.systems[i].emitter(x_t)
                 y_emission_mu_t.append(y_emission_mu_t_state_i)
             y_emission_mu_t = torch.stack(y_emission_mu_t)
             y_emission_mu_t = y_emission_mu_t.permute(1, 0, 2)  # batch_size x n_states x dims
-            y_emission_mu.append(y_emission_mu_t.unsqueeze(1))
+            y_emission_mu.append(y_emission_mu_t.unsqueeze(2))
 
         x_emission_mu = torch.stack(x_emission_mu).permute(1, 0, 2)
         x_emission_logvar = torch.stack(x_emission_logvar).permute(1, 0, 2)
-        y_emission_mu = torch.cat(y_emission_mu, dim=1)  # batch_size x n_states x T x dims
+        y_emission_mu = torch.cat(y_emission_mu, dim=2)  # batch_size x n_states x T x dims
 
         output = {'x_emission_mu': x_emission_mu, 'x_emission_logvar': x_emission_logvar,
                   'y_emission_mu_1_to_K': y_emission_mu, 'q_x_1_to_K': q_x, 
@@ -255,34 +255,34 @@ class SLDM(nn.Module):
         T, device = data.size(1), data.device
 
         # fixed standard deviation in the output dimension
-        noise_std_ = torch.zeros(output['y_emission_mu'].size()).to(device) + .3
+        noise_std_ = torch.zeros(output['y_emission_mu_1_to_K'][:, 0].size()).to(device) + .3
         noise_logvar = 2. * torch.log(noise_std_)  # hardcoded logvar
 
         elbo = 0
         for t in range(1, T + 1):
-            log_p_yt_given_xt = log_normal_pdf(data[:, t - 1, :], 
-                                               output['y_emission_mu'][:, t - 1, :], 
-                                               noise_logvar[:, t - 1, :])
-            log_p_xt_given_zt = 0
+            elbo_t = []
             for k in range(self.n_states):
-                log_p_xt_given_zt_state_k = log_normal_pdf(output['q_x'][:, k, t - 1, :],
-                                                           output['x_emission_mu'][:, t - 1, :],
-                                                           output['x_emission_logvar'][:, t - 1, :])
-                log_p_xt_given_zt += log_p_xt_given_zt_state_k
-            log_p_zt_given_zt1 = log_gumbel_softmax_pdf(output['q_z'][:, t - 1, :],
-                                                        output['p_z_logits'][:, t - 1, :],
-                                                        temperature)
-            log_q_xt_given_xt1_y = 0
-            for k in range(self.n_states):
-                log_q_xt_given_xt1_y_state_k = log_normal_pdf(output['q_x'][:, k, t - 1, :], 
-                                                              output['q_x_mu'][:, k, t - 1, :],
-                                                              output['q_x_logvar'][:, k, t - 1, :])
-                log_q_xt_given_xt1_y += log_q_xt_given_xt1_y_state_k
-            log_q_zt_given_zt1_x1toK = log_gumbel_softmax_pdf(output['q_z'][:, t - 1, :],
-                                                              output['q_z_logits'][:, t - 1, :],
-                                                              temperature)
-            elbo_t = log_p_yt_given_xt.sum(1) + log_p_xt_given_zt.sum(1) + log_p_zt_given_zt1 \
-                        - log_q_xt_given_xt1_y - log_q_zt_given_zt1_x1toK
+                log_p_yt_given_xt = log_normal_pdf(data[:, t - 1, :], 
+                                                   output['y_emission_mu_1_to_K'][:, k, t - 1, :], 
+                                                   noise_logvar[:, t - 1, :])
+                log_p_xt_given_zt = log_normal_pdf(output['q_x_1_to_K'][:, k, t - 1, :],
+                                                   output['x_emission_mu'][:, t - 1, :],
+                                                   output['x_emission_logvar'][:, t - 1, :])
+                log_p_zt_given_zt1 = log_gumbel_softmax_pdf(output['q_z'][:, t - 1, :],
+                                                            output['p_z_logits'][:, t - 1, :],
+                                                            temperature)
+                log_q_xt_given_xt1_y = log_normal_pdf(output['q_x_1_to_K'][:, k, t - 1, :], 
+                                                      output['q_x_mu_1_to_K'][:, k, t - 1, :],
+                                                      output['q_x_logvar_1_to_K'][:, k, t - 1, :])
+                log_q_zt_given_zt1_x1toK = log_gumbel_softmax_pdf(output['q_z'][:, t - 1, :],
+                                                                  output['q_z_logits'][:, t - 1, :],
+                                                                  temperature)
+                elbo_t_k = log_p_yt_given_xt.sum(1) + log_p_xt_given_zt.sum(1) + log_p_zt_given_zt1 \
+                             - log_q_xt_given_xt1_y.sum(1) - log_q_zt_given_zt1_x1toK
+                elbo_t.append(elbo_t_k)
+            elbo_t = torch.stack(elbo_t).permute(1, 0)
+            state_weights = output['q_z'][:, t - 1, :]
+            elbo_t = torch.sum(elbo_t * state_weights, dim=1)
             elbo += elbo_t
 
         elbo = torch.mean(elbo)  # across batch_size
