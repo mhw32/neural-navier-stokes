@@ -135,31 +135,51 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts, index=0):
         device = samp_trajs.device
         z0, _, _ = ode.infer(samp_trajs)
         orig_ts = torch.from_numpy(orig_ts).float().to(device)
-        z0 = z0[index]  # take first trajectory for visualization
 
-        ts_pos = np.linspace(0., 3. * np.pi, num=4000)
-        ts_neg = np.linspace(-2. * np.pi, 0., num=4000)[::-1].copy()
-        ts_pos = torch.from_numpy(ts_pos).float().to(device)
-        ts_neg = torch.from_numpy(ts_neg).float().to(device)
+        xs_lst, orig_traj_lst, samp_traj_lst = [], [], []
 
-        zs_pos = odeint(ode.func, z0, ts_pos)
-        zs_neg = odeint(ode.func, z0, ts_neg)
+        for index in range(100):
+            z0 = z0[index]  # take first trajectory for visualization
 
-        xs_pos = ode.dec(zs_pos)
-        xs_neg = torch.flip(ode.dec(zs_neg), dims=[0])
+            ts_pos = np.linspace(0., 3. * np.pi, num=4000)
+            ts_neg = np.linspace(-2. * np.pi, 0., num=4000)[::-1].copy()
+            ts_pos = torch.from_numpy(ts_pos).float().to(device)
+            ts_neg = torch.from_numpy(ts_neg).float().to(device)
 
-    xs_pos = xs_pos.cpu().numpy()
-    xs_neg = xs_neg.cpu().numpy()
-    xs = np.concatenate((xs_pos, xs_neg), axis=0)
-    orig_traj = orig_trajs[index].cpu().numpy()
-    samp_traj = samp_trajs[index].cpu().numpy()
+            zs_pos = odeint(ode.func, z0, ts_pos)
+            zs_neg = odeint(ode.func, z0, ts_neg)
 
-    plt.figure()
-    plt.plot(orig_traj[:, 0], orig_traj[:, 1], 'g', label='true trajectory')
-    plt.plot(xs[:, 0], xs[:, 1], 'r', label='learned trajectory')
-    plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
-    plt.legend()
-    plt.savefig('./vis_ode.png', dpi=500)
+            xs_pos = ode.dec(zs_pos)
+            xs_neg = torch.flip(ode.dec(zs_neg), dims=[0])
+
+            xs_pos = xs_pos.cpu().numpy()
+            xs_neg = xs_neg.cpu().numpy()
+            xs = np.concatenate((xs_pos, xs_neg), axis=0)
+            orig_traj = orig_trajs[index].cpu().numpy()
+            samp_traj = samp_trajs[index].cpu().numpy()
+
+            xs_lst.append(xs)
+            orig_traj_lst.append(orig_traj.cpu().numpy())
+            samp_traj_lst.append(samp_traj.cpu().numpy())
+
+    # plot first 100 examples
+    fig, axes = plt.subplots(10, 10, figsize=(30, 30))
+    for i in range(10):
+        for j in range(10):
+            index = 10*i + j
+            # true trajectory
+            axes[i][j].plot(orig_traj_lst[index][:, 0], 
+                            orig_traj_lst[index][:, 1], 
+                            '-', label='true trajectory')
+            plt.plot(xs_lst[index][:, 0], xs_lst[index][:, 1], 
+                     '-', label='learned ODE')
+            axes[i][j].plot(samp_trajs[index][:, 0], 
+                            samp_trajs[index][:, 1], 
+                            'o', markersize=1, label='dataset')
+
+    axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
+                              ncol=5, fontsize=20)
+    plt.savefig('./vis_ode.pdf', dpi=500)
 
 
 if __name__ == '__main__':

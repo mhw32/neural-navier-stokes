@@ -115,8 +115,7 @@ def visualize(rnn, orig_trajs, orig_ts, samp_trajs, index=0):
                             label='half teacher forcing')
             axes[i][j].plot(samp_trajs[index][:, 0].cpu().numpy(), 
                             samp_trajs[index][:, 1].cpu().numpy(), 
-                            'o', markersize=1,
-                            label='dataset')
+                            'o', markersize=1, label='dataset')
     axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
                               ncol=5, fontsize=20)
     plt.savefig('./vis_rnn.pdf', dpi=500)
