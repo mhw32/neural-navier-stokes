@@ -53,7 +53,7 @@ def generate_spiral2d(nspiral=1000,
     rw_cc = a + b * zs_cc
     xs, ys = rw_cc * np.cos(zs_cc) + 5., rw_cc * np.sin(zs_cc)
     orig_traj_cc = np.stack((xs, ys), axis=1)
-    
+   
     if savefig:
         plt.figure()
         plt.plot(orig_traj_cw[:, 0], orig_traj_cw[:, 1], label='clock')
