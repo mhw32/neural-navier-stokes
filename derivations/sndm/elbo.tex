@@ -1,0 +1,49 @@
+\documentclass[12pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amsthm,amssymb}
+\usepackage{graphicx}
+
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Z}{\mathbb{Z}}
+
+\newenvironment{theorem}[2][Theorem]{\begin{trivlist}
+\item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+\newenvironment{lemma}[2][Lemma]{\begin{trivlist}
+\item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+\newenvironment{exercise}[2][Exercise]{\begin{trivlist}
+\item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+\newenvironment{reflection}[2][Reflection]{\begin{trivlist}
+\item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+\newenvironment{proposition}[2][Proposition]{\begin{trivlist}
+\item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+\newenvironment{corollary}[2][Corollary]{\begin{trivlist}
+\item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+
+\begin{document}
+
+We derive a lower bound for a switching state (non)linear dynamical system. Let $\vec{y}$ represent observations, $\vec{x}$ represent latent variables, and $\vec{z}$ represent categorical state variables.
+
+\begin{align}
+    \log p(\vec{y}) &\geq \int_{\vec{z}} \int_{\vec{x}} q(\vec{z},\vec{x}|\vec{y}) \log \frac{p(\vec{y},\vec{x},\vec{z})}{q(\vec{z},\vec{x}|\vec{y})} d\vec{x} d\vec{z}
+\end{align}
+where $\vec{z},\vec{x} \sim q(\vec{z},\vec{x}|\vec{y})$. In particular, $q(\vec{z},\vec{x}|\vec{y}) = q(\vec{z}|\vec{x})q(\vec{x}|\vec{y})$ and $p(\vec{y},\vec{x},\vec{z}) = p(\vec{y}|\vec{x})p(\vec{x}|\vec{z})p(\vec{z})$. We define the following factorizations:
+
+\begin{align}
+    p(\vec{y}|\vec{x}) &= \prod_{t=1}^T p(y_t|x_t) \\
+    p(\vec{x}|\vec{z}) &= \prod_{t=1}^T p(x_t|x_{t-1},z_t) \\
+    p(\vec{z}) &= \prod_{t=1}^T p(z_t|z_{t-1}) \\
+    q(\vec{z}|\vec{x}) &= \prod_{t=1}^T q(z_t|z_{t-1},x^{(1)}_{1:T},...,x^{(K)}_{1:T}) \\
+    q(\vec{x}|\vec{y}) &= \prod_{t=1}^T q(x_t|x_{t-1},y_{1:T})
+\end{align}
+
+Note, $x^{(k)}_{1:T}$ for $k=1...K$ indicates the latent variables generated from state $k$. The objective is then:
+
+\begin{align}
+    \mathcal{L} &= \mathbb{E}_{q(\vec{z},\vec{x}|\vec{y})}[\log \frac{p(\vec{y}|\vec{x})p(\vec{x}|\vec{z})p(\vec{z})}{q(\vec{z}|\vec{x})q(\vec{x}|\vec{y})}] \\
+    &= \mathbb{E}_{q(\vec{z},\vec{x}|\vec{y})}[\log p(\vec{y}|\vec{x}) + \log p(\vec{x}|\vec{z}) + \log p(\vec{z}) - \log q(\vec{z}|\vec{x}) - \log q(\vec{x}|\vec{y})] \\
+    &= \mathbb{E}[\sum_{t=1}^T \{ w_t^{(k)} \cdot \sum_{k=1}^K \{ \log p(y_t|x^{(k)}_t) + \log p(x^{(k)}_t|x^{(k)}_{t-1},z_t) + \log p(z_t|z_{t-1}) \\ &\qquad\qquad - \log q(z_t|z_{t-1},x^{(1)}_{1:T},...,x^{(K)}_{1:T}) - \log q(x^{(k)}_t|x^{(k)}_{t-1},y_{1:T}) \} \} ]
+\end{align}
+where $w_t^{(k)}$ is the $k$-th entry of the soft categorical parameters for $z_t$. Basically, we are averaging the ELBO over $K$ systems and weighting the loss by the contribution of that system at timestep $T$.
+
+\end{document}
