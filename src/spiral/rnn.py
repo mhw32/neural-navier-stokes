@@ -58,30 +58,51 @@ class RNN(nn.Module):
 def visualize(rnn, orig_trajs, orig_ts, samp_trajs, index=0):
     device = orig_trajs.device
     orig_ts = torch.from_numpy(orig_ts).float().to(device)
+    T = orig_trajs.size(1)
 
     with torch.no_grad():
+        # MODE 1
+        # ------
+        # this is teacher forcing -- show a point, predict a point
+        #                            this should be very easy!
         recon_trajs, _ = rnn(orig_trajs, orig_ts)
         
-        n = len(orig_ts)
+        # MODE 2
+        # ------
+        # this takes only the FIRST sample and propogates forward
+        # from there -- this is very difficult!
         extra_trajs = []
         trajs = orig_trajs[:, 0, :].unsqueeze(1)  # take first sample
         hiddens = None
-        for i in range(n):
-            trajs, hiddens = rnn(trajs, orig_ts[i].unsqueeze(0), hiddens=hiddens) 
+        for t in range(T):
+            trajs, hiddens = rnn(trajs, orig_ts[:, t].unsqueeze(1), hiddens=hiddens) 
             extra_trajs.append(trajs)
         extra_trajs = torch.cat(extra_trajs, dim=1)
 
-    # just take the first index
-    orig_traj = orig_trajs[index].cpu().numpy()
-    samp_traj = samp_trajs[index].cpu().numpy()
-    recon_traj = recon_trajs[index].cpu().numpy()
-    extra_traj = extra_trajs[index].cpu().numpy()
+        # MODE 3
+        # ------
+        # Take the first 500 and then generate step by step
+        # this is medium difficulty but is the most interesting
+        T = orig_trajs.size(1)
+        middle_trajs_1, hiddens = rnn(orig_trajs[:, :T // 2], orig_ts[:, :T // 2])
+        middle_trajs_2 = []
+        trajs = orig_trajs[:, T // 2].unsqueeze(1)  # given true sample
+        for t in range(T // 2, T):
+            trajs, hiddens = rnn(trajs, orig_ts[:, t].unsqueeze(1), hiddens=hiddens) 
+            middle_trajs_2.append(trajs)
+        middle_trajs_2 = torch.cat(middle_trajs_2, dim=1)
+        middle_trajs = torch.cat((middle_trajs_1, middle_trajs_2), dim=1)
 
-    plt.figure()
-    plt.plot(orig_traj[:, 0], orig_traj[:, 1], 'g', label='true trajectory')
-    plt.plot(recon_traj[:, 0], recon_traj[:, 1], 'r', label='learned trajectory (teacher-forcing)')
-    plt.plot(extra_traj[:, 0], extra_traj[:, 1], 'c', label='learned trajectory (generated)')
-    plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
+    # plot first 100 examples
+    fig, axes = plt.subplots(10, 10, figsize=(20, 20))
+    for i in range(10):
+        for j in range(10):
+            index = 10*i + j
+            axes[i][j].plot(orig_trajs[index][:, 0], orig_trajs[index][:, 1], '-')      # true trajectory
+            axes[i][j].plot(recon_trajs[index][:, 0], recon_trajs[index][:, 1], '-')    # learned trajectory (teacher-forcing)
+            axes[i][j].plot(extra_trajs[index][:, 0], extra_trajs[index][:, 1], '-')    # learned trajectory (generated)
+            axes[i][j].plot(middle_trajs[index][:, 0], middle_trajs[index][:, 1], '-')  # learned trajectory (both)
+            axes[i][j].plot(samp_trajs[index][:, 0], samp_trajs[index][:, 1], 'o', color='r', markersize=1)
     plt.legend()
     plt.savefig('./vis_rnn.png', dpi=500)
 
