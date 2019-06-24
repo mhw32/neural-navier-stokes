@@ -74,7 +74,7 @@ class SLDM(nn.Module):
         ])
 
         # p(z_t|z_t-1)
-        self.state_transistor = StateTransistor(n_states, z_transition_dim)
+        self. , = StateTransistor(n_states, z_transition_dim)
         # p(x_t|z_t)
         self.state_emitter = StateEmitter(x_dim, n_states, z_emission_dim)
         # q(z_t|z_t-1,x_t:T)
@@ -173,30 +173,21 @@ class SLDM(nn.Module):
         z_prev = self.gumbel_softmax_reparameterize(z_prev_logits, temperature)
 
         x_sample, z_sample, z_logits_1_to_T = [], [], []
-        q_x_mixture_comps_1_to_T = []  # save the mixture weights so we can compute pdf
         for t in range(1, T + 1):
             x_summary = self.state_downsampler(x_summary_1_to_K[:, t - 1, :])
             # infer q(z_t|z_t-1,x^1_1:T,...,x^T_1:T)
             z_t_logits = self.state_combiner(z_prev, x_summary)
-            z_t = self.gumbel_softmax_reparameterize(z_t_logits, temperature)  # batch_size x z_dim x n_states
+            # batch_size x z_dim x n_states
+            z_t = self.gumbel_softmax_reparameterize(z_t_logits, temperature)
+            z_prev = z_t  # update for next iter
             
-            # z_t is a soft-indexing function, we generate the final sample as the weighted
-            # sum of samples from each system. Note that as temperature -> 0, this will be
-            # a real sample from the mixture.
-            x_t = torch.sum(z_t.unsqueeze(2) * q_x_1_to_K[:, :, t - 1, :], dim=1) 
-
-            q_x_mixture_comps_1_to_T.append(z_t)
-            x_sample.append(x_t)
             z_sample.append(z_t)
             z_logits_1_to_T.append(z_t_logits)
-            z_prev = z_t  # update for next iter
 
-        x_sample_1_to_T = torch.stack(x_sample).permute(1, 0, 2)  # batch_size x T x x_dim
         z_sample_1_to_T = torch.stack(z_sample).permute(1, 0, 2)  # batch_size x T x n_states
         z_logits_1_to_T = torch.stack(z_logits_1_to_T).permute(1, 0, 2)
-        q_x_mixture_comps_1_to_T = torch.stack(q_x_mixture_comps_1_to_T).permute(1, 0, 2)
 
-        return (x_sample_1_to_T, q_x_mu_1_to_K, q_x_logvar_1_to_K, q_x_mixture_comps_1_to_T, 
+        return (q_x_1_to_K, q_x_mu_1_to_K, q_x_logvar_1_to_K, 
                 z_sample_1_to_T, z_logits_1_to_T)
 
     def prior_network(self, batch_size, T, temperature):
@@ -218,7 +209,7 @@ class SLDM(nn.Module):
 
         z_logits_T = []
         for t in range(1, T + 1):
-            z_logits = self.state_transistor(z_prev)
+            z_logits = self. ,(z_prev)
             z_t = self.gumbel_softmax_reparameterize(z_logits, temperature)
             z_logits_T.append(z_logits)
             z_prev = z_t
@@ -228,39 +219,35 @@ class SLDM(nn.Module):
 
     def forward(self, data, temperature):
         batch_size, T, _ = data.size()
-        q_x, q_x_mu, q_x_logvar, q_x_mixture_comps, q_z, q_z_logits = \
-            self.inference_network(data, temperature)
+        q_x, q_x_mu, q_x_logvar, q_z, q_z_logits = self.inference_network(data, temperature)
         p_z_logits = self.prior_network(batch_size, T, temperature)
 
-        y_emission_mu = []
-        x_emission_mu, x_emission_logvar = [], []
+        y_emission_mu, x_emission_mu, x_emission_logvar = [], [], []
 
         for t in range(1, T + 1):
             # NOTE: important to use samples from q(z,x|y)
             z_t = q_z[:, t - 1]
-            x_t = q_x[:, t - 1, :]
             x_emission_mu_t, x_emission_logvar_t = self.state_emitter(z_t)
             x_emission_mu.append(x_emission_mu_t)
             x_emission_logvar.append(x_emission_logvar_t)
 
             y_emission_mu_t = []
             for i in range(self.n_states):
+                x_t = q_x[:, i, t, :]  # q_x has shape batch_size x n_states x T x dims
                 # batch_size x T x y_dim
                 y_emission_mu_t_state_i = self.systems[i].emitter(x_t)
                 y_emission_mu_t.append(y_emission_mu_t_state_i)
             y_emission_mu_t = torch.stack(y_emission_mu_t)
-            y_emission_mu_t = y_emission_mu_t.permute(1, 0, 2)
-            # weighted against z_t
-            y_emission_mu_t = torch.sum(z_t.unsqueeze(2) * y_emission_mu_t, dim=1)
-            y_emission_mu.append(y_emission_mu_t)
+            y_emission_mu_t = y_emission_mu_t.permute(1, 0, 2)  # batch_size x n_states x dims
+            y_emission_mu.append(y_emission_mu_t.unsqueeze(1))
 
         x_emission_mu = torch.stack(x_emission_mu).permute(1, 0, 2)
         x_emission_logvar = torch.stack(x_emission_logvar).permute(1, 0, 2)
-        y_emission_mu = torch.stack(y_emission_mu).permute(1, 0, 2)
+        y_emission_mu = torch.cat(y_emission_mu, dim=1)  # batch_size x n_states x T x dims
 
         output = {'x_emission_mu': x_emission_mu, 'x_emission_logvar': x_emission_logvar,
-                  'y_emission_mu': y_emission_mu, 'q_x': q_x, 'q_x_mu': q_x_mu, 
-                  'q_x_logvar': q_x_logvar, 'q_x_mixture_comps': q_x_mixture_comps,
+                  'y_emission_mu_1_to_K': y_emission_mu, 'q_x_1_to_K': q_x, 
+                  'q_x_mu_1_to_K': q_x_mu, 'q_x_logvar_1_to_K': q_x_logvar, 
                   'q_z': q_z, 'q_z_logits': q_z_logits, 'p_z_logits': p_z_logits}
         return output
 
@@ -276,16 +263,21 @@ class SLDM(nn.Module):
             log_p_yt_given_xt = log_normal_pdf(data[:, t - 1, :], 
                                                output['y_emission_mu'][:, t - 1, :], 
                                                noise_logvar[:, t - 1, :])
-            log_p_xt_given_zt = log_normal_pdf(output['q_x'][:, t - 1, :],
-                                               output['x_emission_mu'][:, t - 1, :],
-                                               output['x_emission_logvar'][:, t - 1, :])
+            log_p_xt_given_zt = 0
+            for k in range(self.n_states):
+                log_p_xt_given_zt_state_k = log_normal_pdf(output['q_x'][:, k, t - 1, :],
+                                                           output['x_emission_mu'][:, t - 1, :],
+                                                           output['x_emission_logvar'][:, t - 1, :])
+                log_p_xt_given_zt += log_p_xt_given_zt_state_k
             log_p_zt_given_zt1 = log_gumbel_softmax_pdf(output['q_z'][:, t - 1, :],
                                                         output['p_z_logits'][:, t - 1, :],
                                                         temperature)
-            log_q_xt_given_xt1_y = log_mixture_of_normals_pdf(output['q_x'][:, t - 1, :], 
-                                                              output['q_x_mixture_comps'][:, t - 1, :],
-                                                              output['q_x_mu'][:, :, t - 1, :],
-                                                              output['q_x_logvar'][:, :, t - 1, :])
+            log_q_xt_given_xt1_y = 0
+            for k in range(self.n_states):
+                log_q_xt_given_xt1_y_state_k = log_normal_pdf(output['q_x'][:, k, t - 1, :], 
+                                                              output['q_x_mu'][:, k, t - 1, :],
+                                                              output['q_x_logvar'][:, k, t - 1, :])
+                log_q_xt_given_xt1_y += log_q_xt_given_xt1_y_state_k
             log_q_zt_given_zt1_x1toK = log_gumbel_softmax_pdf(output['q_z'][:, t - 1, :],
                                                               output['q_z_logits'][:, t - 1, :],
                                                               temperature)
