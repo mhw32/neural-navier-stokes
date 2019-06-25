@@ -3,12 +3,14 @@ from src.spiral.ldm import LDM, visualize as vis_ldm
 from src.spiral.ndm import NDM, visualize as vis_ndm
 from src.spiral.ode import NeuralODE, visualize as vis_ode
 from src.spiral.rnn import RNN, visualize as vis_rnn
+from src.spiral.sndm import SNDM, visualize as vis_sndm
 
 name2vis = {
     'ldm': vis_ldm,
     'ndm': vis_ndm,
     'ode': vis_ode,
     'rnn': vis_rnn,
+    'sndm': vis_sndm,
 }
 
 if __name__ == '__main__':
@@ -31,6 +33,8 @@ if __name__ == '__main__':
         model = NeuralODE(4, 2, 20, 25, 1000).to(device)
     elif model_name == 'rnn':
         model = RNN(3, 2, 20, 25).to(device)
+    elif model_name == 'sndm':
+        model = SNDM(4, 2, 4, 20, 20, 20, 20, 25, 25).to(device)
     model.load_state_dict(checkpoint['state_dict'])
     model = model.eval()
 
@@ -46,3 +50,6 @@ if __name__ == '__main__':
     elif model_name == 'rnn':
         vis_rnn(model, checkpoint['orig_trajs'], checkpoint['orig_ts'],
                 checkpoint['samp_trajs'])
+    elif model_name == 'sndm':
+        vis_sndm(model, checkpoint['orig_trajs'], checkpoint['orig_ts'],
+                 checkpoint['samp_trajs'])

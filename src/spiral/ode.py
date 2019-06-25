@@ -3,6 +3,7 @@ import sys
 import argparse
 import numpy as np
 from tqdm import tqdm
+from sklearn.decomposition import PCA
 
 import torch
 import torch.nn as nn

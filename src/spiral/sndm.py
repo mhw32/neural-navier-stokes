@@ -217,7 +217,7 @@ def visualize(sndm, orig_trajs, orig_ts, samp_trajs):
         # inputs = merge_inputs(orig_trajs, orig_ts)
         inputs = orig_trajs
         outputs = sndm(inputs, 0.01)  # almost 0.
-        recon_trajs = outputs['y_mu'][:, :, :2]  # ignore time dim
+        recon_trajs = outputs['y_emission_mu_1_to_K'][:, :, :, :2]  # ignore time dim
 
         # TODO: extrapolations by sequential generation
 
