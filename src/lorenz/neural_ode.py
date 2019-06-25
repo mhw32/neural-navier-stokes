@@ -95,15 +95,15 @@ if __name__ == '__main__':
 
     data = np.load(args.data_file)
     t, x, y, z = data['t'], data['x'], data['y'], data['z']
-    data = torch.from_numpy(np.vstack([x, y, z]).T)
-    data0 = data[0].unsqueeze(0)
-    data0 = data0.to(device )
+    data = torch.from_numpy(np.vstack([x, y, z]).T).float()
+    data0 = data[0]
+    data0 = data0.to(device)
     t = torch.from_numpy(t)
-    data_size = len(t)
+    T = len(t)
 
     def get_batch():
-        s = np.random.choice(np.arange(data_size - args.batch_time, dtype=np.int64),
-                             args.batch_size, replace=False))
+        s = np.random.choice(np.arange(T - args.batch_time, dtype=np.int64),
+                             args.batch_size, replace=False)
         s = torch.from_numpy(s)
         batch_data0 = data[s]
         batch_t = t[:args.batch_time]  # (T)
@@ -130,12 +130,12 @@ if __name__ == '__main__':
             train_loss.backward()
             optimizer.step()
 
-            loss_meter.update(loss.item())
+            loss_meter.update(train_loss.item())
             tqdm_pbar.set_postfix({"loss": loss_meter.avg})
 
             if itr % 100 == 0:
                 pred_data = odeint(func, data0, t)  # full thing
-                test_loss = torch.mean(torch.abs(pred_data - data))
+                test_loss = torch.mean(torch.abs(pred_data - data.to(device)))
                 if test_loss.item() < best_loss:
                     best_loss = test_loss.item()
                     torch.save({
@@ -152,7 +152,7 @@ if __name__ == '__main__':
     checkpoint = torch.load(os.path.join(model_dir, 'model_best_T_{}.pth.tar'.format(T)))
     func.load_state_dict(checkpoint['func_state_dict'])
 
-    pred_data = odeint(func, data0, t)
+    pred_data = odeint(func, data0, t).detach().cpu().numpy()
 
     fig = plt.figure()
     ax = fig.gca(projection='3d')
