@@ -1,6 +1,7 @@
 """Runge Kutta Solver (RK4) for Lorenz system. In particular,
 you can vary the hyperparameter `h`."""
 
+import os
 import numpy as np
 from tqdm import tqdm
 
@@ -132,7 +133,18 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--n', type=int, default=2000)
+    parser.add_argument('--no-viz', action='store_true', default=False,
+                        help='do not visualise [default: False]')
     args = parser.parse_args()
-    
+   
+    if not os.path.isdir('./data'):
+        os.makedirs('./data')
+
     t, x, y, z = lorenz_ode_compute(args.n, 40.0, 8.0, 1.0, 1.0)
-    lorenz_ode_plot_3d(args.n, t, x, y, z)
+    
+    if not args.no_viz:
+        lorenz_ode_plot_3d(args.n, t, x, y, z)
+
+    np.savez('./data/rk4_data_n_{}.npz'.format(args.n),
+             n=args.n, t=t, x=x, y=y, z=z)
+
