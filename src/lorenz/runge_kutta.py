@@ -114,22 +114,22 @@ def rk4vec(t0, m, u0, dt, f):
     return u
 
 
-def lorenz_ode_plot_3d ( n, t, x, y, z ):
-  fig = plt.figure()
-  ax = fig.gca(projection='3d')
-  ax.plot(x, y, z, linewidth=2, color='b')
-  ax.grid(True)
-  ax.set_xlabel('x(t)')
-  ax.set_ylabel('y(t)')
-  ax.set_zlabel('z(t)')
-  plt.savefig('lorenz_ode_3d.png')
-  plt.clf()
+def lorenz_ode_plot_3d(n, t, x, y, z):
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    ax.plot(x, y, z, linewidth=2, color='b')
+    ax.grid(True)
+    ax.set_xlabel('x(t)')
+    ax.set_ylabel('y(t)')
+    ax.set_zlabel('z(t)')
+    plt.savefig('lorenz_ode_3d.png')
+    plt.clf()
 
 
 if __name__ == "__main__":
     import argparse
     parser.add_argument('--n', type=int, default=2000)
-    return parser
+    args = parser.parse_args()
     
     t, x, y, z = lorenz_ode_compute(args.n, 40.0, 8.0, 1.0, 1.0)
     lorenz_ode_plot_3d(n, t, x, y, z)
