@@ -137,12 +137,13 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts, index=0):
         orig_ts = torch.from_numpy(orig_ts).float().to(device)
 
         xs_lst, orig_traj_lst, samp_traj_lst = [], [], []
+        zs_pos_lst, zs_neg_lst = [], []
 
         for index in tqdm(range(100)):
             z0_i = z0[index]  # take first trajectory for visualization
 
-            ts_pos = np.linspace(0., 3. * np.pi, num=4000)
-            ts_neg = np.linspace(-2. * np.pi, 0., num=4000)[::-1].copy()
+            ts_pos = np.linspace(0., 2. * np.pi, num=2000)
+            ts_neg = np.linspace(-2. * np.pi, 0., num=2000)[::-1].copy()
             ts_pos = torch.from_numpy(ts_pos).float().to(device)
             ts_neg = torch.from_numpy(ts_neg).float().to(device)
 
@@ -161,6 +162,8 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts, index=0):
             xs_lst.append(xs)
             orig_traj_lst.append(orig_traj)
             samp_traj_lst.append(samp_traj)
+            zs_pos_lst.append(zs_pos.cpu().numpy())
+            zs_neg_lst.append(zs_neg.cpu().numpy())
 
     # plot first 100 examples
     fig, axes = plt.subplots(10, 10, figsize=(30, 30))
@@ -180,6 +183,12 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts, index=0):
     axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
                               ncol=5, fontsize=20)
     plt.savefig('./vis_ode.pdf', dpi=500)
+
+    # plot latent dimensions
+    plt.figure(figsize=(10,10))
+    for i in range(100):
+        plt.plot(zs_pos_lst[i][:, 0], zs_pos_lst[i][:, 1])
+    plt.savefig('./vis_ode_latents.pdf', dpi=500)
 
 
 if __name__ == '__main__':
