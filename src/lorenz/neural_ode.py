@@ -204,13 +204,13 @@ if __name__ == '__main__':
                     'samp_trajs': samp_trajs,
                     'samp_ts': samp_ts,
                     'cmd_line_args': args,
-                }, os.path.join(model_dir, 'model_best.pth.tar'))
+                }, os.path.join(model_dir, 'model_best_n_{}.pth.tar'.format(n))
 
             tqdm_pbar.update()
         tqdm_pbar.close()
 
     # visualization part -- load the models
-    checkpoint = torch.load(os.path.join(model_dir, 'model_best.pth.tar'))
+    checkpoint = torch.load(os.path.join(model_dir, 'model_best_n_{}.pth.tar'.format(n)))
     func.load_state_dict(checkpoint['func_state_dict'])
     rec.load_state_dict(checkpoint['rec_state_dict'])
     dec.load_state_dict(checkpoint['dec_state_dict'])
