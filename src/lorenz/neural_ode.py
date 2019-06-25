@@ -30,9 +30,10 @@ def get_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('data_file', type=str, help='where is data stored')
     parser.add_argument('--vis-only', action='store_true', default=False)
+    parser.add_argument('--hot-start', action='store_true', default=False)
     parser.add_argument('--adjoint', action='store_true', default=False)
     parser.add_argument('--niters', type=int, default=2000)
-    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--lr', type=float, default=0.005)
     parser.add_argument('--gpu', type=int, default=0)
     return parser
 
@@ -157,6 +158,14 @@ if __name__ == '__main__':
         params = (list(func.parameters()) + list(dec.parameters()) + 
                   list(rec.parameters()))
         optimizer = optim.Adam(params, lr=args.lr)
+
+        if args.hot_start:
+            checkpoint = torch.load(os.path.join(model_dir, 'model_best.pth.tar'))
+            func.load_state_dict(checkpoint['func_state_dict'])
+            rec.load_state_dict(checkpoint['rec_state_dict'])
+            dec.load_state_dict(checkpoint['dec_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
         loss_meter = RunningAverageMeter()
 
         best_loss = np.inf
