@@ -1,12 +1,12 @@
 import torch
 from src.spiral.ldm import LDM, visualize as vis_ldm
-from src.spiral.ndm import NDM
+from src.spiral.ndm import NDM, visualize as vis_ndm
 from src.spiral.ode import NeuralODE, visualize as vis_ode
 from src.spiral.rnn import RNN, visualize as vis_rnn
 
 name2vis = {
     'ldm': vis_ldm,
-    'ndm': vis_ldm,
+    'ndm': vis_ndm,
     'ode': vis_ode,
     'rnn': vis_rnn,
 }
@@ -35,8 +35,11 @@ if __name__ == '__main__':
     model.load_state_dict(checkpoint['state_dict'])
     model = model.eval()
 
-    if model_name in ['ldm', 'ndm']:
+    if model_name == 'ldm':
         vis_ldm(model, checkpoint['orig_trajs'], checkpoint['orig_ts'],
+                checkpoint['samp_trajs'], index=args.index)
+    elif model_name == 'ndm':
+        vis_ndm(model, checkpoint['orig_trajs'], checkpoint['orig_ts'],
                 checkpoint['samp_trajs'], index=args.index)
     elif model_name == 'ode':
         vis_ode(model, checkpoint['orig_trajs'], checkpoint['samp_trajs'],

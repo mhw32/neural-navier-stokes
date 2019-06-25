@@ -143,6 +143,40 @@ class Combiner(nn.Module):
         return x_t_mu, x_t_logvar
 
 
+def visualize(ndm, orig_trajs, orig_ts, samp_trajs, index=0):
+    device = orig_trajs.device
+    orig_ts = torch.from_numpy(orig_ts).float().to(device)
+
+    with torch.no_grad():
+        # first, get reconstructions with teacher forcing
+        inputs = merge_inputs(orig_trajs, orig_ts)
+        outputs = ndm(inputs)
+        recon_trajs = outputs['y_mu'][:, :, :2]  # ignore time dim
+
+        # TODO: extrapolations by sequential generation
+
+    # plot first 100 examples
+    fig, axes = plt.subplots(10, 10, figsize=(30, 30))
+    for i in range(10):
+        for j in range(10):
+            index = 10*i + j
+            # true trajectory
+            axes[i][j].plot(orig_trajs[index][:, 0].cpu().numpy(), 
+                            orig_trajs[index][:, 1].cpu().numpy(), '-',
+                            label='true trajectory')
+            # learned trajectory (teacher-forcing)
+            axes[i][j].plot(recon_trajs[index][:, 0].cpu().numpy(), 
+                            recon_trajs[index][:, 1].cpu().numpy(), '-',
+                            label='teacher forcing')
+            axes[i][j].plot(samp_trajs[index][:, 0].cpu().numpy(), 
+                            samp_trajs[index][:, 1].cpu().numpy(), 
+                            'o', markersize=1, label='dataset')
+    axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
+                              ncol=5, fontsize=20)
+    plt.savefig('./vis_ndm.pdf', dpi=500)
+
+
+
 if __name__ == '__main__':
     parser = get_parser()
     args = parser.parse_args()

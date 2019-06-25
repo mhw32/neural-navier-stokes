@@ -294,17 +294,25 @@ def visualize(ldm, orig_trajs, orig_ts, samp_trajs, index=0):
 
         # TODO: extrapolations by sequential generation
 
-    # just take the first index
-    orig_traj = orig_trajs[index].cpu().numpy()
-    samp_traj = samp_trajs[index].cpu().numpy()
-    recon_traj = recon_trajs[index].cpu().numpy()
-
-    plt.figure()
-    plt.plot(orig_traj[:, 0], orig_traj[:, 1], 'g', label='true trajectory')
-    plt.plot(recon_traj[:, 0], recon_traj[:, 1], 'r', label='learned trajectory (teacher-forcing)')
-    plt.scatter(samp_traj[:, 0], samp_traj[:, 1], label='sampled data', s=3)
-    plt.legend()
-    plt.savefig('./vis_ldm.png', dpi=500)
+    # plot first 100 examples
+    fig, axes = plt.subplots(10, 10, figsize=(30, 30))
+    for i in range(10):
+        for j in range(10):
+            index = 10*i + j
+            # true trajectory
+            axes[i][j].plot(orig_trajs[index][:, 0].cpu().numpy(), 
+                            orig_trajs[index][:, 1].cpu().numpy(), '-',
+                            label='true trajectory')
+            # learned trajectory (teacher-forcing)
+            axes[i][j].plot(recon_trajs[index][:, 0].cpu().numpy(), 
+                            recon_trajs[index][:, 1].cpu().numpy(), '-',
+                            label='teacher forcing')
+            axes[i][j].plot(samp_trajs[index][:, 0].cpu().numpy(), 
+                            samp_trajs[index][:, 1].cpu().numpy(), 
+                            'o', markersize=1, label='dataset')
+    axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
+                              ncol=5, fontsize=20)
+    plt.savefig('./vis_ldm.pdf', dpi=500)
 
 
 if __name__ == '__main__':
