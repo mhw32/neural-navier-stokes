@@ -25,7 +25,7 @@ if __name__ == '__main__':
     model_name = checkpoint['model_name']
 
     if model_name == 'ldm':
-        model = LDM(3, 4, 20, 20, 25).to(device)
+        model = LDM(2, 4, 20, 20, 25).to(device)
     elif model_name == 'ndm':
         model = NDM(3, 4, 20, 20, 25).to(device)
     elif model_name == 'ode':

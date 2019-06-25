@@ -103,7 +103,8 @@ class Transistor(nn.Module):
         h1 = F.relu(self.lin_x_to_hidden(x_t_1))
         h2 = F.relu(self.lin_hidden_to_hidden(h1))
         mu = self.lin_hidden_to_mu(h2)
-        logvar = torch.zeros_like(mu)
+        std = torch.zeros_like(mu) + .3
+        logvar = 2. * torch.log(std)
         # logvar = self.lin_hidden_to_logvar(h1)
         return mu, logvar
 
@@ -137,8 +138,8 @@ class Combiner(nn.Module):
         # use the combined hidden state to compute the mean used to sample z_t
         x_t_mu = self.lin_hidden_to_mu(h_combined)
         # use the combined hidden state to compute the scale used to sample z_t
-        x_t_logvar = torch.zeros_like(x_t_mu) 
-        # x_t_logvar = self.lin_hidden_to_logvar(h_combined)
+        # x_t_logvar = torch.zeros_like(x_t_mu) 
+        x_t_logvar = self.lin_hidden_to_logvar(h_combined)
         # return parameters of normal distribution
         return x_t_mu, x_t_logvar
 

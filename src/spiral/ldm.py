@@ -212,8 +212,8 @@ class Transistor(nn.Module):
     def forward(self, x_t_1):
         h1 = self.lin_x_to_hidden(x_t_1)
         mu = self.lin_hidden_to_mu(h1)
-        logvar = torch.zeros_like(mu)
-        # logvar = self.lin_hidden_to_logvar(h1)
+        # logvar = torch.zeros_like(mu)
+        logvar = self.lin_hidden_to_logvar(h1)
         return mu, logvar
 
 
@@ -243,8 +243,8 @@ class Combiner(nn.Module):
         # use the combined hidden state to compute the mean used to sample z_t
         x_t_mu = self.lin_hidden_to_mu(h_combined)
         # use the combined hidden state to compute the scale used to sample z_t
-        x_t_logvar = torch.zeros_like(x_t_mu) 
-        # x_t_logvar = self.lin_hidden_to_logvar(h_combined)
+        # x_t_logvar = torch.zeros_like(x_t_mu) 
+        x_t_logvar = self.lin_hidden_to_logvar(h_combined)
         # return parameters of normal distribution
         return x_t_mu, x_t_logvar
 
@@ -288,7 +288,8 @@ def visualize(ldm, orig_trajs, orig_ts, samp_trajs, index=0):
 
     with torch.no_grad():
         # first, get reconstructions with teacher forcing
-        inputs = merge_inputs(orig_trajs, orig_ts)
+        # inputs = merge_inputs(orig_trajs, orig_ts)
+        inputs = orig_trajs
         outputs = ldm(inputs)
         recon_trajs = outputs['y_mu'][:, :, :2]  # ignore time dim
 
@@ -327,14 +328,16 @@ if __name__ == '__main__':
     samp_trajs = torch.from_numpy(samp_trajs).float().to(device)
     samp_ts = torch.from_numpy(samp_ts).float().to(device)
 
-    ldm = LDM(3, 4, 20, 20, 25).to(device)
+    ldm = LDM(2, 4, 20, 20, 25).to(device)
+    # ldm = LDM(3, 4, 20, 20, 25).to(device)
     optimizer = optim.Adam(ldm.parameters(), lr=args.lr)
 
     loss_meter = AverageMeter()
     tqdm_pbar = tqdm(total=args.niters)
     for itr in range(1, args.niters + 1):
         optimizer.zero_grad()
-        inputs = merge_inputs(samp_trajs, samp_ts)
+        # inputs = merge_inputs(samp_trajs, samp_ts)
+        inputs = samp_trajs
         outputs = ldm(inputs)
         loss = ldm.compute_loss(inputs, outputs)
         loss.backward()
