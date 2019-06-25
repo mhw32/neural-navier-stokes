@@ -138,16 +138,16 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts, index=0):
 
         xs_lst, orig_traj_lst, samp_traj_lst = [], [], []
 
-        for index in range(100):
-            z0 = z0[index]  # take first trajectory for visualization
+        for index in tqdm(range(100)):
+            z0_i = z0[index]  # take first trajectory for visualization
 
             ts_pos = np.linspace(0., 3. * np.pi, num=4000)
             ts_neg = np.linspace(-2. * np.pi, 0., num=4000)[::-1].copy()
             ts_pos = torch.from_numpy(ts_pos).float().to(device)
             ts_neg = torch.from_numpy(ts_neg).float().to(device)
 
-            zs_pos = odeint(ode.func, z0, ts_pos)
-            zs_neg = odeint(ode.func, z0, ts_neg)
+            zs_pos = odeint(ode.func, z0_i, ts_pos)
+            zs_neg = odeint(ode.func, z0_i, ts_neg)
 
             xs_pos = ode.dec(zs_pos)
             xs_neg = torch.flip(ode.dec(zs_neg), dims=[0])
@@ -159,8 +159,8 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts, index=0):
             samp_traj = samp_trajs[index].cpu().numpy()
 
             xs_lst.append(xs)
-            orig_traj_lst.append(orig_traj.cpu().numpy())
-            samp_traj_lst.append(samp_traj.cpu().numpy())
+            orig_traj_lst.append(orig_traj)
+            samp_traj_lst.append(samp_traj)
 
     # plot first 100 examples
     fig, axes = plt.subplots(10, 10, figsize=(30, 30))
@@ -171,10 +171,10 @@ def visualize(ode, orig_trajs, samp_trajs, orig_ts, index=0):
             axes[i][j].plot(orig_traj_lst[index][:, 0], 
                             orig_traj_lst[index][:, 1], 
                             '-', label='true trajectory')
-            plt.plot(xs_lst[index][:, 0], xs_lst[index][:, 1], 
-                     '-', label='learned ODE')
-            axes[i][j].plot(samp_trajs[index][:, 0], 
-                            samp_trajs[index][:, 1], 
+            axes[i][j].plot(xs_lst[index][:, 0], xs_lst[index][:, 1], 
+                            '-', label='learned ODE')
+            axes[i][j].plot(samp_traj_lst[index][:, 0], 
+                            samp_traj_lst[index][:, 1], 
                             'o', markersize=1, label='dataset')
 
     axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
