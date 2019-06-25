@@ -208,9 +208,12 @@ def get_parser():
 def visualize(sndm, orig_trajs, orig_ts, samp_trajs):
     device = orig_trajs.device
     orig_ts = torch.from_numpy(orig_ts).float().to(device)
+    T = orig_ts.size(0)
 
     with torch.no_grad():
-        # first, get reconstructions with teacher forcing
+        # MODE 1
+        # ------
+        # get reconstructions with teacher forcing
         # inputs = merge_inputs(orig_trajs, orig_ts)
         inputs = orig_trajs
         outputs = sndm(inputs, 0.01)  # almost 0.
@@ -236,7 +239,75 @@ def visualize(sndm, orig_trajs, orig_ts, samp_trajs):
                             'o', markersize=1, label='dataset')
     axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
                               ncol=5, fontsize=20)
-    plt.savefig('./vis_sndm.pdf', dpi=500)
+    plt.savefig('./vis_sndm_recons.pdf', dpi=500)
+
+    with torch.no_grad():
+        # MODE 2
+        # ------
+        # sample x0, use transition to get to xt, use generator to yt
+        z_prev = sndm.z_0.expand(100, sndm.z_0.size(0))
+        z_samples, x_samples, y_samples = [], [], []
+        for t in range(T):
+            z_t_logits = sndm.state_transistor(z_prev)
+            z_t = sndm.gumbel_softmax_reparameterize(z_t_logits, 0.5)
+            x_t_mu, x_t_logvar = sndm.state_emitter(z_t)
+            x_t = sndm.gaussian_reparameterize(x_t_mu, x_t_logvar)
+            z_t_hard = torch.argmax(z_t, dim=1)
+            
+            y_t_mu = []
+            for i in range(100):
+                y_t_mu_i = sndm.systems[z_t_hard[i].item()].emitter(x_t[i].unsqueeze(0))
+                y_t_mu.append(y_t_mu_i)
+            y_t_mu = torch.cat(y_t_mu, dim=0)
+            y_t_std_ = torch.zeros_like(y_t_mu) + .3
+            y_t_logvar = 2. * torch.log(y_t_std_)
+            y_t = sndm.reparameterize(y_t_mu, y_t_logvar)
+            z_samples.append(z_t_hard.unsqueeze(1).cpu())
+            x_samples.append(x_t.unsqueeze(1).cpu())
+            y_samples.append(y_t.unsqueeze(1).cpu())
+        z_samples = torch.cat(z_samples, dim=1)
+        x_samples = torch.cat(x_samples, dim=1)
+        y_samples = torch.cat(y_samples, dim=1)
+        z_samples = z_samples.numpy()
+        x_samples = x_samples.numpy()
+        y_samples = y_samples.numpy()
+
+    # plot first 100 examples
+    fig, axes = plt.subplots(10, 10, figsize=(30, 30))
+    for i in range(10):
+        for j in range(10):
+            index = 10*i + j
+            # true trajectory
+            axes[i][j].plot(y_samples[index][:, 0], 
+                            y_samples[index][:, 1], '-',
+                            label='generated observations')
+    axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
+                              ncol=5, fontsize=20)
+    plt.savefig('./vis_sndm_y_samples.pdf', dpi=500)
+
+    fig, axes = plt.subplots(10, 10, figsize=(30, 30))
+    for i in range(10):
+        for j in range(10):
+            index = 10*i + j
+            # true trajectory
+            axes[i][j].plot(x_samples[index][:, 0], 
+                            x_samples[index][:, 1], '-',
+                            label='generated latents')
+    axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
+                              ncol=5, fontsize=20)
+    plt.savefig('./vis_sndm_x_samples.pdf', dpi=500)
+
+    fig, axes = plt.subplots(10, 10, figsize=(30, 30))
+    for i in range(10):
+        for j in range(10):
+            index = 10*i + j
+            # true trajectory
+            axes[i][j].plot(z_samples[index][:, 0], 
+                            z_samples[index][:, 1], '-',
+                            label='generated categories')
+    axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
+                              ncol=5, fontsize=20)
+    plt.savefig('./vis_sndm_z_samples.pdf', dpi=500)
 
 
 if __name__ == '__main__':
