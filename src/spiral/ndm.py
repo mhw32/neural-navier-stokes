@@ -144,13 +144,14 @@ class Combiner(nn.Module):
         return x_t_mu, x_t_logvar
 
 
-def visualize(ndm, orig_trajs, orig_ts, samp_trajs, index=0):
+def visualize(ndm, orig_trajs, orig_ts, samp_trajs):
     device = orig_trajs.device
     orig_ts = torch.from_numpy(orig_ts).float().to(device)
 
     with torch.no_grad():
         # first, get reconstructions with teacher forcing
-        inputs = merge_inputs(orig_trajs, orig_ts)
+        # inputs = merge_inputs(orig_trajs, orig_ts)
+        inputs = orig_trajs
         outputs = ndm(inputs)
         recon_trajs = outputs['y_mu'][:, :, :2]  # ignore time dim
 

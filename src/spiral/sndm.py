@@ -18,6 +18,10 @@ from src.spiral.sldm import SLDM
 from src.spiral.utils import (AverageMeter, log_normal_pdf, normal_kl, gumbel_softmax,
                               log_mixture_of_normals_pdf, log_gumbel_softmax_pdf)
 
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 
 class SNDM(SLDM):
     """
@@ -199,6 +203,40 @@ def get_parser():
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--out-dir', type=str, default='./')
     return parser
+
+
+def visualize(sndm, orig_trajs, orig_ts, samp_trajs):
+    device = orig_trajs.device
+    orig_ts = torch.from_numpy(orig_ts).float().to(device)
+
+    with torch.no_grad():
+        # first, get reconstructions with teacher forcing
+        # inputs = merge_inputs(orig_trajs, orig_ts)
+        inputs = orig_trajs
+        outputs = sndm(inputs, 0.01)  # almost 0.
+        recon_trajs = outputs['y_mu'][:, :, :2]  # ignore time dim
+
+        # TODO: extrapolations by sequential generation
+
+    # plot first 100 examples
+    fig, axes = plt.subplots(10, 10, figsize=(30, 30))
+    for i in range(10):
+        for j in range(10):
+            index = 10*i + j
+            # true trajectory
+            axes[i][j].plot(orig_trajs[index][:, 0].cpu().numpy(), 
+                            orig_trajs[index][:, 1].cpu().numpy(), '-',
+                            label='true trajectory')
+            # learned trajectory (teacher-forcing)
+            axes[i][j].plot(recon_trajs[index][:, 0].cpu().numpy(), 
+                            recon_trajs[index][:, 1].cpu().numpy(), '-',
+                            label='teacher forcing')
+            axes[i][j].plot(samp_trajs[index][:, 0].cpu().numpy(), 
+                            samp_trajs[index][:, 1].cpu().numpy(), 
+                            'o', markersize=1, label='dataset')
+    axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
+                              ncol=5, fontsize=20)
+    plt.savefig('./vis_sndm.pdf', dpi=500)
 
 
 if __name__ == '__main__':

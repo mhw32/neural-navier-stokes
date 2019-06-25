@@ -282,7 +282,7 @@ def merge_inputs(samp_trajs, samp_ts):
     return inputs
 
 
-def visualize(ldm, orig_trajs, orig_ts, samp_trajs, index=0):
+def visualize(ldm, orig_trajs, orig_ts, samp_trajs):
     device = orig_trajs.device
     orig_ts = torch.from_numpy(orig_ts).float().to(device)
 
