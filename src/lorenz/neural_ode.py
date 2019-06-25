@@ -29,79 +29,33 @@ CUR_DIR = os.path.dirname(__file__)
 def get_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('data_file', type=str, help='where is data stored')
+    parser.add_argument('--batch-time', type=int, default=40)
+    parser.add_argument('--batch-size', type=int, default=20)
     parser.add_argument('--vis-only', action='store_true', default=False)
-    parser.add_argument('--hot-start', action='store_true', default=False)
     parser.add_argument('--adjoint', action='store_true', default=False)
     parser.add_argument('--niters', type=int, default=2000)
-    parser.add_argument('--lr', type=float, default=0.005)
     parser.add_argument('--gpu', type=int, default=0)
     return parser
 
 
-class LatentODEfunc(nn.Module):
-    def __init__(self, latent_dim=4, nhidden=20):
-        super(LatentODEfunc, self).__init__()
-        self.elu = nn.ELU(inplace=True)
-        self.fc1 = nn.Linear(latent_dim, nhidden)
-        self.fc2 = nn.Linear(nhidden, nhidden)
-        self.fc3 = nn.Linear(nhidden, latent_dim)
-        self.nfe = 0
+class ODEFunc(nn.Module):
+    def __init__(self):
+        super(ODEFunc, self).__init__()
 
-    def forward(self, t, x):
-        self.nfe += 1
-        out = self.fc1(x)
-        out = self.elu(out)
-        out = self.fc2(out)
-        out = self.elu(out)
-        out = self.fc3(out)
-        return out
+        self.net = nn.Sequential(
+            nn.Linear(3, 50),
+            nn.Tanh(),
+            nn.Linear(50, 50),
+            nn.Tanh(),
+            nn.Linear(50, 3))
 
+        for m in self.net.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, mean=0, std=0.1)
+                nn.init.constant_(m.bias, val=0)
 
-class RecognitionRNN(nn.Module):
-    def __init__(self, latent_dim=4, obs_dim=2, nhidden=25):
-        super(RecognitionRNN, self).__init__()
-        self.nhidden = nhidden
-        self.i2h = nn.Linear(obs_dim + nhidden, nhidden)
-        self.h2o = nn.Linear(nhidden, latent_dim * 2)
-
-    def forward(self, x, h):
-        combined = torch.cat((x, h), dim=1)
-        h = torch.tanh(self.i2h(combined))
-        out = self.h2o(h)
-        return out, h
-
-    def initHidden(self, nbatch):
-        return torch.zeros(nbatch, self.nhidden)
-
-
-class Decoder(nn.Module):
-    def __init__(self, latent_dim=4, obs_dim=2, nhidden=20):
-        super(Decoder, self).__init__()
-        self.relu = nn.ReLU(inplace=True)
-        self.fc1 = nn.Linear(latent_dim, nhidden)
-        self.fc2 = nn.Linear(nhidden, obs_dim)
-
-    def forward(self, z):
-        out = self.fc1(z)
-        out = self.relu(out)
-        out = self.fc2(out)
-        return out
-
-
-def log_normal_pdf(x, mean, logvar):
-    const = torch.from_numpy(np.array([2. * np.pi])).float().to(x.device)
-    const = torch.log(const)
-    return -.5 * (const + logvar + (x - mean) ** 2. / torch.exp(logvar))
-
-
-def normal_kl(mu1, lv1, mu2, lv2):
-    v1 = torch.exp(lv1)
-    v2 = torch.exp(lv2)
-    lstd1 = lv1 / 2.
-    lstd2 = lv2 / 2.
-
-    kl = lstd2 - lstd1 + ((v1 + (mu1 - mu2) ** 2.) / (2. * v2)) - .5
-    return kl
+    def forward(self, t, y):
+        return self.net(y)
 
 
 class RunningAverageMeter(object):
@@ -141,112 +95,66 @@ if __name__ == '__main__':
 
     data = np.load(args.data_file)
     t, x, y, z = data['t'], data['x'], data['y'], data['z']
-    samp_trajs, samp_ts = np.vstack([x, y, z]).T, t
-    samp_trajs = samp_trajs[np.newaxis, ...]
-    T = len(t)
-    n = len(samp_trajs)  # NOTE: this is 1?
+    data = torch.from_numpy(np.vstack([x, y, z]).T)
+    data0 = data[0].unsqueeze(0)
+    data0 = data0.to(device )
+    t = torch.from_numpy(t)
+    data_size = len(t)
 
-    samp_trajs = torch.from_numpy(samp_trajs).float().to(device)
-    samp_ts = torch.from_numpy(samp_ts).float().to(device)
-    test_ts = copy.deepcopy(samp_ts)
+    def get_batch():
+        s = np.random.choice(np.arange(data_size - args.batch_time, dtype=np.int64),
+                             args.batch_size, replace=False))
+        s = torch.from_numpy(s)
+        batch_data0 = data[s]
+        batch_t = t[:args.batch_time]  # (T)
+        batch_data = torch.stack([data[s + i] for i in range(args.batch_time)], dim=0)
+        return batch_data0, batch_t, batch_data
 
-    func = LatentODEfunc(4, 20).to(device)
-    rec = RecognitionRNN(4, 3, 25).to(device)
-    dec = Decoder(4, 3, 20).to(device)
-
+    func = ODEFunc()
+    func = func.to(device)
+    
     if not args.vis_only:
-        params = (list(func.parameters()) + list(dec.parameters()) + 
-                  list(rec.parameters()))
-        optimizer = optim.Adam(params, lr=args.lr)
-
-        if args.hot_start:
-            checkpoint = torch.load(os.path.join(model_dir, 'model_best.pth.tar'))
-            func.load_state_dict(checkpoint['func_state_dict'])
-            rec.load_state_dict(checkpoint['rec_state_dict'])
-            dec.load_state_dict(checkpoint['dec_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-
-        loss_meter = RunningAverageMeter()
+        optimizer = optim.RMSprop(func.parameters(), lr=1e-3)
+        loss_meter = RunningAverageMeter(0.97)
 
         best_loss = np.inf
-
-        # do actual training
         tqdm_pbar = tqdm(total=args.niters)
         for itr in range(1, args.niters + 1):
             optimizer.zero_grad()
-            # backward in time to infer q(z_0)
-            h = rec.initHidden(n).to(device)
-            for t in reversed(range(samp_trajs.size(1))):
-                obs = samp_trajs[:, t, :]
-                out, h = rec.forward(obs, h)
-            qz0_mean, qz0_logvar = torch.chunk(out, 2, dim=1)
-            epsilon = torch.randn(qz0_mean.size()).to(device)
-            z0 = epsilon * torch.exp(.5 * qz0_logvar) + qz0_mean
-
-            # forward in time and solve ode for reconstructions
-            if args.adjoint:
-                pred_z = odeint_adjoint(func, z0, samp_ts).permute(1, 0, 2)
-            else:
-                pred_z = odeint(func, z0, samp_ts).permute(1, 0, 2)
-            pred_x = dec(pred_z)
-
-            # compute loss
-            noise_std_ = torch.zeros(pred_x.size()).to(device) + .3
-            noise_logvar = 2. * torch.log(noise_std_).to(device)  # hardcoded 
-            logpx = log_normal_pdf(samp_trajs, pred_x, noise_logvar).sum(-1).sum(-1)
-            pz0_mean = pz0_logvar = torch.zeros(z0.size()).to(device)
-            analytic_kl = normal_kl(qz0_mean, qz0_logvar, pz0_mean, pz0_logvar).sum(-1)
-            loss = torch.mean(-logpx + analytic_kl, dim=0)
-            loss.backward()
+            batch_data0, batch_t, batch_data = get_batch()
+            batch_data0 = batch_data0.to(device)
+            batch_data = batch_data.to(device)
+            batch_t = batch_t.to(device)
+            pred_data = odeint(func, batch_data0, batch_t)
+            train_loss = torch.mean(torch.abs(pred_data - batch_data))
+            train_loss.backward()
             optimizer.step()
+
             loss_meter.update(loss.item())
+            tqdm_pbar.set_postfix({"loss": loss_meter.avg})
 
-            tqdm_pbar.set_postfix({"loss": -loss_meter.avg})
-
-            if itr % 100 == 0 and loss.item() < best_loss:  # save best model
-                best_loss = loss.item()
-                torch.save({
-                    'func_state_dict': func.state_dict(),
-                    'rec_state_dict': rec.state_dict(),
-                    'dec_state_dict': dec.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'samp_trajs': samp_trajs,
-                    'samp_ts': samp_ts,
-                    'cmd_line_args': args,
-                }, os.path.join(model_dir, 'model_best_n_{}.pth.tar'.format(n))
+            if itr % 100 == 0:
+                pred_data = odeint(func, data0, t)  # full thing
+                test_loss = torch.mean(torch.abs(pred_data - data))
+                if test_loss.item() < best_loss:
+                    best_loss = test_loss.item()
+                    torch.save({
+                        'func_state_dict': func.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'cmd_line_args': args,
+                        'test_loss': best_loss,
+                    }, os.path.join(model_dir, 'model_best_T_{}.pth.tar'.format(T)))
 
             tqdm_pbar.update()
         tqdm_pbar.close()
 
     # visualization part -- load the models
-    checkpoint = torch.load(os.path.join(model_dir, 'model_best_n_{}.pth.tar'.format(n)))
+    checkpoint = torch.load(os.path.join(model_dir, 'model_best_T_{}.pth.tar'.format(T)))
     func.load_state_dict(checkpoint['func_state_dict'])
-    rec.load_state_dict(checkpoint['rec_state_dict'])
-    dec.load_state_dict(checkpoint['dec_state_dict'])
 
-    with torch.no_grad():
-        h = rec.initHidden(n).to(device)
-        for t in reversed(range(samp_trajs.size(1))):
-            obs = samp_trajs[:, t, :]
-            out, h = rec.forward(obs, h)
-            qz0_mean, qz0_logvar = torch.chunk(out, 2, dim=1)
-            epsilon = torch.randn(qz0_mean.size()).to(device)
-            z0 = epsilon * torch.exp(.5 * qz0_logvar) + qz0_mean
+    pred_data = odeint(func, data0, t)
 
-        xs_list = []
-        for i in tqdm(range(100)):
-            if args.adjoint:
-                zs = odeint_adjoint(func, z0[i], test_ts)
-            else:
-                zs = odeint(func, z0[i], test_ts)
-            xs = dec(zs)
-            xs = xs.cpu().numpy()
-            xs_list.append(xs[np.newaxis, ...])
-        xs_list = np.concatenate(xs, axis=0)
-
-    fig, axes = plt.subplots(10, 10, figsize=(30, 30), projection='3d')
-    for i in range(10):
-        for j in range(10):
-            index = 10 * i + j
-            axes[i][j].plot(xs[index][:, 0], xs[index][:, 1], xs[index][:, 2], '-')
-    plt.savefig(os.path.join(image_dir, 'vis_n_{}.pdf'.format(n), dpi=500))
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    ax.plot(pred_data[:, 0], pred_data[:, 1], pred_data[:, 2])
+    plt.savefig(os.path.join(image_dir, 'vis_T_{}.pdf'.format(T)))
