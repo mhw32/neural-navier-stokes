@@ -175,8 +175,50 @@ def visualize(ndm, orig_trajs, orig_ts, samp_trajs):
                             'o', markersize=1, label='dataset')
     axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
                               ncol=5, fontsize=20)
-    plt.savefig('./vis_ndm.pdf', dpi=500)
+    plt.savefig('./vis_ndm_recons.pdf', dpi=500)
 
+    with torch.no_grad():
+        # MODE 2
+        # ------
+        # sample x0, use transition to get to xt, use generator to yt
+        x_prev = ndm.x0.unsqueeze(0).repeat(100, ndm.x_dim)  # make 100 of x0
+        x_samples, y_samples = [], []
+        for t in range(T):
+            x_t_mu, x_t_logvar = ndm.transistor(x_prev)
+            x_t = ndm.reparameterize(x_t_mu, x_t_logvar)
+            y_t_mu = ndm.emitter(x_t)
+            y_t_std_ = torch.zeros_like(y_t_mu) + .3
+            y_t_logvar = 2. * torch.log(y_t_std_)
+            y_t = ndm.reparameterize(y_t_mu, y_t_logvar)
+            x_samples.append(x_t.squeeze(1).cpu())
+            y_samples.append(y_t.squeeze(1).cpu())
+        x_samples = torch.cat(x_samples, dim=1)
+        y_samples = torch.cat(y_samples, dim=1)
+        x_samples = x_samples.numpy()
+        y_samples = y_samples.numpy()
+
+    # plot first 100 examples
+    fig, axes = plt.subplots(10, 10, figsize=(30, 30))
+    for i in range(10):
+        for j in range(10):
+            index = 10*i + j
+            axes[i][j].plot(y_samples[index][:, 0].cpu().numpy(), 
+                            y_samples[index][:, 1].cpu().numpy(), '-',
+                            label='generated observations')
+    axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
+                              ncol=5, fontsize=20)
+    plt.savefig('./vis_ndm_y_samples.pdf', dpi=500)
+
+    fig, axes = plt.subplots(10, 10, figsize=(30, 30))
+    for i in range(10):
+        for j in range(10):
+            index = 10*i + j
+            axes[i][j].plot(x_samples[index][:, 0].cpu().numpy(), 
+                            x_samples[index][:, 1].cpu().numpy(), '-',
+                            label='generated latents')
+    axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
+                              ncol=5, fontsize=20)
+    plt.savefig('./vis_ndm_x_samples.pdf', dpi=500)
 
 
 if __name__ == '__main__':
