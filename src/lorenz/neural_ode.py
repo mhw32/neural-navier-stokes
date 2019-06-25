@@ -6,8 +6,8 @@ Heavily borrowed from https://github.com/rtqichen/torchdiffeq/blob/master/exampl
 """
 
 import os
-import sys
 import copy
+import argparse
 import numpy as np
 from tqdm import tqdm
 
@@ -30,7 +30,7 @@ def get_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('data_file', type=str, help='where is data stored')
     parser.add_argument('--vis-only', action='store_true', default=False)
-    parser.add_argument('--adjoint', type=eval, default=False)
+    parser.add_argument('--adjoint', action='store_true', default=False)
     parser.add_argument('--niters', type=int, default=2000)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--gpu', type=int, default=0)
@@ -130,19 +130,21 @@ if __name__ == '__main__':
     image_dir = os.path.join(CUR_DIR, 'images')
 
     if not os.path.isdir(model_dir):
-        os.makedir(model_dir)
+        os.makedirs(model_dir)
 
     if not os.path.isdir(image_dir):
-        os.makedir(image_dir)
+        os.makedirs(image_dir)
 
     device = torch.device('cuda:' + str(args.gpu)
                           if torch.cuda.is_available() else 'cpu')
 
-    data_dict = np.load(args.data_file)
+    data = np.load(args.data_file)
     t, x, y, z = data['t'], data['x'], data['y'], data['z']
-    samp_trajs, samp_ts = [x, y, z], t
-    n = len(t)
-    
+    samp_trajs, samp_ts = np.vstack([x, y, z]).T, t
+    samp_trajs = samp_trajs[np.newaxis, ...]
+    T = len(t)
+    n = len(samp_trajs)  # NOTE: this is 1?
+
     samp_trajs = torch.from_numpy(samp_trajs).float().to(device)
     samp_ts = torch.from_numpy(samp_ts).float().to(device)
     test_ts = copy.deepcopy(samp_ts)
@@ -152,13 +154,15 @@ if __name__ == '__main__':
     dec = Decoder(4, 3, 20).to(device)
 
     if not args.vis_only:
-        params = (list(func.parameters()) + list(dec.parameters()) + list(rec.parameters()))
+        params = (list(func.parameters()) + list(dec.parameters()) + 
+                  list(rec.parameters()))
         optimizer = optim.Adam(params, lr=args.lr)
         loss_meter = RunningAverageMeter()
 
-        best_loss = sys.maxint
+        best_loss = np.inf
 
         # do actual training
+        tqdm_pbar = tqdm(total=args.niters)
         for itr in range(1, args.niters + 1):
             optimizer.zero_grad()
             # backward in time to infer q(z_0)
@@ -178,7 +182,7 @@ if __name__ == '__main__':
             pred_x = dec(pred_z)
 
             # compute loss
-            noise_std_ = torch.zeros(pred_x.size()).to(device) + noise_std
+            noise_std_ = torch.zeros(pred_x.size()).to(device) + .3
             noise_logvar = 2. * torch.log(noise_std_).to(device)  # hardcoded 
             logpx = log_normal_pdf(samp_trajs, pred_x, noise_logvar).sum(-1).sum(-1)
             pz0_mean = pz0_logvar = torch.zeros(z0.size()).to(device)
@@ -188,7 +192,7 @@ if __name__ == '__main__':
             optimizer.step()
             loss_meter.update(loss.item())
 
-            print('Iter: {}, running avg elbo: {:.4f}'.format(itr, -loss_meter.avg))
+            tqdm_pbar.set_postfix({"loss": -loss_meter.avg})
 
             if loss.item() < best_loss:  # save best model
                 best_loss = loss.item()
@@ -201,6 +205,9 @@ if __name__ == '__main__':
                     'samp_ts': samp_ts,
                     'cmd_line_args': args,
                 }, os.path.join(model_dir, 'model_best.pth.tar'))
+
+            tqdm_pbar.update()
+        tqdm_pbar.close()
 
     # visualization part -- load the models
     checkpoint = torch.load(os.path.join(model_dir, 'model_best.pth.tar'))
@@ -233,4 +240,4 @@ if __name__ == '__main__':
         for j in range(10):
             index = 10 * i + j
             axes[i][j].plot(xs[index][:, 0], xs[index][:, 1], xs[index][:, 2], '-')
-    plt.savefig(os.path.join(image_dir, 'vis_n_{}.pdf'.format(n), dpi=500)
+    plt.savefig(os.path.join(image_dir, 'vis_n_{}.pdf'.format(n), dpi=500))
