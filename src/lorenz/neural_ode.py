@@ -194,7 +194,7 @@ if __name__ == '__main__':
 
             tqdm_pbar.set_postfix({"loss": -loss_meter.avg})
 
-            if loss.item() < best_loss:  # save best model
+            if itr % 100 == 0 and loss.item() < best_loss:  # save best model
                 best_loss = loss.item()
                 torch.save({
                     'func_state_dict': func.state_dict(),
