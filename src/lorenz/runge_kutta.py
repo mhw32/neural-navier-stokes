@@ -2,9 +2,10 @@
 you can vary the hyperparameter `h`."""
 
 import numpy as np
+from tqdm import tqdm
 
 import matplotlib as mpl
-mpl.switch_backend('Agg')
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -28,7 +29,7 @@ def lorenz_ode_compute(n, t_final, x0, y0, z0):
     y[0] = 1.0
     z[0] = 1.0
 
-    for i in range(n):
+    for i in tqdm(range(n)):
         xyz = np.array([x[i], y[i], z[i]])
         xyz = rk4vec(t[i], 3, xyz, dt, lorenz_rhs)
 
@@ -119,17 +120,19 @@ def lorenz_ode_plot_3d(n, t, x, y, z):
     ax = fig.gca(projection='3d')
     ax.plot(x, y, z, linewidth=2, color='b')
     ax.grid(True)
+    ax.set_title('{} points'.format(n))
     ax.set_xlabel('x(t)')
     ax.set_ylabel('y(t)')
     ax.set_zlabel('z(t)')
-    plt.savefig('lorenz_ode_3d.png')
+    plt.savefig('lorenz_ode_3d_{}.png'.format(n))
     plt.clf()
 
 
 if __name__ == "__main__":
     import argparse
+    parser = argparse.ArgumentParser()
     parser.add_argument('--n', type=int, default=2000)
     args = parser.parse_args()
     
     t, x, y, z = lorenz_ode_compute(args.n, 40.0, 8.0, 1.0, 1.0)
-    lorenz_ode_plot_3d(n, t, x, y, z)
+    lorenz_ode_plot_3d(args.n, t, x, y, z)
