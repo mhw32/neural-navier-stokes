@@ -15,7 +15,6 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('checkpoint_path', type=str)
-    parser.add_argument('--index', type=int, default=0)
     parser.add_argument('--gpu', type=int, default=0)
     args = parser.parse_args()
     device = torch.device('cuda:' + str(args.gpu)
@@ -37,13 +36,13 @@ if __name__ == '__main__':
 
     if model_name == 'ldm':
         vis_ldm(model, checkpoint['orig_trajs'], checkpoint['orig_ts'],
-                checkpoint['samp_trajs'], index=args.index)
+                checkpoint['samp_trajs'])
     elif model_name == 'ndm':
         vis_ndm(model, checkpoint['orig_trajs'], checkpoint['orig_ts'],
-                checkpoint['samp_trajs'], index=args.index)
+                checkpoint['samp_trajs'])
     elif model_name == 'ode':
         vis_ode(model, checkpoint['orig_trajs'], checkpoint['samp_trajs'],
-                checkpoint['orig_ts'], index=args.index)
+                checkpoint['orig_ts'])
     elif model_name == 'rnn':
         vis_rnn(model, checkpoint['orig_trajs'], checkpoint['orig_ts'],
-                checkpoint['samp_trajs'], index=args.index)
+                checkpoint['samp_trajs'])

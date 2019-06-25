@@ -191,14 +191,16 @@ if __name__ == '__main__':
     samp_trajs = torch.from_numpy(samp_trajs).float().to(device)
     samp_ts = torch.from_numpy(samp_ts).float().to(device)
 
-    ndm = NDM(3, 4, 20, 20, 25).to(device)
+    ndm = NDM(2, 4, 20, 20, 25).to(device)
+    # ndm = NDM(3, 4, 20, 20, 25).to(device)
     optimizer = optim.Adam(ndm.parameters(), lr=args.lr)
 
     loss_meter = AverageMeter()
     tqdm_pbar = tqdm(total=args.niters)
     for itr in range(1, args.niters + 1):
         optimizer.zero_grad()
-        inputs = merge_inputs(samp_trajs, samp_ts)
+        # inputs = merge_inputs(samp_trajs, samp_ts)
+        inputs = samp_trajs
         outputs = ndm(inputs)
         loss = ndm.compute_loss(inputs, outputs)
         loss.backward()
