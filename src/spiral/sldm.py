@@ -395,7 +395,7 @@ if __name__ == '__main__':
     samp_trajs = torch.from_numpy(samp_trajs).float().to(device)
     samp_ts = torch.from_numpy(samp_ts).float().to(device)
 
-    sldm = SLDM(2, 3, 4, 20, 20, 20, 20, 25, 25).to(device)
+    sldm = SLDM(4, 2, 4, 20, 20, 20, 20, 25, 25).to(device)
     optimizer = optim.Adam(sldm.parameters(), lr=args.lr)
     
     init_temp, min_temp, anneal_rate = 1.0, 0.5, 0.00003
@@ -405,7 +405,8 @@ if __name__ == '__main__':
     temp = init_temp
     for itr in range(1, args.niters + 1):
         optimizer.zero_grad()
-        inputs = merge_inputs(samp_trajs, samp_ts)
+        # inputs = merge_inputs(samp_trajs, samp_ts)
+        inputs = samp_trajs
         outputs = sldm(inputs, temp)
         loss = sldm.compute_loss(inputs, outputs, temp)
         if np.isnan(loss.item()):
