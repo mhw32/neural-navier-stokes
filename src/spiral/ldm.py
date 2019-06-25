@@ -51,6 +51,7 @@ class LDM(nn.Module):
         self.x_0 = nn.Parameter(torch.zeros(x_dim))    # p(x_1)
         self.x_q_0 = nn.Parameter(torch.zeros(x_dim))  # q(x_1|y_{1:T})
         self.h_0 = nn.Parameter(torch.zeros(1, 1, rnn_dim))
+        self.y_dim, self.x_dim = y_dim, x_dim
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5*logvar)
@@ -322,7 +323,7 @@ def visualize(ldm, orig_trajs, orig_ts, samp_trajs):
         # MODE 2
         # ------
         # sample x0, use transition to get to xt, use generator to yt
-        x_prev = ldm.x0.unsqueeze(0).repeat(100, ldm.x_dim)  # make 100 of x0
+        x_prev = ldm.x_0.expand(100, ldm.x_0.size(0))
         x_samples, y_samples = [], []
         for t in range(T):
             x_t_mu, x_t_logvar = ldm.transistor(x_prev)
@@ -331,8 +332,8 @@ def visualize(ldm, orig_trajs, orig_ts, samp_trajs):
             y_t_std_ = torch.zeros_like(y_t_mu) + .3
             y_t_logvar = 2. * torch.log(y_t_std_)
             y_t = ldm.reparameterize(y_t_mu, y_t_logvar)
-            x_samples.append(x_t.squeeze(1).cpu())
-            y_samples.append(y_t.squeeze(1).cpu())
+            x_samples.append(x_t.unsqueeze(1).cpu())
+            y_samples.append(y_t.unsqueeze(1).cpu())
         x_samples = torch.cat(x_samples, dim=1)
         y_samples = torch.cat(y_samples, dim=1)
         x_samples = x_samples.numpy()
@@ -344,8 +345,8 @@ def visualize(ldm, orig_trajs, orig_ts, samp_trajs):
         for j in range(10):
             index = 10*i + j
             # true trajectory
-            axes[i][j].plot(y_samples[index][:, 0].cpu().numpy(), 
-                            y_samples[index][:, 1].cpu().numpy(), '-',
+            axes[i][j].plot(y_samples[index][:, 0], 
+                            y_samples[index][:, 1], '-',
                             label='generated observations')
     axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
                               ncol=5, fontsize=20)
@@ -356,8 +357,8 @@ def visualize(ldm, orig_trajs, orig_ts, samp_trajs):
         for j in range(10):
             index = 10*i + j
             # true trajectory
-            axes[i][j].plot(x_samples[index][:, 0].cpu().numpy(), 
-                            x_samples[index][:, 1].cpu().numpy(), '-',
+            axes[i][j].plot(x_samples[index][:, 0], 
+                            x_samples[index][:, 1], '-',
                             label='generated latents')
     axes.flatten()[-2].legend(loc='upper center', bbox_to_anchor=(-4, -0.12), 
                               ncol=5, fontsize=20)

@@ -26,7 +26,7 @@ if __name__ == '__main__':
     if model_name == 'ldm':
         model = LDM(2, 4, 20, 20, 25).to(device)
     elif model_name == 'ndm':
-        model = NDM(3, 4, 20, 20, 25).to(device)
+        model = NDM(2, 4, 20, 20, 25).to(device)
     elif model_name == 'ode':
         model = NeuralODE(4, 2, 20, 25, 1000).to(device)
     elif model_name == 'rnn':
