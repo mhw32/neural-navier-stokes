@@ -82,11 +82,20 @@ if __name__ == "__main__":
     from matplotlib import pyplot as plt, cm
     from mpl_toolkits.mplot3d import Axes3D
 
-    nx = 41
-    ny = 41
-    nt = 500
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--nx', type=int, default=41,
+                        help='grid size along nx [default: 41]')
+    parser.add_argument('--ny', type=int, default=41,
+                        help='grid size along ny [default: 41]')
+    parser.add_argument('--dt', type=float, default=.001,
+                        help='stepsize over time [default: .001]')
+    args = parser.parse_args()
+
+    nx = args.nx
+    ny = args.ny
+    nt = 700
     nit = 50
-    c = 1
     dx = 2 / (nx - 1)
     dy = 2 / (ny - 1)
     x = np.linspace(0, 2, nx)
@@ -95,13 +104,12 @@ if __name__ == "__main__":
 
     rho = 1
     nu = .1
-    dt = .001
+    dt = args.dt
 
     u = np.zeros((ny, nx))
     v = np.zeros((ny, nx))
     p = np.zeros((ny, nx))
     b = np.zeros((ny, nx))
-    nt = 700
 
     u, v, p = cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu)
 
