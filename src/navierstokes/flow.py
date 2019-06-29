@@ -37,6 +37,8 @@ def cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu):
     un = np.empty_like(u)
     vn = np.empty_like(v)
     b = np.zeros((ny, nx))
+
+    u_list, v_list, p_list = [], [], []
     
     for n in range(nt):
         un = u.copy()
@@ -77,7 +79,15 @@ def cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu):
         v[:, 0]  = 0
         v[:, -1] = 0
 
-    return u, v, p
+        u_list.append(u)
+        v_list.append(v)
+        p_list.append(p)
+    
+    u_list = np.stack(u_list)
+    v_list = np.stack(v_list)
+    p_list = np.stack(p_list)
+
+    return u_list, v_list, p_list
 
 
 if __name__ == "__main__":
@@ -116,7 +126,8 @@ if __name__ == "__main__":
     p = np.zeros((ny, nx))
     b = np.zeros((ny, nx))
 
-    u, v, p = cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu)
+    u_dset, v_dset, p_dset = cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu)
+    u, v, p = u_dset[-1], v_dset[-1], p_dset[-1]
 
     fig = plt.figure(figsize=(11, 7), dpi=100)
     plt.contourf(X, Y, p, alpha=0.5, cmap=cm.viridis)
@@ -137,4 +148,4 @@ if __name__ == "__main__":
     plt.savefig('images/streamplot_nx_{}_ny_{}_dt_{}.pdf'.format(nx, ny, dt))
 
     np.savez('data/data_nx_{}_ny_{}_dt_{}.npy'.format(nx, ny, dt),
-             X=X, Y=Y, p=p, u=u, v=v)
+             X=X, Y=Y, p=p_dset, u=u_dset, v=v_dset)
