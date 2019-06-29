@@ -1,3 +1,4 @@
+import os
 import numpy as np
 
 
@@ -93,6 +94,8 @@ if __name__ == "__main__":
                         help='stepsize over time [default: .001]')
     args = parser.parse_args()
 
+    os.makedirs('images', exist_ok=True)
+
     nx = args.nx
     ny = args.ny
     nt = 700
@@ -121,7 +124,7 @@ if __name__ == "__main__":
     plt.quiver(X[::2, ::2], Y[::2, ::2], u[::2, ::2], v[::2, ::2])
     plt.xlabel('X')
     plt.ylabel('Y')
-    plt.savefig('quiver.pdf')
+    plt.savefig('images/quiver_nx_{}_ny_{}_dt_{}.pdf'.format(nx=nx, ny=ny, dt=dt))
 
     fig = plt.figure(figsize=(11, 7), dpi=100)
     plt.contourf(X, Y, p, alpha=0.5, cmap=cm.viridis)
@@ -130,4 +133,7 @@ if __name__ == "__main__":
     plt.streamplot(X, Y, u, v)
     plt.xlabel('X')
     plt.ylabel('Y')
-    plt.savefig('streamplot.pdf')
+    plt.savefig('images/streamplot_nx_{}_ny_{}_dt_{}.pdf'.format(nx=nx, ny=ny, dt=dt))
+
+    np.savez('data_nx_{}_ny_{}_dt_{}.npy'.format(nx=nx, ny=ny, dt=dt),
+             X=X, Y=Y, p=p, u=u, v=v)
