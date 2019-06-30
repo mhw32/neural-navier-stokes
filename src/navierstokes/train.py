@@ -19,6 +19,20 @@ def mean_squared_error(pred, true):
     return torch.mean(mse)  # over batch size
 
 
+def build_batch(array, batch_start, batch_T):
+    batch = []
+    batch_size = len(batch_start)
+    for i in range(batch_size):
+        batch_i = array[batch_start[i]:batch_start[i]+batch_T]
+        batch.append(batch_i)
+    batch = np.stack(batch)
+    return batch
+
+
+def numpy_to_torch(array, device):
+    return torch.from_numpy(array).float().to(device)
+
+
 if __name__ == "__main__":
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
@@ -26,43 +40,38 @@ if __name__ == "__main__":
     torch.manual_seed(1337)
     np.random.seed(1337)
 
-    os.makedirs(MODEL_DIR)
+    os.makedirs(MODEL_DIR, exist_ok=True)
 
     batch_T = 50  # number of timesteps to sample
     batch_size = 100
 
-    dataset = np.load(os.path.join(DATA_DIR, 'data_nx_50_ny_50_dt_0.001.npy'))
+    dataset = np.load(os.path.join(DATA_DIR, 'data_nx_50_ny_50_dt_0.001.npz'))
     X, Y, u_seq, v_seq, p_seq = (dataset['X'], dataset['Y'], dataset['u'], 
                                  dataset['v'], dataset['p'])
-    X, Y, u_seq, v_seq, p_seq = spatial_coarsen(X, Y, u_seq, v_seq, p_seq)
+    X, Y, u_seq, v_seq, p_seq = spatial_coarsen(X, Y, u_seq, v_seq, p_seq,
+                                                agg_x=5, agg_y=5)
 
-    X = torch.from_numpy(X).float()
-    Y = torch.from_numpy(Y).float()
-    u_seq = torch.from_numpy(u_seq).float()
-    v_seq = torch.from_numpy(v_seq).float()
-    p_seq = torch.from_numpy(p_seq).float()
+    T = u_seq.shape[0]
 
-    T = u_seq.size(1)
-
-    u_in, v_in, p_in = u_seq[:, :T-1], v_seq[:, :T-1], p_seq[:, :T-1]
-    u_out, v_out, p_out = u_seq[:, 1:T], v_seq[:, 1:T], p_seq[:, 1:T]
+    u_in, v_in, p_in = u_seq[:T-1], v_seq[:T-1], p_seq[:T-1]
+    u_out, v_out, p_out = u_seq[1:], v_seq[1:], p_seq[1:]
 
     model = RNNDiffEq(10)
     model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
-    best_loss = sys.maxint
+    best_loss = np.inf
 
     for iteration in tqdm(range(1000)):
         model.train()
         # sample a batch of contiguous timesteps
-        start = np.random.choice(np.arange(T - batch_T), size=batch_size)
-        batch_u_in = u_in[start:start+batch_T].to(device)
-        batch_v_in = v_in[start:start+batch_T].to(device)
-        batch_p_in = p_in[start:start+batch_T].to(device)
-        batch_u_out = u_out[start:start+batch_T].to(device)
-        batch_v_out = v_out[start:start+batch_T].to(device)
-        batch_p_out = p_out[start:start+batch_T].to(device)
+        start = np.random.choice(np.arange(T - 1 - batch_T), size=batch_size)
+        batch_u_in = numpy_to_torch(build_batch(u_in, start, batch_T), device)
+        batch_v_in = numpy_to_torch(build_batch(v_in, start, batch_T), device)
+        batch_p_in = numpy_to_torch(build_batch(p_in, start, batch_T), device)
+        batch_u_out = numpy_to_torch(build_batch(u_out, start, batch_T), device)
+        batch_v_out = numpy_to_torch(build_batch(v_out, start, batch_T), device)
+        batch_p_out = numpy_to_torch(build_batch(p_out, start, batch_T), device)
 
         optimizer.zero_grad()
         batch_u_pred, batch_v_pred, batch_p_pred = model(
@@ -81,6 +90,11 @@ if __name__ == "__main__":
                 test_u_in, test_u_out = u_in.to(device), u_out.to(device)
                 test_v_in, test_v_out = v_in.to(device), v_out.to(device)
                 test_p_in, test_p_out = p_in.to(device), p_out.to(device)
+                test_u_in, test_u_out = test_u_in.unsqueeze(0), test_u_out.unsqueeze(0)
+                test_v_in, test_v_out = test_v_in.unsqueeze(0), test_v_out.unsqueeze(0)
+                test_p_in, test_p_out = test_p_in.unsqueeze(0), test_p_out.unsqueeze(0)
+                test_u_pred, test_v_pred, test_p_pred = model(
+                    test_u_in, test_v_in, test_p_in)
 
                 test_loss = (mean_squared_error(test_u_pred, test_u_out) + 
                              mean_squared_error(test_v_pred, test_v_out) + 
@@ -105,13 +119,7 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         # load originally coarse data (no artificial coarsening)
-        dataset = np.load(os.path.join(DATA_DIR, 'data_nx_10_ny_10_dt_0.001.npy'))
+        dataset = np.load(os.path.join(DATA_DIR, 'data_nx_10_ny_10_dt_0.001.npz'))
         X, Y, u_seq, v_seq, p_seq = (dataset['X'], dataset['Y'], dataset['u'], 
-                                    dataset['v'], dataset['p'])
-        X = torch.from_numpy(X).float()
-        Y = torch.from_numpy(Y).float()
-        u_seq = torch.from_numpy(u_seq).float()
-        v_seq = torch.from_numpy(v_seq).float()
-        p_seq = torch.from_numpy(p_seq).float()
-
-        # TODO.
+                                     dataset['v'], dataset['p'])
+        # TODO. How do we do multi-length inference for RNN w/o diverging?

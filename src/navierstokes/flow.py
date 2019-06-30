@@ -151,5 +151,5 @@ if __name__ == "__main__":
     plt.ylabel('Y')
     plt.savefig('images/streamplot_nx_{}_ny_{}_dt_{}.pdf'.format(nx, ny, dt))
 
-    np.savez('data/data_nx_{}_ny_{}_dt_{}.npy'.format(nx, ny, dt),
+    np.savez('data/data_nx_{}_ny_{}_dt_{}.npz'.format(nx, ny, dt),
              X=X, Y=Y, p=p_dset, u=u_dset, v=v_dset)

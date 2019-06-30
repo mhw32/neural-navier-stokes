@@ -14,6 +14,7 @@ class RNNDiffEq(nn.Module):
            the input 
     """
     def __init__(self, grid_dim, rnn_dim=64, hidden_dim=64, n_filters=32):
+        super(RNNDiffEq, self).__init__()
         self.spatial_encoder = SpatialEncoder(grid_dim, hidden_dim=hidden_dim,
                                               n_filters=n_filters)
         self.spatial_decoder = SpatialDecoder(grid_dim, hidden_dim=hidden_dim,
@@ -55,7 +56,8 @@ class SpatialEncoder(nn.Module):
 
 
 class SpatialDecoder(nn.Module):
-    def __init__(self, grid_dim, channels=3, hidden_dim=64, n_filters=32)
+    def __init__(self, grid_dim, channels=3, hidden_dim=64, n_filters=32):
+        super(SpatialDecoder, self).__init__()
         self.conv = nn.Sequential(
             nn.ConvTranspose2d(n_filters*4, n_filters*4, 2, 2, padding=0),
             nn.ReLU(),
