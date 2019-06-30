@@ -29,6 +29,7 @@ if __name__ == "__main__":
     os.makedirs(MODEL_DIR)
 
     batch_T = 50  # number of timesteps to sample
+    batch_size = 100
 
     dataset = np.load(os.path.join(DATA_DIR, 'data_nx_50_ny_50_dt_0.001.npy'))
     X, Y, u_seq, v_seq, p_seq = (dataset['X'], dataset['Y'], dataset['u'], 
@@ -55,13 +56,13 @@ if __name__ == "__main__":
     for iteration in tqdm(range(1000)):
         model.train()
         # sample a batch of contiguous timesteps
-        start = np.random.choice(np.arange(T - batch_T))
-        batch_u_in = u_in[:, start:start+batch_T].to(device)
-        batch_v_in = v_in[:, start:start+batch_T].to(device)
-        batch_p_in = p_in[:, start:start+batch_T].to(device)
-        batch_u_out = u_out[:, start:start+batch_T].to(device)
-        batch_v_out = v_out[:, start:start+batch_T].to(device)
-        batch_p_out = p_out[:, start:start+batch_T].to(device)
+        start = np.random.choice(np.arange(T - batch_T), size=batch_size)
+        batch_u_in = u_in[start:start+batch_T].to(device)
+        batch_v_in = v_in[start:start+batch_T].to(device)
+        batch_p_in = p_in[start:start+batch_T].to(device)
+        batch_u_out = u_out[start:start+batch_T].to(device)
+        batch_v_out = v_out[start:start+batch_T].to(device)
+        batch_p_out = p_out[start:start+batch_T].to(device)
 
         optimizer.zero_grad()
         batch_u_pred, batch_v_pred, batch_p_pred = model(
@@ -80,11 +81,10 @@ if __name__ == "__main__":
                 test_u_in, test_u_out = u_in.to(device), u_out.to(device)
                 test_v_in, test_v_out = v_in.to(device), v_out.to(device)
                 test_p_in, test_p_out = p_in.to(device), p_out.to(device)
-                
-                
+
                 test_loss = (mean_squared_error(test_u_pred, test_u_out) + 
-                            mean_squared_error(test_v_pred, test_v_out) + 
-                            mean_squared_error(test_p_pred, test_p_out))
+                             mean_squared_error(test_v_pred, test_v_out) + 
+                             mean_squared_error(test_p_pred, test_p_out))
                 tqdm.set_postfix({'train loss': loss.item(),
                                 'test_loss': test_loss.item()}) 
 
