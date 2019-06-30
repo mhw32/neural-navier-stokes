@@ -67,13 +67,16 @@ class SpatialDecoder(nn.Module):
         self.cout = gen_conv_output_dim(grid_dim)
         self.fc = nn.Linear(hidden_dim, n_filters*4*self.cout**2)
         self.grid_dim = grid_dim
+        self.channels = channels
     
     def forward(self, hidden):
         batch_size = hidden.size(0)
         out = self.fc(hidden)
-        out = out.view(batch_size, self.n_filters*4, self.cout, self.cout)
+        out = out.view(batch_size, self.n_filters*4, 
+                       self.cout, self.cout)
         logits = self.conv(out)
-        logits = out.view(batch_size, 1, self.grid_dim, self.grid_dim)
+        logits = out.view(batch_size, self.channels, 
+                          self.grid_dim, self.grid_dim)
         return logits
 
 

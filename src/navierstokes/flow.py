@@ -1,6 +1,9 @@
 import os
 import numpy as np
 
+DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+DATA_DIR = os.path.realpath(DATA_DIR)
+
 
 def build_up_b(b, rho, dt, u, v, dx, dy):
     b[1:-1, 1:-1] = (rho * (1 / dt * 
@@ -104,8 +107,9 @@ if __name__ == "__main__":
                         help='stepsize over time [default: .001]')
     args = parser.parse_args()
 
-    os.makedirs('images', exist_ok=True)
-    os.makedirs('data', exist_ok=True)
+    dirname = os.path.dirname(__file__)
+    os.makedirs(os.path.join(dirname, 'images'), exist_ok=True)
+    os.makedirs(os.path.join(dirname, 'data'), exist_ok=True)
 
     nx = args.nx
     ny = args.ny
