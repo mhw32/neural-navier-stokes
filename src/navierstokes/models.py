@@ -24,14 +24,20 @@ class RNNDiffEq(nn.Module):
     def forward(self, u_seq, v_seq, p_seq, rnn_h0=None):
         batch_size, T, grid_dim = u_seq.size(0), u_seq.size(1), u_seq.size(2)
         seq = torch.cat([u_seq.unsqueeze(2), v_seq.unsqueeze(2), 
-                         p_seq_unsqueeze(2)], dim=2)
-        seq = seq.view(batch_size * T, grid_dim, grid_dim)
+                         p_seq.unsqueeze(2)], dim=2)
+        seq = seq.view(batch_size * T, 3, grid_dim, grid_dim)
         hidden_seq = self.spatial_encoder(seq)
         hidden_seq = hidden_seq.view(batch_size, T, -1)  # batch_size, T, hidden_dim
-        _, hidden_seq = self.rnn(hidden_seq, rnn_h0)
-        out = self.spatial_decoder(hidden_seq)  # batch_size x channel x grid_dim**2
+        output_seq, hidden_seq = self.rnn(hidden_seq, rnn_h0)
+        output_seq = output_seq.contiguous().view(batch_size * T, -1)
+        out = self.spatial_decoder(output_seq)  # batch_size x channel x grid_dim**2
+        out = out.view(batch_size, T, 3, grid_dim, grid_dim)
 
-        next_u_seq, next_v_seq, next_p_seq = out[:, 0], out[:, 1], out[:, 2]
+        next_u_seq, next_v_seq, next_p_seq = out[:, :, 0], out[:, :, 1], out[:, :, 2]
+        next_u_seq = next_u_seq.contiguous()
+        next_v_seq = next_v_seq.contiguous()
+        next_p_seq = next_p_seq.contiguous()
+
         return next_u_seq, next_v_seq, next_p_seq, hidden_seq
 
 
@@ -40,13 +46,13 @@ class SpatialEncoder(nn.Module):
         super(SpatialEncoder, self).__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(channels, n_filters, 2, 2, padding=0),
-            nn.ReLU(),
-            nn.Conv2d(n_filters, n_filters*2, 2, 2, padding=0),
-            nn.ReLU(),
-            nn.Conv2d(n_filters*2, n_filters*4, 2, 2, padding=0),
             nn.ReLU())
+            # nn.Conv2d(n_filters, n_filters*2, 2, 2, padding=0),
+            # nn.ReLU(),
+            # nn.Conv2d(n_filters*2, n_filters*4, 2, 2, padding=0),
+            # nn.ReLU())
         cout = gen_conv_output_dim(grid_dim)
-        self.fc = nn.Linear(n_filters*4*cout**2, hidden_dim)
+        self.fc = nn.Linear(n_filters*cout**2, hidden_dim)
     
     def forward(self, x):
         batch_size = x.size(0)
@@ -59,33 +65,33 @@ class SpatialDecoder(nn.Module):
     def __init__(self, grid_dim, channels=3, hidden_dim=64, n_filters=32):
         super(SpatialDecoder, self).__init__()
         self.conv = nn.Sequential(
-            nn.ConvTranspose2d(n_filters*4, n_filters*4, 2, 2, padding=0),
+            nn.ConvTranspose2d(n_filters, n_filters, 2, 2, padding=0),
             nn.ReLU(),
-            nn.ConvTranspose2d(n_filters*4, n_filters*2, 2, 2, padding=0),
-            nn.ReLU(),
-            nn.ConvTranspose2d(n_filters*2, n_filters, 2, 2, padding=0),
-            nn.ReLU(),
+            # nn.ConvTranspose2d(n_filters*4, n_filters*2, 2, 2, padding=0),
+            # nn.ReLU(),
+            # nn.ConvTranspose2d(n_filters*2, n_filters, 2, 2, padding=0),
+            # nn.ReLU(),
             nn.Conv2d(n_filters, channels, 1, 1, padding=0))
         self.cout = gen_conv_output_dim(grid_dim)
-        self.fc = nn.Linear(hidden_dim, n_filters*4*self.cout**2)
+        self.fc = nn.Linear(hidden_dim, n_filters*self.cout**2)
         self.grid_dim = grid_dim
         self.channels = channels
+        self.n_filters = n_filters
     
     def forward(self, hidden):
         batch_size = hidden.size(0)
         out = self.fc(hidden)
-        out = out.view(batch_size, self.n_filters*4, 
-                       self.cout, self.cout)
+        out = out.view(batch_size, self.n_filters, self.cout, self.cout)
         logits = self.conv(out)
-        logits = out.view(batch_size, self.channels, 
-                          self.grid_dim, self.grid_dim)
+        logits = logits.view(batch_size, self.channels, 
+                             self.grid_dim, self.grid_dim)
         return logits
 
 
 def gen_conv_output_dim(s):
     s = _get_conv_output_dim(s, 2, 0, 2)
-    s = _get_conv_output_dim(s, 2, 0, 2)
-    s = _get_conv_output_dim(s, 2, 0, 2)
+    # s = _get_conv_output_dim(s, 2, 0, 2)
+    # s = _get_conv_output_dim(s, 2, 0, 2)
     return s
 
 

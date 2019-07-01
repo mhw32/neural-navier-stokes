@@ -34,6 +34,11 @@ def numpy_to_torch(array, device):
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--test-only', action='store_true', default=False)
+    args = parser.parse_args()
+
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
@@ -44,6 +49,7 @@ if __name__ == "__main__":
 
     batch_T = 50  # number of timesteps to sample
     batch_size = 100
+    epochs = 2000
 
     dataset = np.load(os.path.join(DATA_DIR, 'data_nx_50_ny_50_dt_0.001.npz'))
     X, Y, u_seq, v_seq, p_seq = (dataset['X'], dataset['Y'], dataset['u'], 
@@ -61,56 +67,63 @@ if __name__ == "__main__":
 
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     best_loss = np.inf
+    test_loss_item = np.inf
 
-    for iteration in tqdm(range(1000)):
-        model.train()
-        # sample a batch of contiguous timesteps
-        start = np.random.choice(np.arange(T - 1 - batch_T), size=batch_size)
-        batch_u_in = numpy_to_torch(build_batch(u_in, start, batch_T), device)
-        batch_v_in = numpy_to_torch(build_batch(v_in, start, batch_T), device)
-        batch_p_in = numpy_to_torch(build_batch(p_in, start, batch_T), device)
-        batch_u_out = numpy_to_torch(build_batch(u_out, start, batch_T), device)
-        batch_v_out = numpy_to_torch(build_batch(v_out, start, batch_T), device)
-        batch_p_out = numpy_to_torch(build_batch(p_out, start, batch_T), device)
+    if not args.test_only:
+        pbar = tqdm(total=epochs)
+        for iteration in range(epochs):
+            model.train()
+            # sample a batch of contiguous timesteps
+            start = np.random.choice(np.arange(T - 1 - batch_T), size=batch_size)
+            batch_u_in = numpy_to_torch(build_batch(u_in, start, batch_T), device)
+            batch_v_in = numpy_to_torch(build_batch(v_in, start, batch_T), device)
+            batch_p_in = numpy_to_torch(build_batch(p_in, start, batch_T), device)
+            batch_u_out = numpy_to_torch(build_batch(u_out, start, batch_T), device)
+            batch_v_out = numpy_to_torch(build_batch(v_out, start, batch_T), device)
+            batch_p_out = numpy_to_torch(build_batch(p_out, start, batch_T), device)
 
-        optimizer.zero_grad()
-        batch_u_pred, batch_v_pred, batch_p_pred = model(
-            batch_u_in, batch_v_in, batch_p_in)
-        loss = (mean_squared_error(batch_u_pred, batch_u_out) + 
-                mean_squared_error(batch_v_pred, batch_v_out) + 
-                mean_squared_error(batch_p_pred, batch_p_out))
-        loss.backward()
-        optimizer.step()
-        tqdm.set_postfix({'train loss': loss.item()})
+            optimizer.zero_grad()
+            batch_u_pred, batch_v_pred, batch_p_pred, _ = model(
+                batch_u_in, batch_v_in, batch_p_in)
+            loss = (mean_squared_error(batch_u_pred, batch_u_out) + 
+                    mean_squared_error(batch_v_pred, batch_v_out) + 
+                    mean_squared_error(batch_p_pred, batch_p_out))
+            loss.backward()
+            optimizer.step()
+            pbar.update() 
+            pbar.set_postfix({'train loss': loss.item(),
+                              'test_loss': test_loss_item})
 
-        if iteration % 10 == 0:
-            model.eval()
-            with torch.no_grad():
-                # test on entire dataset as test metric
-                test_u_in, test_u_out = numpy_to_torch(u_in, device), numpy_to_torch(u_out, device)
-                test_v_in, test_v_out = numpy_to_torch(v_in, device), numpy_to_torch(v_out, device)
-                test_p_in, test_p_out = numpy_to_torch(p_in, device), numpy_to_torch(p_out, device)
-                test_u_in, test_u_out = test_u_in.unsqueeze(0), test_u_out.unsqueeze(0)
-                test_v_in, test_v_out = test_v_in.unsqueeze(0), test_v_out.unsqueeze(0)
-                test_p_in, test_p_out = test_p_in.unsqueeze(0), test_p_out.unsqueeze(0)
-                test_u_pred, test_v_pred, test_p_pred = model(
-                    test_u_in, test_v_in, test_p_in)
+            if iteration % 10 == 0:
+                model.eval()
+                with torch.no_grad():
+                    # test on entire dataset as test metric
+                    test_u_in, test_u_out = numpy_to_torch(u_in, device), numpy_to_torch(u_out, device)
+                    test_v_in, test_v_out = numpy_to_torch(v_in, device), numpy_to_torch(v_out, device)
+                    test_p_in, test_p_out = numpy_to_torch(p_in, device), numpy_to_torch(p_out, device)
+                    test_u_in, test_u_out = test_u_in.unsqueeze(0), test_u_out.unsqueeze(0)
+                    test_v_in, test_v_out = test_v_in.unsqueeze(0), test_v_out.unsqueeze(0)
+                    test_p_in, test_p_out = test_p_in.unsqueeze(0), test_p_out.unsqueeze(0)
+                    test_u_pred, test_v_pred, test_p_pred, _ = model(
+                        test_u_in, test_v_in, test_p_in)
 
-                test_loss = (mean_squared_error(test_u_pred, test_u_out) + 
-                             mean_squared_error(test_v_pred, test_v_out) + 
-                             mean_squared_error(test_p_pred, test_p_out))
-                tqdm.set_postfix({'train loss': loss.item(),
-                                'test_loss': test_loss.item()}) 
+                    test_loss = (mean_squared_error(test_u_pred, test_u_out) + 
+                                 mean_squared_error(test_v_pred, test_v_out) + 
+                                 mean_squared_error(test_p_pred, test_p_out))
+                    test_loss_item = test_loss.item()
+                    pbar.set_postfix({'train loss': loss.item(),
+                                      'test_loss': test_loss_item}) 
 
-                if test_loss.item() < best_loss:
-                    best_loss = test_loss.item()
-                    is_best = True
+                    if test_loss.item() < best_loss:
+                        best_loss = test_loss.item()
+                        is_best = True
 
-                save_checkpoint({
-                    'state_dict': model.state_dict(),
-                    'test_loss': test_loss.item(),
-                }, is_best, MODEL_DIR)    
+                    save_checkpoint({
+                        'state_dict': model.state_dict(),
+                        'test_loss': test_loss.item(),
+                    }, is_best, MODEL_DIR)    
 
+        pbar.close()
 
     # load the best model
     checkpoint = torch.load(os.path.join(MODEL_DIR, 'model_best.pth.tar'))
@@ -122,23 +135,24 @@ if __name__ == "__main__":
         dataset = np.load(os.path.join(DATA_DIR, 'data_nx_10_ny_10_dt_0.001.npz'))
         X, Y, _u_seq, _v_seq, _p_seq = (dataset['X'], dataset['Y'], dataset['u'], 
                                         dataset['v'], dataset['p'])
-        # TODO. How do we do multi-length inference for RNN w/o diverging?
-        u, v, p = _u_seq[0].unsqueeze(0), _v_seq[0].unsqueeze(0), \
-                  _p_seq[0].unsqueeze(0)
+        u, v, p = _u_seq[0].copy(), _v_seq[0].copy(), _p_seq[0].copy()
         u, v, p = numpy_to_torch(u, device), numpy_to_torch(v, device), \
                   numpy_to_torch(p, device)
-        u_seq, v_seq, p_seq = [u.copy()], [v.copy()], [p.copy()]
+        u = u.unsqueeze(0).unsqueeze(0) 
+        v = v.unsqueeze(0).unsqueeze(0)
+        p = p.unsqueeze(0).unsqueeze(0)
+        u_seq, v_seq, p_seq = [u.cpu().numpy()], [v.cpu().numpy()], [p.cpu().numpy()]
         h0 = None
 
         for _ in range(T - 1):
             u, v, p, h0 = model(u, v, p, rnn_h0=h0)
-            u_seq.append(u.copy().detach())
-            v_seq.append(v.copy().detach())
-            p_seq.append(p.copy().detach())
+            u_seq.append(u.cpu().numpy())
+            v_seq.append(v.cpu().numpy())
+            p_seq.append(p.cpu().numpy())
         
-        u_seq = torch.stack(u_seq).numpy()
-        v_seq = torch.stack(v_seq).numpy()
-        p_seq = torch.stack(p_seq).numpy()
+        u_seq = np.stack(u_seq)
+        v_seq = np.stack(v_seq)
+        p_seq = np.stack(p_seq)
 
-        np.savez(os.path.join(MODEL_DIR, 'rnn_on_coarse.npz'),
+        np.savez(os.path.join(MODEL_DIR, 'rnn_nx_10_ny_10_dt_0.001.npz'),
                  X=X, Y=Y, u=u_seq, v=v_seq, p=p_seq)
