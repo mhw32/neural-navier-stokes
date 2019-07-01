@@ -35,19 +35,23 @@ def spatial_coarsen(X, Y, u_seq, v_seq, p_seq, agg_x=4, agg_y=4):
     assert nx % agg_x == 0
     assert ny % agg_y == 0
 
-    new_X = np.zeros((nx // agg_x, ny // agg_y))
-    new_Y = np.zeros((nx // agg_x, ny // agg_y))
     new_u_seq = np.zeros((T, nx // agg_x, ny // agg_y))
     new_v_seq = np.zeros((T, nx // agg_x, ny // agg_y))
     new_p_seq = np.zeros((T, nx // agg_x, ny // agg_y))
 
+    new_x = np.linspace(0, 2, nx // agg_x)
+    new_y = np.linspace(0, 2, ny // agg_y)
+    new_X, new_Y = np.meshgrid(new_x, new_y)
+
     for i in range(nx // agg_x):
         for j in range(ny // agg_x):
-            new_X[i, j] = np.sum(X[i*agg_x:(i+1)*agg_x, j*agg_y:(j+1)*agg_y])
-            new_Y[i, j] = np.sum(Y[i*agg_x:(i+1)*agg_x, j*agg_y:(j+1)*agg_y])
-            new_u_seq[:, i, j] = np.sum(u_seq[:, i*agg_x:(i+1)*agg_x, j*agg_y:(j+1)*agg_y])
-            new_v_seq[:, i, j] = np.sum(v_seq[:, i*agg_x:(i+1)*agg_x, j*agg_y:(j+1)*agg_y])
-            new_p_seq[:, i, j] = np.sum(p_seq[:, i*agg_x:(i+1)*agg_x, j*agg_y:(j+1)*agg_y])
+            u_sub = u_seq[:, i*agg_x:(i+1)*agg_x, j*agg_y:(j+1)*agg_y].reshape(T, -1)
+            v_sub = v_seq[:, i*agg_x:(i+1)*agg_x, j*agg_y:(j+1)*agg_y].reshape(T, -1)
+            p_sub = p_seq[:, i*agg_x:(i+1)*agg_x, j*agg_y:(j+1)*agg_y].reshape(T, -1)
+
+            new_u_seq[:, i, j] = np.mean(u_sub, axis=1)
+            new_v_seq[:, i, j] = np.mean(v_sub, axis=1)
+            new_p_seq[:, i, j] = np.mean(p_sub, axis=1)
 
     return new_X, new_Y, new_u_seq, new_v_seq, new_p_seq
 

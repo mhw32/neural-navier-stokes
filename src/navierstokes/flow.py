@@ -82,9 +82,9 @@ def cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu):
         v[:, 0]  = 0
         v[:, -1] = 0
 
-        u_list.append(u)
-        v_list.append(v)
-        p_list.append(p)
+        u_list.append(u.copy())
+        v_list.append(v.copy())
+        p_list.append(p.copy())
     
     u_list = np.stack(u_list)
     v_list = np.stack(v_list)
@@ -113,7 +113,7 @@ if __name__ == "__main__":
 
     nx = args.nx
     ny = args.ny
-    nt = 700
+    nt = 200
     nit = 50
     dx = 2 / (nx - 1)
     dy = 2 / (ny - 1)

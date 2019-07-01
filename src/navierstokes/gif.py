@@ -4,14 +4,16 @@ import os
 import shutil
 import imageio
 import numpy as np
+from tqdm import tqdm
 
 from matplotlib import pyplot as plt, cm
 from mpl_toolkits.mplot3d import Axes3D
 
 from src.navierstokes.flow import DATA_DIR
+from src.navierstokes.utils import spatial_coarsen
 
 dset_f = np.load(os.path.join(DATA_DIR, 'data_nx_50_ny_50_dt_0.001.npz'))
-X_f, Y_f, u_seq_f, v_seq_f, p_seq_f = (dset_f['X'], dset_f['Y'], dataset['u'], 
+X_f, Y_f, u_seq_f, v_seq_f, p_seq_f = (dset_f['X'], dset_f['Y'], dset_f['u'], 
                                        dset_f['v'], dset_f['p'])
 X_cf, Y_cf, u_seq_cf, v_seq_cf, p_seq_cf = spatial_coarsen(
     X_f, Y_f, u_seq_f, v_seq_f, p_seq_f, agg_x=5, agg_y=5)
@@ -34,6 +36,7 @@ def make_quiver(X, Y, u, v, p, save_path):
     plt.xlabel('X')
     plt.ylabel('Y')
     plt.savefig(save_path)
+    plt.close()
 
 def make_streamplot(X, Y, u, v, p, save_path):
     fig = plt.figure(figsize=(11, 7), dpi=100)
@@ -44,6 +47,7 @@ def make_streamplot(X, Y, u, v, p, save_path):
     plt.xlabel('X')
     plt.ylabel('Y')
     plt.savefig(save_path)
+    plt.close()
 
 def make_gif(image_paths, gif_path, duration=.1):
     images = [imageio.imread(path) for path in image_paths]
@@ -58,7 +62,7 @@ os.makedirs(tmp_dir, exist_ok=True)
 quiver_f_paths, quiver_c_paths, quiver_cf_paths = [], [], []
 stream_f_paths, stream_c_paths, stream_cf_paths = [], [], []
 
-for t in range(T):
+for t in tqdm(range(T)):
     u_f, v_f, p_f = u_seq_f[t], v_seq_f[t], p_seq_f[t]
     u_c, v_c, p_c = u_seq_c[t], v_seq_c[t], p_seq_c[t]
     u_cf, v_cf, p_cf = u_seq_cf[t], v_seq_cf[t], p_seq_cf[t]
@@ -83,9 +87,9 @@ for t in range(T):
     quiver_c_paths.append(quiver_c_t_path)
     quiver_cf_paths.append(quiver_cf_t_path)
 
-    streamplot_f_paths.append(stream_f_t_path)
-    streamplot_c_paths.append(stream_c_t_path)
-    streamplot_cf_paths.append(stream_cf_t_path)
+    stream_f_paths.append(stream_f_t_path)
+    stream_c_paths.append(stream_c_t_path)
+    stream_cf_paths.append(stream_cf_t_path)
 
 # convert those into three gifs
 make_gif(quiver_f_paths, os.path.join(gif_dir, 'quiver_f.gif'))
