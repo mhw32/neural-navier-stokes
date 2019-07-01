@@ -21,18 +21,18 @@ class RNNDiffEq(nn.Module):
                                               n_filters=n_filters)
         self.rnn = nn.GRU(hidden_dim, rnn_dim, batch_first=True)
     
-    def forward(self, u_seq, v_seq, p_seq):
+    def forward(self, u_seq, v_seq, p_seq, rnn_h0=None):
         batch_size, T, grid_dim = u_seq.size(0), u_seq.size(1), u_seq.size(2)
         seq = torch.cat([u_seq.unsqueeze(2), v_seq.unsqueeze(2), 
                          p_seq_unsqueeze(2)], dim=2)
         seq = seq.view(batch_size * T, grid_dim, grid_dim)
         hidden_seq = self.spatial_encoder(seq)
         hidden_seq = hidden_seq.view(batch_size, T, -1)  # batch_size, T, hidden_dim
-        _, hidden_seq = self.rnn(hidden_seq)
+        _, hidden_seq = self.rnn(hidden_seq, rnn_h0)
         out = self.spatial_decoder(hidden_seq)  # batch_size x channel x grid_dim**2
 
         next_u_seq, next_v_seq, next_p_seq = out[:, 0], out[:, 1], out[:, 2]
-        return next_u_seq, next_v_seq, next_p_seq
+        return next_u_seq, next_v_seq, next_p_seq, hidden_seq
 
 
 class SpatialEncoder(nn.Module):

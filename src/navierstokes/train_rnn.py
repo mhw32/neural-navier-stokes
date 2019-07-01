@@ -87,9 +87,9 @@ if __name__ == "__main__":
             model.eval()
             with torch.no_grad():
                 # test on entire dataset as test metric
-                test_u_in, test_u_out = u_in.to(device), u_out.to(device)
-                test_v_in, test_v_out = v_in.to(device), v_out.to(device)
-                test_p_in, test_p_out = p_in.to(device), p_out.to(device)
+                test_u_in, test_u_out = numpy_to_torch(u_in, device), numpy_to_torch(u_out, device)
+                test_v_in, test_v_out = numpy_to_torch(v_in, device), numpy_to_torch(v_out, device)
+                test_p_in, test_p_out = numpy_to_torch(p_in, device), numpy_to_torch(p_out, device)
                 test_u_in, test_u_out = test_u_in.unsqueeze(0), test_u_out.unsqueeze(0)
                 test_v_in, test_v_out = test_v_in.unsqueeze(0), test_v_out.unsqueeze(0)
                 test_p_in, test_p_out = test_p_in.unsqueeze(0), test_p_out.unsqueeze(0)
@@ -120,6 +120,25 @@ if __name__ == "__main__":
     with torch.no_grad():
         # load originally coarse data (no artificial coarsening)
         dataset = np.load(os.path.join(DATA_DIR, 'data_nx_10_ny_10_dt_0.001.npz'))
-        X, Y, u_seq, v_seq, p_seq = (dataset['X'], dataset['Y'], dataset['u'], 
-                                     dataset['v'], dataset['p'])
+        X, Y, _u_seq, _v_seq, _p_seq = (dataset['X'], dataset['Y'], dataset['u'], 
+                                        dataset['v'], dataset['p'])
         # TODO. How do we do multi-length inference for RNN w/o diverging?
+        u, v, p = _u_seq[0].unsqueeze(0), _v_seq[0].unsqueeze(0), \
+                  _p_seq[0].unsqueeze(0)
+        u, v, p = numpy_to_torch(u, device), numpy_to_torch(v, device), \
+                  numpy_to_torch(p, device)
+        u_seq, v_seq, p_seq = [u.copy()], [v.copy()], [p.copy()]
+        h0 = None
+
+        for _ in range(T - 1):
+            u, v, p, h0 = model(u, v, p, rnn_h0=h0)
+            u_seq.append(u.copy().detach())
+            v_seq.append(v.copy().detach())
+            p_seq.append(p.copy().detach())
+        
+        u_seq = torch.stack(u_seq).numpy()
+        v_seq = torch.stack(v_seq).numpy()
+        p_seq = torch.stack(p_seq).numpy()
+
+        np.savez(os.path.join(MODEL_DIR, 'rnn_on_coarse.npz'),
+                 X=X, Y=Y, u=u_seq, v=v_seq, p=p_seq)
