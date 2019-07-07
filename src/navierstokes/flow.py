@@ -36,11 +36,8 @@ def pressure_poisson(p, dx, dy, b):
     return p
 
 
-def cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu):
-    un = np.empty_like(u)
-    vn = np.empty_like(v)
-    b = np.zeros((ny, nx))
-
+def navier_stokes_flow(nt, u, v, dt, dx, dy, p, rho, nu, F):
+    # collect propagations for dataset
     u_list, v_list, p_list = [], [], []
     
     for n in range(nt):
@@ -59,7 +56,8 @@ def cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu):
                          nu * (dt / dx**2 *
                         (un[1:-1, 2:] - 2 * un[1:-1, 1:-1] + un[1:-1, 0:-2]) +
                          dt / dy**2 *
-                        (un[2:, 1:-1] - 2 * un[1:-1, 1:-1] + un[0:-2, 1:-1])))
+                        (un[2:, 1:-1] - 2 * un[1:-1, 1:-1] + un[0:-2, 1:-1])) + 
+                        F * dt)
 
         v[1:-1,1:-1] = (vn[1:-1, 1:-1] -
                         un[1:-1, 1:-1] * dt / dx *
@@ -123,6 +121,7 @@ if __name__ == "__main__":
 
     rho = 1
     nu = .1
+    F = 0  # a source term
     dt = args.dt
 
     u = np.zeros((ny, nx))
@@ -130,7 +129,7 @@ if __name__ == "__main__":
     p = np.zeros((ny, nx))
     b = np.zeros((ny, nx))
 
-    u_dset, v_dset, p_dset = cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu)
+    u_dset, v_dset, p_dset = navier_stokes_flow(nt, u, v, dt, dx, dy, p, rho, nu, F)
     u, v, p = u_dset[-1], v_dset[-1], p_dset[-1]
 
     fig = plt.figure(figsize=(11, 7), dpi=100)
