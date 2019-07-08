@@ -12,6 +12,7 @@ from src.navierstokes.flow import (
     MomentumBoundaryCondition,
     PressureBoundaryCondition,
 )
+
 DATA_DIR = '/mnt/fs5/wumike/navierstokes/data'
 
 
@@ -83,7 +84,7 @@ if __name__ == "__main__":
     for i in tqdm(range(args.num)):
         config = generate_random_config(nt, nit, nx, ny, dt, rho, nu)
         fine_system = generate_system(config)  # make fine system!
-        config['nx'] = 10; config['ny'] = 10
+        config['nx'] = 10; config['ny'] = 10   # make coarse system!
         coarse_system = generate_system(config)
         fine_systems.append(fine_system)
         coarse_systems.append(coarse_system)
