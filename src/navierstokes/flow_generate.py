@@ -13,28 +13,62 @@ TODO: handle Neumann boundary conditions.
 import numpy as np
 
 
+class BoundaryCondition():
+    """General class for a boundary condition."""
+
+    def __init__(self, dirichlet=None, neumann=None, periodic=False):
+        assert (dirichlet not None) or (neumann not None) or (not periodic)
+        if dirichlet is not None:
+            assert neumann is None and not periodic
+        if neumann is not None:
+            assert dirichlet is None and not periodic
+        if periodic:
+            assert neumann is None and dirichlet is None
+        self.dirichlet = dirichlet
+        self.neumann = neumann
+        self.periodic = periodic
+
+    def get(self):
+        if self.dirichlet:
+            return self.dirichlet, 'dirichlet'
+        elif self.neumann:
+            return self.neumann, 'neumann'
+        else:
+            return self.periodic, 'periodic'
+
+
 class BoundaryConditions():
     """Specifies boundary conditions for either Momentum 
-    or Pressure (in Navier Stokes). As a user, you can either
-    specify Dirichlet BCs (x0, y0, xn, yn) or Neumann BCs 
-    (dx0, dy0, dxn, dyn). 
+    or Pressure (in Navier Stokes).
+
+    You can either specify a dirichlet, neumann, or periodic
+    condition at each boundary. We will not allow multiple 
+    types of boundaries.
 
     Args:
     -----
-    x0 := float/string 
-          value of momentum/pressure at x=0
-    y0 := float/string
-          value of momentum/pressure at y=0
-    xn := float/string
-          value of momentum/pressure at x=n
-    yn := float/string 
-          value of momentum/pressure at y=n
+    x0 := BoundaryCondition object
+          boundary condition at x=0
+    y0 := BoundaryCondition object
+          boundary condition at y=0
+    xn := BoundaryCondition object
+          boundary condition at x=n
+    yn := BoundaryCondition object 
+          boundary condition at y=n
     """
-    def __init__(self, x0=None, y0=None, xn=None, yn=None,
-                 dx0=None, dy0=None, dxn=None, dyn=None):
-        self.condition = {'x0': x0, 'y0': y0, 'xn': xn, 'yn': yn,
-                          'dx0': dx0, 'dy0': dy0, 'dxn': dxn, 'dyn': dyn}
-        assert 
+    def __init__(self, x0_bc, y0_bc, xn_bc, yn_bc):
+        self.x0_bc = x0_bc
+        self.y0_bc = y0_bc
+        self.xn_bc = xn_bc
+        self.yn_bc = yn_bc
+
+    def is_dirichlet(self):
+        pass
+    
+    def is_neumann(self):
+        pass
+    
+    def is_periodic(self):
 
 
 class PressureBoundaryConditions(BoundaryConditions):
