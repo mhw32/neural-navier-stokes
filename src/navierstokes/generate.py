@@ -15,7 +15,7 @@ from src.navierstokes.flow import (
 DATA_DIR = '/mnt/fs5/wumike/navierstokes/data'
 
 
-def generate_random_system(nt, nit, nx, ny, dt, rho, nu):
+def generate_random_config(nt, nit, nx, ny, dt, rho, nu):
     dx, dy = 2. / (nx - 1), 2. / (ny - 1)
 
     # randomly pick source 
@@ -55,9 +55,15 @@ def generate_random_system(nt, nit, nx, ny, dt, rho, nu):
               'u_bc': u_bc, 'v_bc': v_bc, 'p_bc': p_bc,
               'nt': nt, 'nit': nit, 'nx': nx, 'ny': ny,
               'dt': dt, 'rho': rho, 'nu': nu, 'F': F}
-    system = NavierStokesSystem(u_ic, v_ic, p_ic, u_bc, v_bc, p_bc,
-                                nt=nt, nit=nit, nx=nx, ny=ny, dt=dt,
-                                rho=rho, nu=nu, F=F)
+    return config
+
+
+def generate_system(config):
+    system = NavierStokesSystem(config['u_ic'], config['v_ic'], config['p_ic'], 
+                                config['u_bc'], config['v_bc'], config['p_bc'],
+                                nt=config['nt'], nit=config['nit'], 
+                                nx=config['nx'], ny=config['ny'], dt=config['dt'],
+                                rho=config['rho'], nu=config['nu'], F=config['F'])
     u, v, p = system.simulate()
     return {'u': u, 'v': v, 'p': p, 'config': config}
 
@@ -73,10 +79,17 @@ if __name__ == "__main__":
     nt, nit, nx, ny = 200, 50, 50, 50
     dt, rho, nu = 0.001, 1, 0.1
 
-    systems = []
+    fine_systems, coarse_systems = [], []
     for i in tqdm(range(args.num)):
-        system = generate_random_system(nt, nit, nx, ny, dt, rho, nu)
-        systems.append(system)
+        config = generate_random_config(nt, nit, nx, ny, dt, rho, nu)
+        fine_system = generate_system(config)  # make fine system!
+        config['nx'] = 10; config['ny'] = 10
+        coarse_system = generate_system(config)
+        fine_systems.append(fine_system)
+        coarse_systems.append(coarse_system)
 
-    with open(os.path.join(DATA_DIR, '{}_systems.pickle'), 'wb') as fp:
-        pickle.dump(systems, fp)
+    with open(os.path.join(DATA_DIR, '{}_fine_systems.pickle'), 'wb') as fp:
+        pickle.dump(fine_systems, fp)
+
+    with open(os.path.join(DATA_DIR, '{}_coarse_systems.pickle'), 'wb') as fp:
+        pickle.dump(coarse_systems, fp)
