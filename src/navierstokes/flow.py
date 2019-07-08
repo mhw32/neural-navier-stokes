@@ -19,6 +19,7 @@ Notes:
 """
 
 import numpy as np
+from tqdm import tqdm
 
 
 class BaseBoundaryCondition(object):
@@ -32,10 +33,10 @@ class BaseBoundaryCondition(object):
          y-coordinate in matrix A
     """
 
-    def __init__(self, x, y, min_x, max_x, min_y, max_y, dx, dy, 
+    def __init__(self, i, j, min_i, max_i, min_j, max_j, dx, dy, 
                  dirichlet=None, neumann=None, periodic=False):
         super().__init__()
-        assert (dirichlet not None) or (neumann not None) or (not periodic)
+        assert (dirichlet is not None) or (neumann is not None) or (not periodic)
         if dirichlet is not None:
             assert neumann is None and not periodic
         if neumann is not None:
@@ -45,8 +46,8 @@ class BaseBoundaryCondition(object):
         self.dirichlet = dirichlet
         self.neumann = neumann
         self.periodic = periodic
-        self.x, self.x_min, self.x_max = x, x_min, x_max
-        self.y, self.y_min, self.y_may = y, y_min, y_max
+        self.i, self.min_i, self.max_i = i, min_i, max_i
+        self.j, self.min_j, self.max_j = j, min_j, max_j
         self.dx, self.dy = dx, dy
 
     def is_dirichlet(self):
@@ -59,16 +60,16 @@ class BaseBoundaryCondition(object):
         return self.periodic
 
     def is_left_x_boundary(self):
-        return self.x == self.min_x
+        return self.i == self.min_i
     
     def is_right_x_boundary(self):
-        return self.x == self.max_x
+        return self.i == self.max_i
     
     def is_left_y_boundary(self):
-        return self.y == self.min_y
+        return self.j == self.min_j
     
     def is_right_y_boundary(self):
-        return self.y == self.max_y
+        return self.j == self.max_j
 
     def apply(self):
         raise NotImplementedError
@@ -89,7 +90,7 @@ class BoundaryCondition(BaseBoundaryCondition):
         Dirichlet BCs are easy, all we have to do is set 
         the point to a particular value.
         """
-        A[self.x, self.y] = self.dirichlet
+        A[self.i, self.j] = self.dirichlet
         return A
 
     def _apply_neumann(self, A):
@@ -111,23 +112,23 @@ class BoundaryCondition(BaseBoundaryCondition):
         """
         if self.is_left_x_boundary():
             dAdx = self.neumann
-            A[self.x, self.y] = (4./3. * A[self.x+1,self.y] - 
-                                 1./3 * A[self.x+2,self.y] - 
+            A[self.i, self.j] = (4./3. * A[self.i+1,self.j] - 
+                                 1./3 * A[self.i+2,self.j] - 
                                  2./3. * self.dx * dAdx)
         elif self.is_right_x_boundary():
             dAdx = self.neumann
-            A[self.x, self.y] = (4./3. * A[self.x-1,self.y] - 
-                                 1./3 * A[self.x-2,self.y] + 
+            A[self.i, self.j] = (4./3. * A[self.i-1,self.j] - 
+                                 1./3 * A[self.i-2,self.j] + 
                                  2./3. * self.dx * dAdx)
         elif self.is_left_y_boundary():
             dAdy = self.neumann
-            A[self.x, self.y] = (4./3. * A[self.x,self.y+1] - 
-                                 1./3 * A[self.x,self.y+2] - 
+            A[self.i, self.j] = (4./3. * A[self.i,self.j+1] - 
+                                 1./3 * A[self.i,self.j+2] - 
                                  2./3. * self.dy * dAdy)
         elif self.is_right_y_boundary():
             dAdy = self.neumann
-            A[self.x, self.y] = (4./3. * A[self.x,self.y-1] - 
-                                 1./3 * A[self.x,self.y-2] + 
+            A[self.i, self.j] = (4./3. * A[self.i,self.j-1] - 
+                                 1./3 * A[self.i,self.j-2] + 
                                  2./3. * self.dy * dAdy)
         else:
             raise Exception('invalid point not on boundary.')
@@ -190,7 +191,7 @@ class NavierStokesSystem(object):
         self.u_bc, self.v_bc, self.p_bc = u_bc, v_bc, p_bc
         self.nt, self.dt, self.nx, self.ny = nt, dt, nx, ny
         self.dx, self.dy = 2. / (self.nx - 1), 2. / (self.ny - 1)
-        self.rho, self.nu, self.F = rho, nu, F
+        self.nit, self.rho, self.nu, self.F = nit, rho, nu, F
 
     def _build_up_b(self, u, v):
         rho, dt, dx, dy = self.rho, self.dt, self.dx, self.dy
@@ -229,7 +230,7 @@ class NavierStokesSystem(object):
         p = self._pressure_poisson(p, b)
 
         dt, dx, dy = self.dt, self.dx, self.dy
-        rho, F = self.rho, self.F
+        rho, nu, F = self.rho, self.nu, self.F
 
         u[1:-1, 1:-1] = (un[1:-1, 1:-1]-
                          un[1:-1, 1:-1] * dt / dx *
@@ -268,7 +269,7 @@ class NavierStokesSystem(object):
         u_list, v_list, p_list = [], [], []
         u, v, p = self.u_ic, self.v_ic, self.p_ic
     
-        for n in range(self.nt):
+        for n in tqdm(range(self.nt)):
             u, v, p = self.step(u, v, p)
             u_list.append(u.copy())
             v_list.append(v.copy())

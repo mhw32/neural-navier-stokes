@@ -13,7 +13,10 @@ from src.navierstokes.flow import (
     PressureBoundaryCondition,
 )
 
-DATA_DIR = '/mnt/fs5/wumike/navierstokes/data'
+if 'ccncluster' in os.uname()[1]:
+    DATA_DIR = '/mnt/fs5/wumike/navierstokes/data'
+else:
+    DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 
 
 def generate_random_config(nt, nit, nx, ny, dt, rho, nu):
@@ -22,40 +25,49 @@ def generate_random_config(nt, nit, nx, ny, dt, rho, nu):
     # randomly pick source 
     F = np.random.choice([0, 1], p=[0.8, 0.2])
 
-    # create random initial conditions
-    u_ic = np.random.randn(nx, ny)
-    v_ic = np.random.randn(nx, ny)
-    p_ic = np.random.uniform(0, 1, size=nx*ny).reshape(nx, ny)
+    # for now, we will use the same initial 
+    # conditions (to highlight differences in boundary)
+    u_ic = np.zeros((nx, ny))
+    v_ic = np.zeros((nx, ny))
+    p_ic = np.zeros((nx, ny))
 
     # create random boundary conditions
     u_bc, v_bc, p_bc = [], [], []
-    for i in np.linspace(0, 2, nx):
+    for i in range(nx):
         boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
         boundary_value = np.random.randn()
         boundary_dict = {boundary_type: boundary_value}
 
-        u_bc_y0 = MomentumBoundaryCondition(i, 0, 0, 2, 0, 2, dx, dy, **boundary_dict)
-        u_bc_yn = MomentumBoundaryCondition(i, 2, 0, 2, 0, 2, dx, dy, **boundary_dict)
-        u_bc_x0 = MomentumBoundaryCondition(0, i, 0, 2, 0, 2, dx, dy, **boundary_dict)
-        u_bc_xn = MomentumBoundaryCondition(2, i, 0, 2, 0, 2, dx, dy, **boundary_dict)
-        u_bc.extend([u_bc_y0, u_bc_yn, u_bc_x0, u_bc_xn])
+        u_bc_x0 = MomentumBoundaryCondition(i, 0, 0, 2, 0, 2, dx, dy, **boundary_dict)
+        u_bc_xn = MomentumBoundaryCondition(i, 2, 0, 2, 0, 2, dx, dy, **boundary_dict)
+        u_bc.extend([u_bc_x0, u_bc_xn])
 
-        v_bc_y0 = MomentumBoundaryCondition(i, 0, 0, 2, 0, 2, dx, dy, **boundary_dict)
-        v_bc_yn = MomentumBoundaryCondition(i, 2, 0, 2, 0, 2, dx, dy, **boundary_dict)
-        v_bc_x0 = MomentumBoundaryCondition(0, i, 0, 2, 0, 2, dx, dy, **boundary_dict)
-        v_bc_xn = MomentumBoundaryCondition(2, i, 0, 2, 0, 2, dx, dy, **boundary_dict)
-        v_bc.extend([v_bc_y0, v_bc_yn, v_bc_x0, v_bc_xn])
+        v_bc_x0 = MomentumBoundaryCondition(i, 0, 0, 2, 0, 2, dx, dy, **boundary_dict)
+        v_bc_xn = MomentumBoundaryCondition(i, 2, 0, 2, 0, 2, dx, dy, **boundary_dict)
+        v_bc.extend([v_bc_x0, v_bc_xn])
 
-        p_bc_y0 = PressureBoundaryCondition(i, 0, 0, 2, 0, 2, dx, dy, **boundary_dict)
-        p_bc_yn = PressureBoundaryCondition(i, 2, 0, 2, 0, 2, dx, dy, **boundary_dict)
-        p_bc_x0 = PressureBoundaryCondition(0, i, 0, 2, 0, 2, dx, dy, **boundary_dict)
-        p_bc_xn = PressureBoundaryCondition(2, i, 0, 2, 0, 2, dx, dy, **boundary_dict)
-        p_bc.extend([p_bc_y0, p_bc_yn, p_bc_x0, p_bc_xn])
+        p_bc_x0 = PressureBoundaryCondition(i, 0, 0, 2, 0, 2, dx, dy, **boundary_dict)
+        p_bc_xn = PressureBoundaryCondition(i, 2, 0, 2, 0, 2, dx, dy, **boundary_dict)
+        p_bc.extend([p_bc_x0, p_bc_xn])
+
+    for j in range(ny):
+        u_bc_y0 = MomentumBoundaryCondition(0, j, 0, 2, 0, 2, dx, dy, **boundary_dict)
+        u_bc_yn = MomentumBoundaryCondition(2, j, 0, 2, 0, 2, dx, dy, **boundary_dict)
+        u_bc.extend([u_bc_y0, u_bc_yn])
+
+        v_bc_y0 = MomentumBoundaryCondition(0, j, 0, 2, 0, 2, dx, dy, **boundary_dict)
+        v_bc_yn = MomentumBoundaryCondition(2, j, 0, 2, 0, 2, dx, dy, **boundary_dict)
+        v_bc.extend([v_bc_y0, v_bc_yn])
+
+        p_bc_y0 = PressureBoundaryCondition(0, j, 0, 2, 0, 2, dx, dy, **boundary_dict)
+        p_bc_yn = PressureBoundaryCondition(2, j, 0, 2, 0, 2, dx, dy, **boundary_dict)
+        p_bc.extend([p_bc_y0, p_bc_yn])
 
     config = {'u_ic': u_ic, 'v_ic': v_ic, 'p_ic': p_ic,
               'u_bc': u_bc, 'v_bc': v_bc, 'p_bc': p_bc,
               'nt': nt, 'nit': nit, 'nx': nx, 'ny': ny,
               'dt': dt, 'rho': rho, 'nu': nu, 'F': F}
+    
     return config
 
 
@@ -80,8 +92,11 @@ if __name__ == "__main__":
     nt, nit, nx, ny = 200, 50, 50, 50
     dt, rho, nu = 0.001, 1, 0.1
 
+    os.makedirs(DATA_DIR, exist_ok=True)
+
     fine_systems, coarse_systems = [], []
-    for i in tqdm(range(args.num)):
+    for i in range(args.num):
+        print('Generating navier-stokes system: ({}/{})'.format(i + 1, args.num))
         config = generate_random_config(nt, nit, nx, ny, dt, rho, nu)
         fine_system = generate_system(config)  # make fine system!
         config['nx'] = 10; config['ny'] = 10   # make coarse system!
@@ -89,8 +104,8 @@ if __name__ == "__main__":
         fine_systems.append(fine_system)
         coarse_systems.append(coarse_system)
 
-    with open(os.path.join(DATA_DIR, '{}_fine_systems.pickle'), 'wb') as fp:
+    with open(os.path.join(DATA_DIR, '{}_fine_systems.pickle'.format(args.num)), 'wb') as fp:
         pickle.dump(fine_systems, fp)
 
-    with open(os.path.join(DATA_DIR, '{}_coarse_systems.pickle'), 'wb') as fp:
+    with open(os.path.join(DATA_DIR, '{}_coarse_systems.pickle'.format(args.num)), 'wb') as fp:
         pickle.dump(coarse_systems, fp)

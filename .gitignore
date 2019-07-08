@@ -115,3 +115,4 @@ plots_nl/
 notebooks/
 **.pdf
 **.gif
+src/navierstokes/data
