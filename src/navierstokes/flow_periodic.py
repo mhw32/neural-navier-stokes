@@ -32,7 +32,7 @@ def build_up_b(rho, dt, dx, dy, u, v):
     return b
 
 
-def pressure_poisson(p, dx, dy):
+def pressure_poisson(p, dx, dy, b):
     pn = np.empty_like(p)
     
     for q in range(nit):
@@ -70,7 +70,7 @@ def navier_stokes_flow(nt, u, v, dt, dx, dy, p, rho, nu, F):
         vn = v.copy()
 
         b = build_up_b(rho, dt, dx, dy, u, v)
-        p = pressure_poisson_periodic(p, dx, dy)
+        p = pressure_poisson_periodic(p, dx, dy, b)
 
         u[1:-1, 1:-1] = (un[1:-1, 1:-1] -
                         un[1:-1, 1:-1] * dt / dx * 
