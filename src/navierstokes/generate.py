@@ -106,22 +106,22 @@ if __name__ == "__main__":
     fine_systems, coarse_systems = [], []
     while count < args.num:
         config = generate_random_config(nt, nit, nx, ny, dt, rho, nu)
-        print('Generating **fine** navier-stokes system: ({}/{})'.format(i + 1, args.num))
+        print('Generating **fine** navier-stokes system: ({}/{})'.format(count + 1, args.num))
         fine_system = generate_system(config)  # make fine system!
         config['nx'] = 10; config['ny'] = 10   # make coarse system!
-        print('Generating **coarse** navier-stokes system: ({}/{})'.format(i + 1, args.num))
+        print('Generating **coarse** navier-stokes system: ({}/{})'.format(count + 1, args.num))
         coarse_system = generate_system(config)
 
         # randomly initializing boundary conditions sometimes gets us into
         # trouble, so ignore when that happens.
-        if (np.sum(np.isnan(if fine_system['u'])) > 0 or 
-            np.sum(np.isnan(if fine_system['v'])) > 0 or 
-            np.sum(np.isnan(if fine_system['p'])) > 0):
+        if (np.sum(np.isnan(fine_system['u'])) > 0 or 
+            np.sum(np.isnan(fine_system['v'])) > 0 or 
+            np.sum(np.isnan(fine_system['p'])) > 0):
             continue
 
-        if (np.sum(np.isnan(if coarse_system['u'])) > 0 or 
-            np.sum(np.isnan(if coarse_system['v'])) > 0 or 
-            np.sum(np.isnan(if coarse_system['p'])) > 0):
+        if (np.sum(np.isnan(coarse_system['u'])) > 0 or 
+            np.sum(np.isnan(coarse_system['v'])) > 0 or 
+            np.sum(np.isnan(coarse_system['p'])) > 0):
             continue
 
         fine_systems.append(fine_system)
