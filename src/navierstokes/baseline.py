@@ -43,15 +43,29 @@ def coarsen_fine_systems(X_fine, Y_fine, u_fine, v_fine, p_fine):
 if __name__ == "__main__":
     np.random.seed(1337)
 
-    u_fine, v_fine, p_fine = load_systems(DATA_DIR, fine=True)
-    u_coarse, v_coarse, p_coarse = load_systems(DATA_DIR, fine=False)
+    u_fine, v_fine, p_fine = load_systems(DATA_SM_DIR, fine=True)
+    u_coarse, v_coarse, p_coarse = load_systems(DATA_SM_DIR, fine=False)
+    
+    N = u_fine.shape[0]
+    N_train = int(0.8 * N)
+    N_val = int(0.1 * N)
+
+    # just grab the ``test set"
+    u_fine = u_fine[N_train + N_val:, ...]
+    v_fine = v_fine[N_train + N_val:, ...]
+    p_fine = p_fine[N_train + N_val:, ...]
+    
+    u_coarse = u_coarse[N_train + N_val:, ...]
+    v_coarse = v_coarse[N_train + N_val:, ...]
+    p_coarse = p_coarse[N_train + N_val:, ...]
 
     N = len(u_fine)
     nx, ny = u_fine.shape[2], u_fine.shape[3]
     x_fine = np.linspace(0, 2, nx)  # slightly hardcoded
     y_fine = np.linspace(0, 2, ny)
     X_fine, Y_fine = np.meshgrid(x_fine, y_fine)
-    u_coarsened, v_coarsened, p_coarsened = coarsen_fine_systems(u_fine, v_fine, p_fine)
+    u_coarsened, v_coarsened, p_coarsened = coarsen_fine_systems(
+        X_fine, Y_fine, u_fine, v_fine, p_fine)
 
     print('Computing error for coarse systems:')
     u_errors, v_errors, p_errors = [], [], []
@@ -64,20 +78,20 @@ if __name__ == "__main__":
         v_errors.append(v_error_i)
         p_errors.append(p_error_i)
 
-    # this will be (1000, T)
-    u_errors = np.stack(u_errors, axis=0)
-    v_errors = np.stack(v_errors, axis=0)
-    p_errors = np.stack(p_errors, axis=0)
+    u_errors = np.stack(u_errors)
+    v_errors = np.stack(v_errors)
+    p_errors = np.stack(p_errors)
 
-    u_error_mean = np.mean(u_errors, axis=0)
-    u_error_stdev = np.std(u_errors, axis=0)
-    v_error_mean = np.mean(v_errors, axis=0)
-    v_error_stdev = np.std(v_errors, axis=0)
-    p_error_mean = np.mean(p_errors, axis=0)
-    p_error_stdev = np.std(p_errors, axis=0)
+    u_err_mean = np.mean(u_errors, axis=0)
+    v_err_mean = np.mean(v_errors, axis=0)
+    p_err_mean = np.mean(p_errors, axis=0)
+
+    u_err_std = np.std(u_errors, axis=0)
+    v_err_std = np.std(v_errors, axis=0)
+    p_err_std = np.std(p_errors, axis=0)
 
     os.makedirs(RESULTS_DIR, exist_ok=True)
     np.savez(os.path.join(RESULTS_DIR, 'baseline_error.npz'), 
-             u_mean=u_error_mean, u_std=u_error_stdev,
-             v_mean=v_error_mean, v_std=v_error_stdev,
-             p_mean=p_error_mean, p_std=p_error_stdev)
+             u_error_mean=u_err_mean, v_error_mean=v_err_mean,
+             p_error_mean=p_err_mean, u_error_std=u_err_std,
+             v_error_std=v_err_std, p_error_std=p_err_std)

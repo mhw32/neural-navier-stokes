@@ -241,7 +241,7 @@ if __name__ == "__main__":
         np.savez(os.path.join(FINE_DIR, 'system_{}.npz'.format(count)), 
                  u=fine_system['u'], v=fine_system['v'], p=fine_system['p'])
         np.savez(os.path.join(COARSE_DIR, 'system_{}.npz'.format(count)), 
-                 u=fine_system['u'], v=fine_system['v'], p=fine_system['p'])
+                 u=coarse_system['u'], v=coarse_system['v'], p=coarse_system['p'])
 
         fine_systems.append(fine_system)
         coarse_systems.append(coarse_system)

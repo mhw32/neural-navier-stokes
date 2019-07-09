@@ -116,3 +116,4 @@ notebooks/
 **.pdf
 **.gif
 src/navierstokes/data
+**results/
