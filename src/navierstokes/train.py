@@ -310,7 +310,6 @@ if __name__ == "__main__":
     model.load_state_dict(checkpoint['state_dict'])
     model = model.eval()
 
-    breakpoint()
     with torch.no_grad():
         print('Applying model to test set (20step teacher forcing)')
         _test_u_in, _test_u_out = numpy_to_torch(test_u_in, device), numpy_to_torch(test_u_out, device)
