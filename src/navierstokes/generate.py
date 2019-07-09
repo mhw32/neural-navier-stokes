@@ -142,7 +142,7 @@ if __name__ == "__main__":
     X, Y = np.meshgrid(x, y)
 
     print('Plotting functions')
-    for i in tqdm(range(args.num)):
+    for i in tqdm(range(100)):
         u, v, p = fine_systems[i]['u'], fine_systems[i]['v'], fine_systems[i]['p']
         fig = plt.figure(figsize=(11, 7), dpi=100)
         plt.contourf(X, Y, p[-1], alpha=0.5, cmap=cm.viridis)

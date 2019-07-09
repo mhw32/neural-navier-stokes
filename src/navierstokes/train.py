@@ -73,9 +73,11 @@ if __name__ == "__main__":
     model_dir = os.path.join(MODEL_DIR, args.model)
     os.makedirs(model_dir, exist_ok=True)
 
+    print('loading fine systems')
     with open(os.path.join(DATA_DIR, '1000_fine_systems.pickle'), 'rb') as fp:
         fine_systems = pickle.load(fp)
 
+    print('loading coarse systems')
     with open(os.path.join(DATA_DIR, '1000_coarse_systems.pickle'), 'rb') as fp:
         coarse_systems = pickle.load(fp)
 
