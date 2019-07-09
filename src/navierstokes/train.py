@@ -248,7 +248,7 @@ if __name__ == "__main__":
         
         test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
             _test_u_out, _test_v_out, _test_p_out,
-            test_u_pred, test_v_pred, test_p_pred)
+            test_u_pred, test_v_pred, test_p_pred, dim=2)
         
         test_u_mse = test_u_mse.cpu().numpy()
         test_v_mse = test_v_mse.cpu().numpy()
@@ -295,7 +295,7 @@ if __name__ == "__main__":
 
         test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
             _test_u_out, _test_v_out, _test_p_out,
-            test_u_pred, test_v_pred, test_p_pred)
+            test_u_pred, test_v_pred, test_p_pred, dim=2)
         
         test_u_mse = test_u_mse.cpu().numpy()
         test_v_mse = test_v_mse.cpu().numpy()
@@ -352,7 +352,7 @@ if __name__ == "__main__":
 
         test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
             _test_u_out[:, head_start:], _test_v_out[:, head_start:], _test_p_out[:, head_start:],
-            test_u_pred, test_v_pred, test_p_pred)
+            test_u_pred, test_v_pred, test_p_pred, dim=2)
         
         test_u_mse = test_u_mse.cpu().numpy()
         test_v_mse = test_v_mse.cpu().numpy()

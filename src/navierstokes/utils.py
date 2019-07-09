@@ -59,31 +59,31 @@ def spatial_coarsen(X, Y, u_seq, v_seq, p_seq, agg_x=4, agg_y=4):
 
 
 def dynamics_prediction_error_numpy(
-    u_seq, v_seq, p_seq, u_hat_seq, v_hat_seq, p_hat_seq):
+    u_seq, v_seq, p_seq, u_hat_seq, v_hat_seq, p_hat_seq, dim=1):
     """
     Mean squared error between predicted momentum and 
     pressure and ground truth dynamics.
 
     Each object has shape (batch_size, T, grid_dim, grid_dim)
     """
-    u_seq_mse = np.sum(np.sum(np.power(u_hat_seq - u_seq, 2), 1), 1)
-    v_seq_mse = np.sum(np.sum(np.power(v_hat_seq - v_seq, 2), 1), 1)
-    p_seq_mse = np.sum(np.sum(np.power(p_hat_seq - p_seq, 2), 1), 1)
+    u_seq_mse = np.sum(np.sum(np.power(u_hat_seq - u_seq, 2), dim), dim)
+    v_seq_mse = np.sum(np.sum(np.power(v_hat_seq - v_seq, 2), dim), dim)
+    p_seq_mse = np.sum(np.sum(np.power(p_hat_seq - p_seq, 2), dim), dim)
 
     return u_seq_mse, v_seq_mse, p_seq_mse
 
 
 def dynamics_prediction_error_torch(
-    u_seq, v_seq, p_seq, u_hat_seq, v_hat_seq, p_hat_seq):
+    u_seq, v_seq, p_seq, u_hat_seq, v_hat_seq, p_hat_seq, dim=1):
     """
     Mean squared error between predicted momentum and 
     pressure and ground truth dynamics.
 
     Each object has shape (batch_size, T, grid_dim, grid_dim)
     """
-    u_seq_mse = torch.sum(torch.sum(torch.pow(u_hat_seq - u_seq, 2), 1), 1)
-    v_seq_mse = torch.sum(torch.sum(torch.pow(v_hat_seq - v_seq, 2), 1), 1)
-    p_seq_mse = torch.sum(torch.sum(torch.pow(p_hat_seq - p_seq, 2), 1), 1)
+    u_seq_mse = torch.sum(torch.sum(torch.pow(u_hat_seq - u_seq, 2), dim), dim)
+    v_seq_mse = torch.sum(torch.sum(torch.pow(v_hat_seq - v_seq, 2), dim), dim)
+    p_seq_mse = torch.sum(torch.sum(torch.pow(p_hat_seq - p_seq, 2), dim), dim)
 
     return u_seq_mse, v_seq_mse, p_seq_mse
 
