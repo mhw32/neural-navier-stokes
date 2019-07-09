@@ -1,5 +1,6 @@
 import os
 import sys
+import copy
 import numpy as np
 from tqdm import tqdm
 
@@ -233,7 +234,7 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         # measure accuracy on unseen test set!
-        print('Applying model to test set.')
+        print('Applying model to test set (with teacher forcing)')
         test_u_in, test_u_out = numpy_to_torch(test_u_in, device), numpy_to_torch(test_u_out, device)
         test_v_in, test_v_out = numpy_to_torch(test_v_in, device), numpy_to_torch(test_v_out, device)
         test_p_in, test_p_out = numpy_to_torch(test_p_in, device), numpy_to_torch(test_p_out, device)
@@ -253,5 +254,52 @@ if __name__ == "__main__":
         test_v_mse = test_u_mse.cpu().numpy()
         test_p_mse = test_u_mse.cpu().numpy()
 
-        np.savez(os.path.join(model_dir, 'test_error.npz'),
+        np.savez(os.path.join(model_dir, 'test_error_teacher_forcing.npz'),
+                 u_mse=test_u_mse, v_mse=test_v_mse, p_mse=test_p_mse)
+
+    print('Reload the best weights')
+    checkpoint = torch.load(os.path.join(model_dir, 'model_best.pth.tar'))
+    model.load_state_dict(checkpoint['state_dict'])
+    model = model.eval()
+
+    with torch.no_grad():
+        print('Applying model to test set (no teacher forcing)')
+        test_u_in, test_u_out = numpy_to_torch(test_u_in, device), numpy_to_torch(test_u_out, device)
+        test_v_in, test_v_out = numpy_to_torch(test_v_in, device), numpy_to_torch(test_v_out, device)
+        test_p_in, test_p_out = numpy_to_torch(test_p_in, device), numpy_to_torch(test_p_out, device)
+        test_t_in = numpy_to_torch(test_t_in, device)
+
+        test_u_pred, test_v_pred, test_p_pred = [], [], []
+
+        # take just the first step
+        u, v, p = test_u_in[0], test_v_in[0], test_p_in[0]
+        u = u.unsqueeze(0)
+        v = v.unsqueeze(0)
+        p = p.unsqueeze(0)
+
+        rnn_h0 = None  # this will cause us to read the initial conditions
+
+        for _ in range(T - 1):
+            if args.model == 'rnn':
+                u, v, p, rnn_h0 = model(u, v, p, rnn_h0=rnn_h0)
+            else:
+                raise NotImplementedError
+            
+            test_u_pred.append(copy.deepcopy(u))
+            test_v_pred.append(copy.deepcopy(v))
+            test_p_pred.append(copy.deepcopy(p))
+        
+        test_u_pred = torch.cat(test_u_pred, dim=0)
+        test_v_pred = torch.cat(test_v_pred, dim=0)
+        test_p_pred = torch.cat(test_p_pred, dim=0)
+
+        test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
+            test_u_out, test_v_out, test_p_out,
+            test_u_pred, test_v_pred, test_p_pred)
+        
+        test_u_mse = test_u_mse.cpu().numpy()
+        test_v_mse = test_u_mse.cpu().numpy()
+        test_p_mse = test_u_mse.cpu().numpy()
+
+        np.savez(os.path.join(model_dir, 'test_error_no_teacher_forcing.npz'),
                  u_mse=test_u_mse, v_mse=test_v_mse, p_mse=test_p_mse)
