@@ -20,6 +20,8 @@ class RNNDiffEq(nn.Module):
     """
     def __init__(self, grid_dim, rnn_dim=64, hidden_dim=64, n_filters=32):
         super(RNNDiffEq, self).__init__()
+        self.bc_encoder = BoundaryConditionEncoder(grid_dim, rnn_dim, channels=channels,
+                                                   hidden_dim=hidden_dim, n_filters=n_filters)
         self.spatial_encoder = SpatialEncoder(grid_dim, hidden_dim=hidden_dim,
                                               n_filters=n_filters)
         self.spatial_decoder = SpatialDecoder(grid_dim, hidden_dim=hidden_dim,
@@ -30,6 +32,13 @@ class RNNDiffEq(nn.Module):
         batch_size, T, grid_dim = u_seq.size(0), u_seq.size(1), u_seq.size(2)
         seq = torch.cat([u_seq.unsqueeze(2), v_seq.unsqueeze(2), 
                          p_seq.unsqueeze(2)], dim=2)
+    
+        if rnn_h0 is None:
+            # pull out boundary conditions (which should be constant over time)
+            bc_x0, bc_xn = seq[:, 0, :, 0, :], seq[:, 0, :, -1, :]
+            bc_y0, bc_yn = seq[:, 0, :, :, 0], seq[:, 0, :, :, -1]
+            rnn_h0 = self.bc_encoder(bc_x0, bc_xn, bc_y0, bc_yn)
+
         seq = seq.view(batch_size * T, 3, grid_dim, grid_dim)
         hidden_seq = self.spatial_encoder(seq)
         hidden_seq = hidden_seq.view(batch_size, T, -1)  # batch_size, T, hidden_dim
@@ -93,6 +102,49 @@ class SpatialDecoder(nn.Module):
         return logits
 
 
+class BoundaryConditionEncoder(nn.Module):
+    def __init__(self, grid_dim, out_dim, channels=3, 
+                 hidden_dim=64, n_filters=32):
+        self.x0_bc = BoundaryConditionNetwork(
+            grid_dim, channels=channels, 
+            hidden_dim=hidden_dim, n_filters=n_filters)
+        self.xn_bc = BoundaryConditionNetwork(
+            grid_dim, channels=channels, 
+            hidden_dim=hidden_dim, n_filters=n_filters)
+        self.y0_bc = BoundaryConditionNetwork(
+            grid_dim, channels=channels, 
+            hidden_dim=hidden_dim, n_filters=n_filters)
+        self.yn_bc = BoundaryConditionNetwork(
+            grid_dim, channels=channels, 
+            hidden_dim=hidden_dim, n_filters=n_filters)
+        self.fc = nn.Linear(hidden_dim*4, out_dim)
+
+    def forward(self, x0, xn, y0, yn):
+        h_x0 = self.x0_bc(x0)
+        h_xn = self.xn_bc(xn)
+        h_y0 = self.y0_bc(y0)
+        h_yn = self.yn_bc(yn)
+        h_bc = torch.cat([h_x0, h_xn, h_y0, h_yn], dim=1)
+        return self.fc(F.relu(h_bc))
+
+
+class BoundaryConditionNetwork(nn.Module):
+    """
+    Encode the boundary conditions as 1 dimensional
+    convolutions over a single boundary.
+    """
+    def __init__(self, grid_dim, channels=3, 
+                 hidden_dim=64, n_filters=32):
+        self.boundary_encoder = nn.Sequential(
+            nn.Conv1d(channels, n_filters, 2, padding=0),
+            nn.ReLU())
+        cout = gen_conv_output_dim(grid_dim)
+        self.fc = nn.Linear(n_filters*cout, hidden_dim)
+    
+    def forward(self, bc):
+        return self.fc(F.relu(self.boundary_encoder(bc)))
+
+
 def gen_conv_output_dim(s):
     s = _get_conv_output_dim(s, 2, 0, 2)
     # s = _get_conv_output_dim(s, 2, 0, 2)
@@ -126,6 +178,8 @@ class ODEDiffEq(nn.Module):
     def __init__(self, grid_dim, latent_dim=16, rnn_dim=64, hidden_dim=64, n_filters=32):
         super(ODEDiffEq, self).__init__()
         self.ode_func = LatentODEfunc(latent_dim, hidden_dim=hidden_dim)
+        self.bc_encoder = BoundaryConditionEncoder(grid_dim, rnn_dim, channels=channels,
+                                                   hidden_dim=hidden_dim, n_filters=n_filters)
         self.spatial_encoder = SpatialEncoder(grid_dim, hidden_dim=hidden_dim,
                                               n_filters=n_filters)
         self.spatial_decoder = SpatialDecoder(grid_dim, hidden_dim=hidden_dim,
@@ -138,6 +192,13 @@ class ODEDiffEq(nn.Module):
         batch_size, T, grid_dim = u_seq.size(0), u_seq.size(1), u_seq.size(2)
         seq = torch.cat([u_seq.unsqueeze(2), v_seq.unsqueeze(2), 
                          p_seq.unsqueeze(2)], dim=2)
+
+        if rnn_h0 is None:
+            # pull out boundary conditions (which should be constant over time)
+            bc_x0, bc_xn = seq[:, 0, :, 0, :], seq[:, 0, :, -1, :]
+            bc_y0, bc_yn = seq[:, 0, :, :, 0], seq[:, 0, :, :, -1]
+            rnn_h0 = self.bc_encoder(bc_x0, bc_xn, bc_y0, bc_yn)
+
         seq = seq.view(batch_size * T, 3, grid_dim, grid_dim)
         hidden_seq = self.spatial_encoder(seq)
         hidden_seq = hidden_seq.view(batch_size, T, -1)  # batch_size, T, hidden_dim
@@ -145,23 +206,29 @@ class ODEDiffEq(nn.Module):
         latent_chunk = self.hidden_to_latent(rnn_h.squeeze(0))
         latent_mu, latent_logvar = torch.chunk(latent_chunk, 2, dim=1)
         latent = self.reparameterize(latent_mu, latent_logvar)
-        return latent, latent_mu, latent_logvar
+        
+        return latent, latent_mu, latent_logvar, rnn_h
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5*logvar)
         eps = torch.randn_like(std)
         return eps.mul(std).add_(mu)
 
-    def forward(self, u_seq, v_seq, p_seq, t_seq):
-        z0, qz0_mean, qz0_logvar = self.infer(u_seq, v_seq, p_seq)
+    def forward(self, u_seq, v_seq, p_seq, t_seq, rnn_h0=None):
+        z0, qz0_mean, qz0_logvar, rnn_h = self.infer(u_seq, v_seq, p_seq, rnn_h0=rnn_h0)
         # forward in time and solve ode for reconstructions
         pred_z = odeint(self.ode_func, z0, t_seq).permute(1, 0, 2)
         batch_size, T, dim = pred_z.size()
         pred_z_flat = pred_z.view(batch_size * T, dim)
         pred_x_flat = self.spatial_decoder(pred_z_flat)
-        pred_x = pred_x_flat.view(batch_size, T, -1)
+        pred_x = pred_x_flat.view(batch_size, T, 3, grid_dim, grid_dim)
 
-        return pred_x, z0, qz0_mean, qz0_logvar
+        next_u_seq, next_v_seq, next_p_seq = out[:, :, 0], out[:, :, 1], out[:, :, 2]
+        next_u_seq = next_u_seq.contiguous()
+        next_v_seq = next_v_seq.contiguous()
+        next_p_seq = next_p_seq.contiguous()
+
+        return next_u_seq, next_v_seq, next_p_seq, z0, qz0_mean, qz0_logvar, rnn_h
 
 
 class LatentODEfunc(nn.Module):
