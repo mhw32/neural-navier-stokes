@@ -4,6 +4,7 @@ conditions and random boundary conditions.
 """
 
 import os
+import copy
 import pickle
 import numpy as np
 from tqdm import tqdm
@@ -125,18 +126,55 @@ def fine_to_coarse_config(fine_config):
 
     for i in range(fine_config['nx']):
         if i % 5 == 0:
-            _u_bc_x0.append(u_bc_x0[i])
-            _u_bc_xn.append(u_bc_xn[i])
-            _u_bc_y0.append(u_bc_y0[i])
-            _u_bc_yn.append(u_bc_yn[i])
-            _v_bc_x0.append(v_bc_x0[i])
-            _v_bc_xn.append(v_bc_xn[i])
-            _v_bc_y0.append(v_bc_y0[i])
-            _v_bc_yn.append(v_bc_yn[i])
-            _p_bc_x0.append(p_bc_x0[i])
-            _p_bc_xn.append(p_bc_xn[i])
-            _p_bc_y0.append(p_bc_y0[i])
-            _p_bc_yn.append(p_bc_yn[i])
+            u_bc_x0_i = copy.deepcopy(u_bc_x0[i])
+            u_bc_x0_i.i = i % 5
+            _u_bc_x0.append(u_bc_x0_i)
+            
+            u_bc_xn_i = copy.deepcopy(u_bc_xn[i])
+            u_bc_xn_i.i = i % 5
+            _u_bc_xn.append(u_bc_xn_i)
+            
+            u_bc_y0_i = copy.deepcopy(u_bc_y0[i])
+            u_bc_y0_i.j = i % 5
+            _u_bc_y0.append(u_bc_y0_i)
+            
+            u_bc_yn_i = copy.deepcopy(u_bc_yn[i])
+            u_bc_yn_i.j = i % 5
+            _u_bc_yn.append(u_bc_yn_i)
+
+            # do same for v
+            v_bc_x0_i = copy.deepcopy(v_bc_x0[i])
+            v_bc_x0_i.i = i % 5
+            _v_bc_x0.append(v_bc_x0_i)
+
+            v_bc_xn_i = copy.deepcopy(v_bc_xn[i])
+            v_bc_xn_i.i = i % 5
+            _v_bc_xn.append(v_bc_xn_i)
+
+            v_bc_y0_i = copy.deepcopy(v_bc_y0[i])
+            v_bc_y0_i.j = i % 5
+            _v_bc_y0.append(v_bc_y0_i)
+
+            v_bc_yn_i = copy.deepcopy(v_bc_yn[i])
+            v_bc_yn_i.j = i % 5
+            _v_bc_yn.append(v_bc_yn_i)
+
+            # finally, do same for p
+            p_bc_x0_i = copy.deepcopy(p_bc_x0[i])
+            p_bc_x0_i.i = i % 5
+            _p_bc_x0.append(p_bc_x0_i)
+
+            p_bc_xn_i = copy.deepcopy(p_bc_xn[i])
+            p_bc_xn_i.i = i % 5
+            _p_bc_xn.append(p_bc_xn_i)
+
+            p_bc_y0_i = copy.deepcopy(p_bc_y0[i])
+            p_bc_y0_i.j = i % 5
+            _p_bc_y0.append(p_bc_y0_i)
+
+            p_bc_yn_i = copy.deepcopy(p_bc_yn[i])
+            p_bc_yn_i.j = i % 5
+            _p_bc_yn.append(p_bc_yn_i)
 
     _u_bc = _u_bc_x0 + _u_bc_xn + _u_bc_y0 + _u_bc_yn
     _v_bc = _v_bc_x0 + _v_bc_xn + _v_bc_y0 + _v_bc_yn
@@ -180,6 +218,7 @@ if __name__ == "__main__":
         coarse_config = fine_to_coarse_config(fine_config)
         print('Generating **coarse** navier-stokes system: ({}/{})'.format(count + 1, args.num))
         coarse_system = generate_system(coarse_config)
+        breakpoint()
 
         # randomly initializing boundary conditions sometimes gets us into
         # trouble, so ignore when that happens.
