@@ -46,7 +46,8 @@ if __name__ == "__main__":
     torch.manual_seed(1337)
     np.random.seed(1337)
 
-    os.makedirs(MODEL_DIR, exist_ok=True)
+    model_dir = os.path.join(MODEL_DIR, args.model)
+    os.makedirs(model_dir, exist_ok=True)
 
     with open(os.path.join(DATA_DIR, '1000_fine_systems.pickle'), 'rb') as fp:
         fine_systems = pickle.load(fp)
@@ -59,6 +60,9 @@ if __name__ == "__main__":
     coarsened_config = coarsened_systems[0]['config']
     assert coarsened_config['nx'] == coarsened_config['ny']
     grid_dim = coarsened_config['nx']
+    nt = coarsened_config['nt']  # num timesteps
+    dt = coarsened_config['dt']  # time stepsize
+    timesteps = np.arange(nt) * dt
 
     T = coarsened_systems[0]['u'].shape[0]
     N = len(coarsened_systems)
@@ -97,9 +101,15 @@ if __name__ == "__main__":
     test_u_in, test_v_in, test_p_in = test_u_mat[:, :T-1], test_v_mat[:, :T-1], test_p_mat[:, :T-1]
     test_u_out, test_v_out, test_p_out = test_u_mat[:, 1:], test_v_mat[:, 1:], test_p_mat[:, 1:]
 
+    t_in, t_out = timesteps[:T-1], timesteps[1:]  # same for train/val/test
+
     print('Initialize model and optimizer.')
 
-    model = RNNDiffEq(grid_dim)
+    if args.model == 'rnn':
+        model = RNNDiffEq(grid_dim)
+    elif args.model == 'ode':
+        model = ODEDiffEq(grid_dim)
+
     model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -117,16 +127,24 @@ if __name__ == "__main__":
             batch_u_in = numpy_to_torch(train_u_in[batch_I, start_T:start_T+args.batch_time, ...], device)
             batch_v_in = numpy_to_torch(train_v_in[batch_I, start_T:start_T+args.batch_time, ...], device)
             batch_p_in = numpy_to_torch(train_p_in[batch_I, start_T:start_T+args.batch_time, ...], device)
+            batch_t_in = numpy_to_torch(t_in[start_T:start_T+args.batch_time], device)
             batch_u_out = numpy_to_torch(train_u_out[batch_I, start_T:start_T+args.batch_time, ...], device)
             batch_v_out = numpy_to_torch(train_v_out[batch_I, start_T:start_T+args.batch_time, ...], device)
             batch_p_out = numpy_to_torch(train_p_out[batch_I, start_T:start_T+args.batch_time, ...], device)
 
             optimizer.zero_grad()
-            batch_u_pred, batch_v_pred, batch_p_pred, _ = model(
-                batch_u_in, batch_v_in, batch_p_in)
-            loss = (mean_squared_error(batch_u_pred, batch_u_out) + 
-                    mean_squared_error(batch_v_pred, batch_v_out) + 
-                    mean_squared_error(batch_p_pred, batch_p_out))
+            
+            if args.model == 'rnn':
+                batch_u_pred, batch_v_pred, batch_p_pred, _ = model(
+                    batch_u_in, batch_v_in, batch_p_in)
+                loss = (mean_squared_error(batch_u_pred, batch_u_out) + 
+                        mean_squared_error(batch_v_pred, batch_v_out) + 
+                        mean_squared_error(batch_p_pred, batch_p_out))
+            else:
+                batch_u_pred, batch_v_pred, batch_p_pred, z, z_mu, z_logvar, _ \
+                    = model(batch_u_in, batch_v_in, batch_p_in, batch_t_in)
+                loss = ...
+
             loss.backward()
             optimizer.step()
             pbar.update() 
@@ -142,11 +160,18 @@ if __name__ == "__main__":
                     val_u_in, val_u_out = numpy_to_torch(val_u_in, device), numpy_to_torch(val_u_out, device)
                     val_v_in, val_v_out = numpy_to_torch(val_v_in, device), numpy_to_torch(val_v_out, device)
                     val_p_in, val_p_out = numpy_to_torch(val_p_in, device), numpy_to_torch(val_p_out, device)
-                    val_u_pred, val_v_pred, val_p_pred, _ = model(val_u_in, val_v_in, val_p_in)
+                    all_t_in = numpy_to_torch(t_in, device)
 
-                    val_loss = (mean_squared_error(val_u_pred, val_u_out) + 
-                                mean_squared_error(val_v_pred, val_v_out) + 
-                                mean_squared_error(val_p_pred, val_p_out))
+                    if args.model == 'rnn':
+                        val_u_pred, val_v_pred, val_p_pred, _ = model(val_u_in, val_v_in, val_p_in)
+                        val_loss = (mean_squared_error(val_u_pred, val_u_out) + 
+                                    mean_squared_error(val_v_pred, val_v_out) + 
+                                    mean_squared_error(val_p_pred, val_p_out))
+                    else:
+                        val_u_pred, val_v_pred, val_p_pred, z, z_mu, z_logvar, _ \
+                            = model(val_u_in, val_v_in, val_p_in, all_t_in)
+                        val_loss = ...
+
                     val_loss_item = val_loss.item()
                     pbar.set_postfix({'train loss': loss.item(),
                                       'val_loss': val_loss_item}) 
@@ -158,13 +183,13 @@ if __name__ == "__main__":
                     save_checkpoint({
                         'state_dict': model.state_dict(),
                         'val_loss': val_loss.item(),
-                    }, is_best, MODEL_DIR)    
+                    }, is_best, model_dir)    
 
         pbar.close()
 
     # load the best model
     print('Loading best weights (by validation error).')
-    checkpoint = torch.load(os.path.join(MODEL_DIR, 'model_best.pth.tar'))
+    checkpoint = torch.load(os.path.join(model_dir, 'model_best.pth.tar'))
     model.load_state_dict(checkpoint['state_dict'])
     model = model.eval()
 
@@ -174,8 +199,14 @@ if __name__ == "__main__":
         test_u_in, test_u_out = numpy_to_torch(test_u_in, device), numpy_to_torch(test_u_out, device)
         test_v_in, test_v_out = numpy_to_torch(test_v_in, device), numpy_to_torch(test_v_out, device)
         test_p_in, test_p_out = numpy_to_torch(test_p_in, device), numpy_to_torch(test_p_out, device)
-        test_u_pred, test_v_pred, test_p_pred, _ = model(test_u_in, test_v_in, test_p_in)
+        all_t_in = numpy_to_torch(t_in, device)
 
+        if args.model == 'rnn':
+            test_u_pred, test_v_pred, test_p_pred, _ = model(test_u_in, test_v_in, test_p_in)
+        else:
+            test_u_pred, test_v_pred, test_p_pred, z, z_mu, z_logvar, _ \
+                = model(test_u_in, test_v_in, test_p_in, all_t_in)
+        
         test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
             test_u_out, test_v_out, test_p_out,
             test_u_pred, test_v_pred, test_p_pred)
@@ -184,5 +215,5 @@ if __name__ == "__main__":
         test_v_mse = test_u_mse.cpu().numpy()
         test_p_mse = test_u_mse.cpu().numpy()
 
-        np.savez(os.path.join(MODEL_DIR, 'test_error.npz'),
+        np.savez(os.path.join(model_dir, 'test_error.npz'),
                  u_mse=test_u_mse, v_mse=test_v_mse, p_mse=test_p_mse)
