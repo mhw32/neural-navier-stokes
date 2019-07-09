@@ -15,8 +15,10 @@ from src.navierstokes.flow import (
 
 if 'ccncluster' in os.uname()[1]:
     DATA_DIR = '/mnt/fs5/wumike/navierstokes/data'
+    IMAGE_DIR = '/mnt/fs5/wumike/navierstokes/data/images'
 else:
     DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+    IMAGE_DIR = os.path.join(os.path.dirname(__file__), 'data/images')
 
 
 def generate_random_config(nt, nit, nx, ny, dt, rho, nu):
@@ -82,6 +84,10 @@ def generate_system(config):
 
 
 if __name__ == "__main__":
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--num', type=int, default=100,
@@ -96,10 +102,11 @@ if __name__ == "__main__":
 
     fine_systems, coarse_systems = [], []
     for i in range(args.num):
-        print('Generating navier-stokes system: ({}/{})'.format(i + 1, args.num))
         config = generate_random_config(nt, nit, nx, ny, dt, rho, nu)
+        print('Generating **fine** navier-stokes system: ({}/{})'.format(i + 1, args.num))
         fine_system = generate_system(config)  # make fine system!
         config['nx'] = 10; config['ny'] = 10   # make coarse system!
+        print('Generating **coarse** navier-stokes system: ({}/{})'.format(i + 1, args.num))
         coarse_system = generate_system(config)
         fine_systems.append(fine_system)
         coarse_systems.append(coarse_system)
@@ -109,3 +116,22 @@ if __name__ == "__main__":
 
     with open(os.path.join(DATA_DIR, '{}_coarse_systems.pickle'.format(args.num)), 'wb') as fp:
         pickle.dump(coarse_systems, fp)
+
+    # for each system, save image so we can get a sense of
+    # how different these things are
+
+    x = np.linspace(0, 2, nx)
+    y = np.linspace(0, 2, ny)
+    X, Y = np.meshgrid(x, y)
+
+    for i in range(args.num):
+        u, v, p = fine_systems[i]['u'], fine_systems[i]['v'], fine_systems[i]['p']
+        fig = plt.figure(figsize=(11, 7), dpi=100)
+        plt.contourf(X, Y, p, alpha=0.5, cmap=cm.viridis)
+        plt.colorbar()
+        plt.contour(X, Y, p, cmap=cm.viridis)
+        plt.streamplot(X, Y, u, v)
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.savefig(os.path.join(IMAGE_DIR, 'streamplot_system_{}.pdf'.format(i)))
+        plt.close()
