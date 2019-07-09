@@ -19,15 +19,7 @@ from src.navierstokes.utils import spatial_coarsen, AverageMeter
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), 'results')
 
 
-if __name__ == "__main__":
-    np.random.seed(1337)
-
-    with open(os.path.join(DATA_DIR, '1000_fine_systems.pickle'), 'rb') as fp:
-        fine_systems = pickle.load(fp)
-
-    with open(os.path.join(DATA_DIR, '1000_coarse_systems.pickle'), 'rb') as fp:
-        coarse_systems = pickle.load(fp)
-
+def coarsen_fine_systems(fine_systems, coarse_systems):
     fine_config = fine_systems[0]['config']
     coarse_config = coarse_systems[0]['config']
 
@@ -56,6 +48,20 @@ if __name__ == "__main__":
         coarsened_system_i['v'] = v_seq
         coarsened_system_i['p'] = p_seq
         coarsened_systems.append(coarsened_system_i)
+    
+    return coarsened_systems
+
+
+if __name__ == "__main__":
+    np.random.seed(1337)
+
+    with open(os.path.join(DATA_DIR, '1000_fine_systems.pickle'), 'rb') as fp:
+        fine_systems = pickle.load(fp)
+
+    with open(os.path.join(DATA_DIR, '1000_coarse_systems.pickle'), 'rb') as fp:
+        coarse_systems = pickle.load(fp)
+
+    coarsened_systems = coarsen_fine_systems(fine_systems, coarsened_systems)
 
     print('Computing error for coarse systems:')
     u_errors, v_errors, p_errors = [], [], []
@@ -72,6 +78,7 @@ if __name__ == "__main__":
         u_errors.append(u_error_i)
         v_errors.append(v_error_i)
         p_errors.append(p_error_i)
+
     # this will be (1000, T)
     u_errors = np.stack(u_errors, axis=0)
     v_errors = np.stack(v_errors, axis=0)
