@@ -38,6 +38,7 @@ class RNNDiffEq(nn.Module):
             bc_x0, bc_xn = seq[:, 0, :, 0, :], seq[:, 0, :, -1, :]
             bc_y0, bc_yn = seq[:, 0, :, :, 0], seq[:, 0, :, :, -1]
             rnn_h0 = self.bc_encoder(bc_x0, bc_xn, bc_y0, bc_yn)
+            rnn_h0 = rnn_h0.unsqueeze(0)
 
         seq = seq.view(batch_size * T, 3, grid_dim, grid_dim)
         hidden_seq = self.spatial_encoder(seq)
@@ -65,8 +66,8 @@ class SpatialEncoder(nn.Module):
             # nn.ReLU(),
             # nn.Conv2d(n_filters*2, n_filters*4, 2, 2, padding=0),
             # nn.ReLU())
-        cout = gen_conv_output_dim(grid_dim)
-        self.fc = nn.Linear(n_filters*cout**2, hidden_dim)
+        self.cout = gen_conv_output_dim(grid_dim)
+        self.fc = nn.Linear(n_filters*self.cout**2, hidden_dim)
     
     def forward(self, x):
         batch_size = x.size(0)
@@ -138,13 +139,16 @@ class BoundaryConditionNetwork(nn.Module):
                  hidden_dim=64, n_filters=32):
         super().__init__()
         self.boundary_encoder = nn.Sequential(
-            nn.Conv1d(channels, n_filters, 2, padding=0),
-            nn.ReLU())
-        cout = gen_conv_output_dim(grid_dim)
-        self.fc = nn.Linear(n_filters*cout, hidden_dim)
+            nn.Conv1d(channels, n_filters // 2, 3, padding=0),
+            nn.ReLU(),
+            nn.Conv1d(n_filters // 2, n_filters, 3, padding=0))
+        self.fc = nn.Linear(n_filters*6, hidden_dim)
     
     def forward(self, bc):
-        return self.fc(F.relu(self.boundary_encoder(bc)))
+        batch_size = bc.size(0)
+        hid = F.relu(self.boundary_encoder(bc))
+        hid = hid.view(batch_size, 32 * 6)
+        return self.fc(hid)
 
 
 def gen_conv_output_dim(s):

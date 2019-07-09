@@ -117,3 +117,4 @@ notebooks/
 **.gif
 src/navierstokes/data
 **results/
+**model

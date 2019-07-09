@@ -76,7 +76,7 @@ if __name__ == "__main__":
     print('loading fine systems')
     u_fine, v_fine, p_fine = load_systems(DATA_SM_DIR, fine=True)
 
-    N = len(u_fine)
+    N = u_fine.shape[0]
     nx, ny = u_fine.shape[2], u_fine.shape[3]
     x_fine = np.linspace(0, 2, nx)  # slightly hardcoded
     y_fine = np.linspace(0, 2, ny)
@@ -85,10 +85,12 @@ if __name__ == "__main__":
         X_fine, Y_fine, u_fine, v_fine, p_fine)
 
     # set some hyperparameters
-    grid_dim = nx
-    T = u_fine.shape[1]
+    grid_dim = u_coarsened.shape[2]
+    T = u_coarsened.shape[1]
     dt = 0.001
+    
     timesteps = np.arange(T) * dt
+    timesteps = np.repeat(timesteps[np.newaxis], N, axis=0)
 
     N = u_fine.shape[0]
     N_train = int(0.8 * N)
@@ -101,14 +103,17 @@ if __name__ == "__main__":
     train_u_mat = u_coarsened[:N_train, ...]
     train_v_mat = v_coarsened[:N_train, ...]
     train_p_mat = p_coarsened[:N_train, ...]
+    train_timesteps = timesteps[:N_train]
 
     val_u_mat = u_coarsened[N_train:(N_train+N_val), ...]
     val_v_mat = v_coarsened[N_train:(N_train+N_val), ...]
     val_p_mat = p_coarsened[N_train:(N_train+N_val), ...]
+    val_timesteps = timesteps[N_train:(N_train+N_val)]
 
     test_u_mat = u_coarsened[N_train+N_val:, ...]
     test_v_mat = v_coarsened[N_train+N_val:, ...]
     test_p_mat = p_coarsened[N_train+N_val:, ...]
+    test_timesteps = timesteps[N_train+N_val:]
     
     # divide data into input and target sequences
     train_u_in, train_v_in, train_p_in = train_u_mat[:, :T-1], train_v_mat[:, :T-1], train_p_mat[:, :T-1]
@@ -120,7 +125,9 @@ if __name__ == "__main__":
     test_u_in, test_v_in, test_p_in = test_u_mat[:, :T-1], test_v_mat[:, :T-1], test_p_mat[:, :T-1]
     test_u_out, test_v_out, test_p_out = test_u_mat[:, 1:], test_v_mat[:, 1:], test_p_mat[:, 1:]
 
-    t_in, t_out = timesteps[:T-1], timesteps[1:]  # same for train/val/test
+    train_t_in, train_t_out = train_timesteps[:T-1], train_timesteps[1:]
+    val_t_in, val_t_out = val_timesteps[:T-1], val_timesteps[1:]
+    test_t_in, test_t_out = test_timesteps[:T-1], test_timesteps[1:]
 
     print('Initialize model and optimizer.')
 
@@ -133,7 +140,7 @@ if __name__ == "__main__":
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     best_loss = np.inf
-    test_loss_item = np.inf
+    val_loss_item = np.inf
 
     if not args.test_only:
         pbar = tqdm(total=args.epochs)
@@ -156,7 +163,7 @@ if __name__ == "__main__":
             batch_u_in = numpy_to_torch(build_batch(train_u_in, batch_I, start_T, args.batch_time), device)
             batch_v_in = numpy_to_torch(build_batch(train_v_in, batch_I, start_T, args.batch_time), device)
             batch_p_in = numpy_to_torch(build_batch(train_p_in, batch_I, start_T, args.batch_time), device)
-            batch_t_in = numpy_to_torch(t_in[start_T:start_T+args.batch_time], device)
+            batch_t_in = numpy_to_torch(build_batch(train_t_in, batch_I, start_T, args.batch_time), device)
             batch_u_out = numpy_to_torch(build_batch(train_u_out, batch_I, start_T, args.batch_time), device)
             batch_v_out = numpy_to_torch(build_batch(train_v_out, batch_I, start_T, args.batch_time), device)
             batch_p_out = numpy_to_torch(build_batch(train_p_out, batch_I, start_T, args.batch_time), device)
@@ -180,28 +187,26 @@ if __name__ == "__main__":
             optimizer.step()
             pbar.update() 
             pbar.set_postfix({'train loss': loss.item(),
-                              'test_loss': test_loss_item})
+                              'val_loss': val_loss_item})
 
-            if iteration % 10 == 0:
+            if iteration % 10 == 0 and iteration > 0:
                 model.eval()
                 with torch.no_grad():
-                    print('Computing validation error.')
-                    
                     # test on validation dataset as metric
-                    val_u_in, val_u_out = numpy_to_torch(val_u_in, device), numpy_to_torch(val_u_out, device)
-                    val_v_in, val_v_out = numpy_to_torch(val_v_in, device), numpy_to_torch(val_v_out, device)
-                    val_p_in, val_p_out = numpy_to_torch(val_p_in, device), numpy_to_torch(val_p_out, device)
-                    all_t_in = numpy_to_torch(t_in, device)
+                    _val_u_in, _val_u_out = numpy_to_torch(val_u_in, device), numpy_to_torch(val_u_out, device)
+                    _val_v_in, _val_v_out = numpy_to_torch(val_v_in, device), numpy_to_torch(val_v_out, device)
+                    _val_p_in, _val_p_out = numpy_to_torch(val_p_in, device), numpy_to_torch(val_p_out, device)
+                    _val_t_in = numpy_to_torch(val_t_in, device)
 
                     if args.model == 'rnn':
-                        val_u_pred, val_v_pred, val_p_pred, _ = model(val_u_in, val_v_in, val_p_in)
-                        val_loss = (mean_squared_error(val_u_pred, val_u_out) + 
-                                    mean_squared_error(val_v_pred, val_v_out) + 
-                                    mean_squared_error(val_p_pred, val_p_out))
+                        val_u_pred, val_v_pred, val_p_pred, _ = model(_val_u_in, _val_v_in, _val_p_in)
+                        val_loss = (mean_squared_error(val_u_pred, _val_u_out) + 
+                                    mean_squared_error(val_v_pred, _val_v_out) + 
+                                    mean_squared_error(val_p_pred, _val_p_out))
                     else:
                         val_u_pred, val_v_pred, val_p_pred, z, qz_mu, qz_logvar, _ \
-                            = model(val_u_in, val_v_in, val_p_in, all_t_in)
-                        val_loss = neural_ode_loss(val_u_out, val_v_out, val_p_out, 
+                            = model(_val_u_in, _val_v_in, _val_p_in, _val_t_in)
+                        val_loss = neural_ode_loss(_val_u_out, _val_v_out, _val_p_out, 
                                                    val_u_pred, val_v_pred, val_p_pred,
                                                    z, qz_mu, qz_logvar, obs_std=0.3)
 
@@ -232,13 +237,13 @@ if __name__ == "__main__":
         test_u_in, test_u_out = numpy_to_torch(test_u_in, device), numpy_to_torch(test_u_out, device)
         test_v_in, test_v_out = numpy_to_torch(test_v_in, device), numpy_to_torch(test_v_out, device)
         test_p_in, test_p_out = numpy_to_torch(test_p_in, device), numpy_to_torch(test_p_out, device)
-        all_t_in = numpy_to_torch(t_in, device)
+        test_t_in = numpy_to_torch(test_t_in, device)
 
         if args.model == 'rnn':
             test_u_pred, test_v_pred, test_p_pred, _ = model(test_u_in, test_v_in, test_p_in)
         else:
             test_u_pred, test_v_pred, test_p_pred, z, z_mu, z_logvar, _ \
-                = model(test_u_in, test_v_in, test_p_in, all_t_in)
+                = model(test_u_in, test_v_in, test_p_in, test_t_in)
         
         test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
             test_u_out, test_v_out, test_p_out,
