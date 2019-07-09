@@ -75,7 +75,7 @@ if __name__ == "__main__":
     os.makedirs(model_dir, exist_ok=True)
 
     print('loading fine systems')
-    u_fine, v_fine, p_fine = load_systems(DATA_SM_DIR, fine=True)
+    u_fine, v_fine, p_fine = load_systems(DATA_DIR, fine=True)
 
     N = u_fine.shape[0]
     nx, ny = u_fine.shape[2], u_fine.shape[3]
