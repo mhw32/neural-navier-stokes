@@ -60,8 +60,8 @@ if __name__ == "__main__":
                         help='batch size [default: 100]')
     parser.add_argument('--epochs', type=int, default=2000,
                         help='number of epochs [default: 2000]')
-    parser.add_argument('--lr', type=float, default=1e-3,
-                        help='learning rate [default: 1e-3]')
+    parser.add_argument('--lr', type=float, default=3e-4,
+                        help='learning rate [default: 3e-4]')
     parser.add_argument('--test-only', action='store_true', default=False)
     args = parser.parse_args()
 
@@ -235,24 +235,24 @@ if __name__ == "__main__":
     with torch.no_grad():
         # measure accuracy on unseen test set!
         print('Applying model to test set (with teacher forcing)')
-        test_u_in, test_u_out = numpy_to_torch(test_u_in, device), numpy_to_torch(test_u_out, device)
-        test_v_in, test_v_out = numpy_to_torch(test_v_in, device), numpy_to_torch(test_v_out, device)
-        test_p_in, test_p_out = numpy_to_torch(test_p_in, device), numpy_to_torch(test_p_out, device)
-        test_t_in = numpy_to_torch(test_t_in, device)
+        _test_u_in, _test_u_out = numpy_to_torch(test_u_in, device), numpy_to_torch(test_u_out, device)
+        _test_v_in, _test_v_out = numpy_to_torch(test_v_in, device), numpy_to_torch(test_v_out, device)
+        _test_p_in, _test_p_out = numpy_to_torch(test_p_in, device), numpy_to_torch(test_p_out, device)
+        _test_t_in = numpy_to_torch(test_t_in, device)
 
         if args.model == 'rnn':
-            test_u_pred, test_v_pred, test_p_pred, _ = model(test_u_in, test_v_in, test_p_in)
+            test_u_pred, test_v_pred, test_p_pred, _ = model(_test_u_in, _test_v_in, _test_p_in)
         else:
             test_u_pred, test_v_pred, test_p_pred, z, z_mu, z_logvar, _ \
-                = model(test_u_in, test_v_in, test_p_in, test_t_in)
+                = model(_test_u_in, _test_v_in, _test_p_in, _test_t_in)
         
         test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
-            test_u_out, test_v_out, test_p_out,
+            _test_u_out, _test_v_out, _test_p_out,
             test_u_pred, test_v_pred, test_p_pred)
         
         test_u_mse = test_u_mse.cpu().numpy()
-        test_v_mse = test_u_mse.cpu().numpy()
-        test_p_mse = test_u_mse.cpu().numpy()
+        test_v_mse = test_v_mse.cpu().numpy()
+        test_p_mse = test_p_mse.cpu().numpy()
 
         np.savez(os.path.join(model_dir, 'test_error_teacher_forcing.npz'),
                  u_mse=test_u_mse, v_mse=test_v_mse, p_mse=test_p_mse)
@@ -264,15 +264,15 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         print('Applying model to test set (no teacher forcing)')
-        test_u_in, test_u_out = numpy_to_torch(test_u_in, device), numpy_to_torch(test_u_out, device)
-        test_v_in, test_v_out = numpy_to_torch(test_v_in, device), numpy_to_torch(test_v_out, device)
-        test_p_in, test_p_out = numpy_to_torch(test_p_in, device), numpy_to_torch(test_p_out, device)
-        test_t_in = numpy_to_torch(test_t_in, device)
+        _test_u_in, _test_u_out = numpy_to_torch(test_u_in, device), numpy_to_torch(test_u_out, device)
+        _test_v_in, _test_v_out = numpy_to_torch(test_v_in, device), numpy_to_torch(test_v_out, device)
+        _test_p_in, _test_p_out = numpy_to_torch(test_p_in, device), numpy_to_torch(test_p_out, device)
+        _test_t_in = numpy_to_torch(test_t_in, device)
 
         test_u_pred, test_v_pred, test_p_pred = [], [], []
 
         # take just the first step
-        u, v, p = test_u_in[0], test_v_in[0], test_p_in[0]
+        u, v, p = _test_u_in[0], _test_v_in[0], _test_p_in[0]
         u = u.unsqueeze(0)
         v = v.unsqueeze(0)
         p = p.unsqueeze(0)
@@ -294,12 +294,12 @@ if __name__ == "__main__":
         test_p_pred = torch.cat(test_p_pred, dim=0)
 
         test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
-            test_u_out, test_v_out, test_p_out,
+            _test_u_out, _test_v_out, _test_p_out,
             test_u_pred, test_v_pred, test_p_pred)
         
         test_u_mse = test_u_mse.cpu().numpy()
-        test_v_mse = test_u_mse.cpu().numpy()
-        test_p_mse = test_u_mse.cpu().numpy()
+        test_v_mse = test_v_mse.cpu().numpy()
+        test_p_mse = test_p_mse.cpu().numpy()
 
         np.savez(os.path.join(model_dir, 'test_error_no_teacher_forcing.npz'),
                  u_mse=test_u_mse, v_mse=test_v_mse, p_mse=test_p_mse)
@@ -310,19 +310,21 @@ if __name__ == "__main__":
     model.load_state_dict(checkpoint['state_dict'])
     model = model.eval()
 
+    breakpoint()
     with torch.no_grad():
-        print('Applying model to test set (no teacher forcing)')
-        test_u_in, test_u_out = numpy_to_torch(test_u_in, device), numpy_to_torch(test_u_out, device)
-        test_v_in, test_v_out = numpy_to_torch(test_v_in, device), numpy_to_torch(test_v_out, device)
-        test_p_in, test_p_out = numpy_to_torch(test_p_in, device), numpy_to_torch(test_p_out, device)
-        test_t_in = numpy_to_torch(test_t_in, device)
+        print('Applying model to test set (20step teacher forcing)')
+        _test_u_in, _test_u_out = numpy_to_torch(test_u_in, device), numpy_to_torch(test_u_out, device)
+        _test_v_in, _test_v_out = numpy_to_torch(test_v_in, device), numpy_to_torch(test_v_out, device)
+        _test_p_in, _test_p_out = numpy_to_torch(test_p_in, device), numpy_to_torch(test_p_out, device)
+        _test_t_in = numpy_to_torch(test_t_in, device)
 
         #  we give it 20 timesteps
         head_start = 20
 
         if args.model == 'rnn':
             test_u_pred, test_v_pred, test_p_pred, rnn_h0 = model(
-                test_u_in[:, :head_start], test_v_in[:, :head_start], test_p_in[:, :head_start])
+                _test_u_in[:, :head_start], _test_v_in[:, :head_start], 
+                _test_p_in[:, :head_start])
         else:
             raise NotImplementedError
 
@@ -330,10 +332,10 @@ if __name__ == "__main__":
         test_u_pred, test_v_pred, test_p_pred = [], [], []
 
         # take just the first step
-        u, v, p = test_u_in[head_start], test_v_in[head_start], test_p_in[head_start]
-        u = u.unsqueeze(0)
-        v = v.unsqueeze(0)
-        p = p.unsqueeze(0)
+        u, v, p = _test_u_in[:, head_start], _test_v_in[:, head_start], _test_p_in[:, head_start]
+        u = u.unsqueeze(1)
+        v = v.unsqueeze(1)
+        p = p.unsqueeze(1)
 
         for _ in range(T - 1 - head_start):
             if args.model == 'rnn':
@@ -350,12 +352,12 @@ if __name__ == "__main__":
         test_p_pred = torch.cat(test_p_pred, dim=0)
 
         test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
-            test_u_out[:, head_start:], test_v_out[:, head_start:], test_p_out[:, head_start:],
+            _test_u_out[:, head_start:], _test_v_out[:, head_start:], _test_p_out[:, head_start:],
             test_u_pred, test_v_pred, test_p_pred)
         
         test_u_mse = test_u_mse.cpu().numpy()
-        test_v_mse = test_u_mse.cpu().numpy()
-        test_p_mse = test_u_mse.cpu().numpy()
+        test_v_mse = test_v_mse.cpu().numpy()
+        test_p_mse = test_p_mse.cpu().numpy()
 
         np.savez(os.path.join(model_dir, 'test_error_20steps_teacher_forcing.npz'),
                  u_mse=test_u_mse, v_mse=test_v_mse, p_mse=test_p_mse)

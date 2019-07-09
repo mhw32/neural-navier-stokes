@@ -60,9 +60,9 @@ class SpatialEncoder(nn.Module):
     def __init__(self, grid_dim, channels=3, hidden_dim=64, n_filters=32):
         super(SpatialEncoder, self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(channels, n_filters, 2, 2, padding=0),
-            nn.ReLU(),
-            nn.Conv2d(n_filters, n_filters*2, 2, 2, padding=0))
+            nn.Conv2d(channels, n_filters, 2, 2, padding=0))
+            # nn.ReLU(),
+            # nn.Conv2d(n_filters, n_filters*2, 2, 2, padding=0))
         self.cout = gen_conv_output_dim(grid_dim)
         self.fc = nn.Linear(n_filters*self.cout**2, hidden_dim)
     
@@ -79,8 +79,8 @@ class SpatialDecoder(nn.Module):
         self.conv = nn.Sequential(
             nn.ConvTranspose2d(n_filters, n_filters, 2, 2, padding=0),
             nn.ReLU(),
-            nn.ConvTranspose2d(n_filters*4, n_filters*2, 2, 2, padding=0),
-            nn.ReLU(),
+            # nn.ConvTranspose2d(n_filters*4, n_filters*2, 2, 2, padding=0),
+            # nn.ReLU(),
             nn.Conv2d(n_filters, channels, 1, 1, padding=0))
         self.cout = gen_conv_output_dim(grid_dim)
         self.fc = nn.Linear(hidden_dim, n_filters*self.cout**2)
@@ -148,7 +148,7 @@ class BoundaryConditionNetwork(nn.Module):
 
 def gen_conv_output_dim(s):
     s = _get_conv_output_dim(s, 2, 0, 2)
-    s = _get_conv_output_dim(s, 2, 0, 2)
+    # s = _get_conv_output_dim(s, 2, 0, 2)
     # s = _get_conv_output_dim(s, 2, 0, 2)
     return s
 
