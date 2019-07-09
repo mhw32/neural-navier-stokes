@@ -86,7 +86,8 @@ def generate_system(config):
 if __name__ == "__main__":
     import matplotlib
     matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
+    from matplotlib import pyplot as plt, cm
+    from mpl_toolkits.mplot3d import Axes3D
 
     import argparse
     parser = argparse.ArgumentParser()
@@ -99,6 +100,7 @@ if __name__ == "__main__":
     dt, rho, nu = 0.001, 1, 0.1
 
     os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(IMAGE_DIR, exist_ok=True)
 
     fine_systems, coarse_systems = [], []
     for i in range(args.num):
@@ -127,10 +129,10 @@ if __name__ == "__main__":
     for i in range(args.num):
         u, v, p = fine_systems[i]['u'], fine_systems[i]['v'], fine_systems[i]['p']
         fig = plt.figure(figsize=(11, 7), dpi=100)
-        plt.contourf(X, Y, p, alpha=0.5, cmap=cm.viridis)
+        plt.contourf(X, Y, p[-1], alpha=0.5, cmap=cm.viridis)
         plt.colorbar()
-        plt.contour(X, Y, p, cmap=cm.viridis)
-        plt.streamplot(X, Y, u, v)
+        plt.contour(X, Y, p[-1], cmap=cm.viridis)
+        plt.streamplot(X, Y, u[-1], v[-1])
         plt.xlabel('X')
         plt.ylabel('Y')
         plt.savefig(os.path.join(IMAGE_DIR, 'streamplot_system_{}.pdf'.format(i)))
