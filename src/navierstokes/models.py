@@ -156,9 +156,13 @@ class ODEDiffEq(nn.Module):
         z0, qz0_mean, qz0_logvar = self.infer(u_seq, v_seq, p_seq)
         # forward in time and solve ode for reconstructions
         pred_z = odeint(self.ode_func, z0, t_seq).permute(1, 0, 2)
-        pred_x = self.dec(pred_z)
+        batch_size, T, dim = pred_z.size()
+        pred_z_flat = pred_z.view(batch_size * T, dim)
+        pred_x_flat = self.spatial_decoder(pred_z_flat)
+        pred_x = pred_x_flat.view(batch_size, T, -1)
 
         return pred_x, z0, qz0_mean, qz0_logvar
+
 
 class LatentODEfunc(nn.Module):
     def __init__(self, latent_dim, hidden_dim=64):
