@@ -1,3 +1,8 @@
+"""
+This is a DEMO script. It is intended to be run in isolation. 
+Please see flow.py for a reliable version.
+"""
+
 import os
 import numpy as np
 

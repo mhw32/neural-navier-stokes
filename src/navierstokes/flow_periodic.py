@@ -1,3 +1,7 @@
+"""
+This is a DEMO script. It is intended to be run in isolation. 
+Please see flow.py for a reliable version.
+"""
 # periodic flow requires special computation
 
 import os
