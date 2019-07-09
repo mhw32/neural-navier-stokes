@@ -209,6 +209,8 @@ if __name__ == "__main__":
 
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(IMAGE_DIR, exist_ok=True)
+    os.makedirs(FINE_DIR, exist_ok=True)
+    os.makedirs(COARSE_DIR, exist_ok=True)
 
     count = 0
     fine_systems, coarse_systems = [], []
@@ -221,7 +223,6 @@ if __name__ == "__main__":
         coarse_config = fine_to_coarse_config(fine_config)
         print('Generating **coarse** navier-stokes system: ({}/{})'.format(count + 1, args.num))
         coarse_system = generate_system(coarse_config)
-        breakpoint()
 
         # randomly initializing boundary conditions sometimes gets us into
         # trouble, so ignore when that happens.
