@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 from src.navierstokes.generate import DATA_DIR
-from src.navierstokes.models import RNNDiffEq
+from src.navierstokes.models import RNNDiffEq, ODEDiffEq
 from src.navierstokes.utils import (
     spatial_coarsen, AverageMeter, save_checkpoint, 
     MODEL_DIR, dynamics_prediction_error_numpy)
@@ -28,6 +28,15 @@ def numpy_to_torch(array, device):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument('--model', type=str, default='rnn', help='rnn|ode')
+    parser.add_argument('--batch-time', type=int, default=50, 
+                        help='batch of timesteps [default: 50]')
+    parser.add_argument('--batch-size', type=int, default=100,
+                        help='batch size [default: 100]')
+    parser.add_argument('--epochs', type=int, default=2000,
+                        help='number of epochs [default: 2000]')
+    parser.add_argument('--lr', type=float, default=1e-3,
+                        help='learning rate [default: 1e-3]')
     parser.add_argument('--test-only', action='store_true', default=False)
     args = parser.parse_args()
 
@@ -38,10 +47,6 @@ if __name__ == "__main__":
     np.random.seed(1337)
 
     os.makedirs(MODEL_DIR, exist_ok=True)
-
-    batch_T = 50  # number of timesteps to sample
-    batch_size = 100
-    epochs = 2000
 
     with open(os.path.join(DATA_DIR, '1000_fine_systems.pickle'), 'rb') as fp:
         fine_systems = pickle.load(fp)
@@ -97,24 +102,24 @@ if __name__ == "__main__":
     model = RNNDiffEq(grid_dim)
     model = model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
     best_loss = np.inf
     test_loss_item = np.inf
 
     if not args.test_only:
-        pbar = tqdm(total=epochs)
-        for iteration in range(epochs):
+        pbar = tqdm(total=args.epochs)
+        for iteration in range(args.epochs):
             model.train()
             # sample a batch of contiguous timesteps
-            start_T = np.random.choice(np.arange(T - 1 - batch_T), size=batch_size)
-            batch_I = np.random.choice(np.arange(N_train), size=batch_size)
+            start_T = np.random.choice(np.arange(T - 1 - args.batch_time), size=args.batch_size)
+            batch_I = np.random.choice(np.arange(N_train), size=args.batch_size)
 
-            batch_u_in = numpy_to_torch(train_u_in[batch_I, start_T:start_T+batch_T, ...], device)
-            batch_v_in = numpy_to_torch(train_v_in[batch_I, start_T:start_T+batch_T, ...], device)
-            batch_p_in = numpy_to_torch(train_p_in[batch_I, start_T:start_T+batch_T, ...], device)
-            batch_u_out = numpy_to_torch(train_u_out[batch_I, start_T:start_T+batch_T, ...], device)
-            batch_v_out = numpy_to_torch(train_v_out[batch_I, start_T:start_T+batch_T, ...], device)
-            batch_p_out = numpy_to_torch(train_p_out[batch_I, start_T:start_T+batch_T, ...], device)
+            batch_u_in = numpy_to_torch(train_u_in[batch_I, start_T:start_T+args.batch_time, ...], device)
+            batch_v_in = numpy_to_torch(train_v_in[batch_I, start_T:start_T+args.batch_time, ...], device)
+            batch_p_in = numpy_to_torch(train_p_in[batch_I, start_T:start_T+args.batch_time, ...], device)
+            batch_u_out = numpy_to_torch(train_u_out[batch_I, start_T:start_T+args.batch_time, ...], device)
+            batch_v_out = numpy_to_torch(train_v_out[batch_I, start_T:start_T+args.batch_time, ...], device)
+            batch_p_out = numpy_to_torch(train_p_out[batch_I, start_T:start_T+args.batch_time, ...], device)
 
             optimizer.zero_grad()
             batch_u_pred, batch_v_pred, batch_p_pred, _ = model(
