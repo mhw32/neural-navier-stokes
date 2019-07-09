@@ -2,6 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# pip install git+https://github.com/rtqichen/torchdiffeq
+from torchdiffeq import odeint
+
+# ----------------------------------------------------------------------
+# Implementation of a Deterministic RNN
 
 class RNNDiffEq(nn.Module):
     """
@@ -28,7 +33,7 @@ class RNNDiffEq(nn.Module):
         seq = seq.view(batch_size * T, 3, grid_dim, grid_dim)
         hidden_seq = self.spatial_encoder(seq)
         hidden_seq = hidden_seq.view(batch_size, T, -1)  # batch_size, T, hidden_dim
-        output_seq, hidden_seq = self.rnn(hidden_seq, rnn_h0)
+        output_seq, rnn_h = self.rnn(hidden_seq, rnn_h0)
         output_seq = output_seq.contiguous().view(batch_size * T, -1)
         out = self.spatial_decoder(output_seq)  # batch_size x channel x grid_dim**2
         out = out.view(batch_size, T, 3, grid_dim, grid_dim)
@@ -38,7 +43,7 @@ class RNNDiffEq(nn.Module):
         next_v_seq = next_v_seq.contiguous()
         next_p_seq = next_p_seq.contiguous()
 
-        return next_u_seq, next_v_seq, next_p_seq, hidden_seq
+        return next_u_seq, next_v_seq, next_p_seq, rnn_h
 
 
 class SpatialEncoder(nn.Module):
@@ -103,3 +108,72 @@ def _get_conv_output_dim(I, K, P, S):
     # O = output height/length
     O = (I - K + 2*P)/float(S) + 1
     return int(O)
+
+# ----------------------------------------------------------------------
+# Implementation of NeuralODEs in PyTorch (adapted from TorchDiffEq)
+
+class ODEDiffEq(nn.Module):
+    """
+    Latent variable model with built-in ODE to predict next element 
+    in a differential equation. This model is stochastic by definition.
+    Uses an RNN internally for encoding sequential data.
+
+    Args (in Forward)
+    ----
+    x_seq: torch.Tensor (size: batch_size x T x grid_dim x grid_dim)
+           the input 
+    """
+    def __init__(self, grid_dim, latent_dim=16, rnn_dim=64, hidden_dim=64, n_filters=32):
+        super(ODEDiffEq, self).__init__()
+        self.ode_func = LatentODEfunc(latent_dim, hidden_dim=hidden_dim)
+        self.spatial_encoder = SpatialEncoder(grid_dim, hidden_dim=hidden_dim,
+                                              n_filters=n_filters)
+        self.spatial_decoder = SpatialDecoder(grid_dim, hidden_dim=hidden_dim,
+                                              n_filters=n_filters)
+        self.rnn = nn.GRU(hidden_dim, rnn_dim, batch_first=True)
+        self.hidden_to_latent = nn.Linear(hidden_dim, latent_dim * 2)
+        self.latent_dim = latent_dim
+
+    def infer(self, u_seq, v_seq, p_seq, rnn_h0=None):
+        batch_size, T, grid_dim = u_seq.size(0), u_seq.size(1), u_seq.size(2)
+        seq = torch.cat([u_seq.unsqueeze(2), v_seq.unsqueeze(2), 
+                         p_seq.unsqueeze(2)], dim=2)
+        seq = seq.view(batch_size * T, 3, grid_dim, grid_dim)
+        hidden_seq = self.spatial_encoder(seq)
+        hidden_seq = hidden_seq.view(batch_size, T, -1)  # batch_size, T, hidden_dim
+        _, rnn_h = self.rnn(hidden_seq, rnn_h0)
+        latent_chunk = self.hidden_to_latent(rnn_h.squeeze(0))
+        latent_mu, latent_logvar = torch.chunk(latent_chunk, 2, dim=1)
+        latent = self.reparameterize(latent_mu, latent_logvar)
+        return latent, latent_mu, latent_logvar
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5*logvar)
+        eps = torch.randn_like(std)
+        return eps.mul(std).add_(mu)
+
+    def forward(self, u_seq, v_seq, p_seq, t_seq):
+        z0, qz0_mean, qz0_logvar = self.infer(u_seq, v_seq, p_seq)
+        # forward in time and solve ode for reconstructions
+        pred_z = odeint(self.ode_func, z0, t_seq).permute(1, 0, 2)
+        pred_x = self.dec(pred_z)
+
+        return pred_x, z0, qz0_mean, qz0_logvar
+
+class LatentODEfunc(nn.Module):
+    def __init__(self, latent_dim, hidden_dim=64):
+        super(LatentODEfunc, self).__init__()
+        self.elu = nn.ELU(inplace=True)
+        self.fc1 = nn.Linear(latent_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc4 = nn.Linear(hidden_dim, latent_dim)
+        self.nfe = 0
+
+    def forward(self, t, x):
+        self.nfe += 1
+        out = self.elu(self.fc1(x))
+        out = self.elu(self.fc2(out))
+        out = self.elu(self.fc3(out))
+        out = self.fc4(out)
+        return out
