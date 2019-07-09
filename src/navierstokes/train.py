@@ -271,11 +271,11 @@ if __name__ == "__main__":
 
         test_u_pred, test_v_pred, test_p_pred = [], [], []
 
-        # take just the first step
-        u, v, p = _test_u_in[0], _test_v_in[0], _test_p_in[0]
-        u = u.unsqueeze(0)
-        v = v.unsqueeze(0)
-        p = p.unsqueeze(0)
+        # take just the first timestep
+        u, v, p = _test_u_in[:, 0], _test_v_in[:, 0], _test_p_in[:, 0]
+        u = u.unsqueeze(1)
+        v = v.unsqueeze(1)
+        p = p.unsqueeze(1)
 
         rnn_h0 = None  # this will cause us to read the initial conditions
 
@@ -289,9 +289,9 @@ if __name__ == "__main__":
             test_v_pred.append(copy.deepcopy(v))
             test_p_pred.append(copy.deepcopy(p))
         
-        test_u_pred = torch.cat(test_u_pred, dim=0)
-        test_v_pred = torch.cat(test_v_pred, dim=0)
-        test_p_pred = torch.cat(test_p_pred, dim=0)
+        test_u_pred = torch.cat(test_u_pred, dim=1)
+        test_v_pred = torch.cat(test_v_pred, dim=1)
+        test_p_pred = torch.cat(test_p_pred, dim=1)
 
         test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
             _test_u_out, _test_v_out, _test_p_out,
@@ -347,9 +347,9 @@ if __name__ == "__main__":
             test_v_pred.append(copy.deepcopy(v))
             test_p_pred.append(copy.deepcopy(p))
         
-        test_u_pred = torch.cat(test_u_pred, dim=0)
-        test_v_pred = torch.cat(test_v_pred, dim=0)
-        test_p_pred = torch.cat(test_p_pred, dim=0)
+        test_u_pred = torch.cat(test_u_pred, dim=1)
+        test_v_pred = torch.cat(test_v_pred, dim=1)
+        test_p_pred = torch.cat(test_p_pred, dim=1)
 
         test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
             _test_u_out[:, head_start:], _test_v_out[:, head_start:], _test_p_out[:, head_start:],
