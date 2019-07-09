@@ -126,9 +126,9 @@ if __name__ == "__main__":
     test_u_in, test_v_in, test_p_in = test_u_mat[:, :T-1], test_v_mat[:, :T-1], test_p_mat[:, :T-1]
     test_u_out, test_v_out, test_p_out = test_u_mat[:, 1:], test_v_mat[:, 1:], test_p_mat[:, 1:]
 
-    train_t_in, train_t_out = train_timesteps[:T-1], train_timesteps[1:]
-    val_t_in, val_t_out = val_timesteps[:T-1], val_timesteps[1:]
-    test_t_in, test_t_out = test_timesteps[:T-1], test_timesteps[1:]
+    train_t_in, train_t_out = train_timesteps[:, :T-1], train_timesteps[:, 1:]
+    val_t_in, val_t_out = val_timesteps[:, :T-1], val_timesteps[:, 1:]
+    test_t_in, test_t_out = test_timesteps[:, :T-1], test_timesteps[:, 1:]
 
     print('Initialize model and optimizer.')
 
@@ -153,8 +153,8 @@ if __name__ == "__main__":
 
             def build_batch(A, batch_indices, start_time_batch, time_lapse):
                 # A = batch_size, T, grid_dim, grid_dim
-                batch_size = A.shape[0]
                 subA = A[batch_indices]
+                batch_size = subA.shape[0]
                 batchA = np.stack([
                     subA[i, start_time_batch[i]:start_time_batch[i]+time_lapse, ...]
                     for i in range(batch_size)
