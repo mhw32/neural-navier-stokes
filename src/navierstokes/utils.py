@@ -81,14 +81,9 @@ def dynamics_prediction_error_torch(
 
     Each object has shape (batch_size, T, grid_dim, grid_dim)
     """
-    u_seq_mse = torch.sum(torch.sum(torch.pow(u_hat_seq - u_seq, 2), 2), 2)
-    v_seq_mse = torch.sum(torch.sum(torch.pow(v_hat_seq - v_seq, 2), 2), 2)
-    p_seq_mse = torch.sum(torch.sum(torch.pow(p_hat_seq - p_seq, 2), 2), 2)
-    
-    # average over the batch_size, giving us errors over time
-    u_seq_mse = torch.mean(u_seq_mse, dim=0)
-    v_seq_mse = torch.mean(v_seq_mse, dim=0)
-    p_seq_mse = torch.mean(p_seq_mse, dim=0)
+    u_seq_mse = torch.sum(torch.sum(torch.pow(u_hat_seq - u_seq, 2), 1), 1)
+    v_seq_mse = torch.sum(torch.sum(torch.pow(v_hat_seq - v_seq, 2), 1), 1)
+    p_seq_mse = torch.sum(torch.sum(torch.pow(p_hat_seq - p_seq, 2), 1), 1)
 
     return u_seq_mse, v_seq_mse, p_seq_mse
 

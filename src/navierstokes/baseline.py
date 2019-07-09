@@ -43,8 +43,8 @@ def coarsen_fine_systems(X_fine, Y_fine, u_fine, v_fine, p_fine):
 if __name__ == "__main__":
     np.random.seed(1337)
 
-    u_fine, v_fine, p_fine = load_systems(DATA_SM_DIR, fine=True)
-    u_coarse, v_coarse, p_coarse = load_systems(DATA_SM_DIR, fine=False)
+    u_fine, v_fine, p_fine = load_systems(DATA_DIR, fine=True)
+    u_coarse, v_coarse, p_coarse = load_systems(DATA_DIR, fine=False)
     
     N = u_fine.shape[0]
     N_train = int(0.8 * N)

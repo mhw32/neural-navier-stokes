@@ -6,12 +6,12 @@ from tqdm import tqdm
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
-from src.navierstokes.generate import DATA_DIR
+from src.navierstokes.generate import DATA_DIR, DATA_SM_DIR
 from src.navierstokes.models import RNNDiffEq, ODEDiffEq
 from src.navierstokes.utils import (
     spatial_coarsen, AverageMeter, save_checkpoint, 
-    MODEL_DIR, dynamics_prediction_error_numpy, 
-    log_normal_pdf, normal_kl)
+    MODEL_DIR, dynamics_prediction_error_torch, 
+    log_normal_pdf, normal_kl, load_systems)
 from src.navierstokes.baseline import coarsen_fine_systems
 
 
@@ -74,49 +74,42 @@ if __name__ == "__main__":
     os.makedirs(model_dir, exist_ok=True)
 
     print('loading fine systems')
-    with open(os.path.join(DATA_DIR, '1000_fine_systems.pickle'), 'rb') as fp:
-        fine_systems = pickle.load(fp)
+    u_fine, v_fine, p_fine = load_systems(DATA_DIR, fine=True)
 
-    print('loading coarse systems')
-    with open(os.path.join(DATA_DIR, '1000_coarse_systems.pickle'), 'rb') as fp:
-        coarse_systems = pickle.load(fp)
+    N = len(u_fine)
+    nx, ny = u_fine.shape[2], u_fine.shape[3]
+    x_fine = np.linspace(0, 2, nx)  # slightly hardcoded
+    y_fine = np.linspace(0, 2, ny)
+    X_fine, Y_fine = np.meshgrid(x_fine, y_fine)
+    u_coarsened, v_coarsened, p_coarsened = coarsen_fine_systems(
+        X_fine, Y_fine, u_fine, v_fine, p_fine)
 
-    # generate coarsened fine systems
-    coarsened_systems = coarsen_fine_systems(fine_systems, coarse_systems)
-    coarsened_config = coarsened_systems[0]['config']
-    assert coarsened_config['nx'] == coarsened_config['ny']
-    grid_dim = coarsened_config['nx']
-    nt = coarsened_config['nt']  # num timesteps
-    dt = coarsened_config['dt']  # time stepsize
-    timesteps = np.arange(nt) * dt
+    # set some hyperparameters
+    grid_dim = nx
+    T = x_fine.shape[1]
+    dt = 0.001
+    timesteps = np.arange(T) * dt
 
-    T = coarsened_systems[0]['u'].shape[0]
-    N = len(coarsened_systems)
-
+    N = x_fine.shape[0]
     N_train = int(0.8 * N)
     N_val = int(0.1 * N)
 
     print('Divide data into train/val/test sets.')
 
-    # split into train/val/test sets
-    train_coarsened_systems = coarsened_systems[:N_train]
-    val_coarsened_systems = coarsened_systems[N_train:N_train+N_val]
-    test_coarsened_systems = coarsened_systems[N_train+N_val:]
-
     # get all momentum and pressure sequences in a matrix
-    # shape: 800 x T x grid_size x grid_size
-    train_u_mat = np.stack([system['u'] for system in train_coarsened_systems])
-    train_v_mat = np.stack([system['v'] for system in train_coarsened_systems])
-    train_p_mat = np.stack([system['p'] for system in train_coarsened_systems])
+    # shape: N_train x T x grid_size x grid_size
+    train_u_mat = u_coarsened[:N_train, ...]
+    train_v_mat = v_coarsened[:N_train, ...]
+    train_p_mat = p_coarsened[:N_train, ...]
 
-    val_u_mat = np.stack([system['u'] for system in val_coarsened_systems])
-    val_v_mat = np.stack([system['v'] for system in val_coarsened_systems])
-    val_p_mat = np.stack([system['p'] for system in val_coarsened_systems])
+    val_u_mat = u_coarsened[N_train:(N_train+N_val), ...]
+    val_v_mat = v_coarsened[N_train:(N_train+N_val), ...]
+    val_p_mat = p_coarsened[N_train:(N_train+N_val), ...]
 
-    test_u_mat = np.stack([system['u'] for system in test_coarsened_systems])
-    test_v_mat = np.stack([system['v'] for system in test_coarsened_systems])
-    test_p_mat = np.stack([system['p'] for system in test_coarsened_systems])
-
+    test_u_mat = u_coarsened[N_train+N_val:, ...]
+    test_v_mat = v_coarsened[N_train+N_val:, ...]
+    test_p_mat = p_coarsened[N_train+N_val:, ...]
+    
     # divide data into input and target sequences
     train_u_in, train_v_in, train_p_in = train_u_mat[:, :T-1], train_v_mat[:, :T-1], train_p_mat[:, :T-1]
     train_u_out, train_v_out, train_p_out = train_u_mat[:, 1:], train_v_mat[:, 1:], train_p_mat[:, 1:]
