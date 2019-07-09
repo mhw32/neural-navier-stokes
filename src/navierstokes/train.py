@@ -143,13 +143,23 @@ if __name__ == "__main__":
             start_T = np.random.choice(np.arange(T - 1 - args.batch_time), size=args.batch_size)
             batch_I = np.random.choice(np.arange(N_train), size=args.batch_size)
 
-            batch_u_in = numpy_to_torch(train_u_in[batch_I][:, start_T:start_T+args.batch_time, ...], device)
-            batch_v_in = numpy_to_torch(train_v_in[batch_I][:, start_T:start_T+args.batch_time, ...], device)
-            batch_p_in = numpy_to_torch(train_p_in[batch_I][:, start_T:start_T+args.batch_time, ...], device)
+            def build_batch(A, batch_indices, start_time_batch, time_lapse):
+                # A = batch_size, T, grid_dim, grid_dim
+                batch_size = A.shape[0]
+                subA = A[batch_indices]
+                batchA = np.stack([
+                    subA[i, start_time_batch[i]:start_time_batch[i]+time_lapse, ...]
+                    for i in range(batch_size)
+                ])
+                return batchA
+
+            batch_u_in = numpy_to_torch(build_batch(train_u_in, batch_I, start_T, args.batch_time), device)
+            batch_v_in = numpy_to_torch(build_batch(train_v_in, batch_I, start_T, args.batch_time), device)
+            batch_p_in = numpy_to_torch(build_batch(train_p_in, batch_I, start_T, args.batch_time), device)
             batch_t_in = numpy_to_torch(t_in[start_T:start_T+args.batch_time], device)
-            batch_u_out = numpy_to_torch(train_u_out[batch_I][:, start_T:start_T+args.batch_time, ...], device)
-            batch_v_out = numpy_to_torch(train_v_out[batch_I][:, start_T:start_T+args.batch_time, ...], device)
-            batch_p_out = numpy_to_torch(train_p_out[batch_I][:, start_T:start_T+args.batch_time, ...], device)
+            batch_u_out = numpy_to_torch(build_batch(train_u_out, batch_I, start_T, args.batch_time), device)
+            batch_v_out = numpy_to_torch(build_batch(train_v_out, batch_I, start_T, args.batch_time), device)
+            batch_p_out = numpy_to_torch(build_batch(train_p_out, batch_I, start_T, args.batch_time), device)
 
             optimizer.zero_grad()
             
