@@ -105,10 +105,20 @@ if __name__ == "__main__":
     count = 0
     fine_systems, coarse_systems = [], []
     while count < args.num:
-        config = generate_random_config(nt, nit, nx, ny, dt, rho, nu)
+        fine_config = generate_random_config(nt, nit, nx, ny, dt, rho, nu)
         print('Generating **fine** navier-stokes system: ({}/{})'.format(count + 1, args.num))
-        fine_system = generate_system(config)  # make fine system!
-        config['nx'] = 10; config['ny'] = 10   # make coarse system!
+        fine_system = generate_system(fine_config)  # make fine system!
+        
+        # make a coarse config from the fine config
+        coarse_config = copy.deepcopy(fine_config)
+        coarse_config['nx'] = 10; coarse_config['ny'] = 10
+        coarse_config['u_ic'] = np.zeros((coarse_config['nx'], coarse_config['ny']))
+        coarse_config['v_ic'] = np.zeros((coarse_config['nx'], coarse_config['ny']))
+        coarse_config['p_ic'] = np.zeros((coarse_config['nx'], coarse_config['ny']))
+        const = fine_config['nx'] // coarse_config['nx']
+        # subsample the boundary conditions
+        interval = np.arange(0, fine_config['nx'], const)
+
         print('Generating **coarse** navier-stokes system: ({}/{})'.format(count + 1, args.num))
         coarse_system = generate_system(config)
 

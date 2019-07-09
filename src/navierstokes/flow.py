@@ -187,7 +187,7 @@ class NavierStokesSystem(object):
     def __init__(self, u_ic, v_ic, p_ic, u_bc, v_bc, p_bc, 
                  nt=200, nit=50, nx=50, ny=50, dt=0.001, rho=1, nu=.1, F=0):
         super().__init__()
-        self.u_ic, self.v_ic, self.p_ic = u_ic, v_ic, p_ic
+        self.u_ic, self.v_ic, self.p_ic = u_ic.copy(), v_ic.copy(), p_ic.copy()
         self.u_bc, self.v_bc, self.p_bc = u_bc, v_bc, p_bc
         self.nt, self.dt, self.nx, self.ny = nt, dt, nx, ny
         self.dx, self.dy = 2. / (self.nx - 1), 2. / (self.ny - 1)
