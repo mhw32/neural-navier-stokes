@@ -10,7 +10,8 @@ from src.navierstokes.generate import DATA_DIR
 from src.navierstokes.models import RNNDiffEq, ODEDiffEq
 from src.navierstokes.utils import (
     spatial_coarsen, AverageMeter, save_checkpoint, 
-    MODEL_DIR, dynamics_prediction_error_numpy)
+    MODEL_DIR, dynamics_prediction_error_numpy, 
+    log_normal_pdf, normal_kl)
 from src.navierstokes.baseline import coarsen_fine_systems
 
 
@@ -19,6 +20,29 @@ def mean_squared_error(pred, true):
     pred, true = pred.view(batch_size, -1), true.view(batch_size, -1)
     mse = torch.mean(torch.pow(pred - true, 2), dim=1)
     return torch.mean(mse)  # over batch size
+
+
+def neural_ode_loss(u_out, v_out, p_out, u_pred, v_pred, p_pred,
+                    z, qz_mu, qz_logvar, obs_std=0.3):
+    """Latent variable model objective using Neural ODE."""
+    device = u_out.device
+    noise_std_ = torch.zeros(pred_x.size()).to(device) + obs_std  # hardcoded logvar
+    noise_logvar = 2. * torch.log(noise_std_).to(device)
+
+    logp_u = log_normal_pdf(u_out, u_pred, noise_logvar)
+    logp_v = log_normal_pdf(v_out, v_pred, noise_logvar)
+    logp_p = log_normal_pdf(p_out, p_pred, noise_logvar)
+
+    logp_u = logp_u.sum(-1).sum(-1)
+    logp_v = logp_v.sum(-1).sum(-1)
+    logp_p = logp_p.sum(-1).sum(-1)
+    logp = logp_u + logp_v + logp_p  # sum 3 components together
+
+    pz_mu = torch.zeros_like(z)
+    pz_logvar = torch.zeros_like(z)
+    analytic_kl = normal_kl(qz_mu, qz_logvar, pz_mu, pz_logvar).sum(-1)
+    loss = torch.mean(-logp + analytic_kl, dim=0)
+    return loss
 
 
 def numpy_to_torch(array, device):
@@ -141,9 +165,11 @@ if __name__ == "__main__":
                         mean_squared_error(batch_v_pred, batch_v_out) + 
                         mean_squared_error(batch_p_pred, batch_p_out))
             else:
-                batch_u_pred, batch_v_pred, batch_p_pred, z, z_mu, z_logvar, _ \
+                batch_u_pred, batch_v_pred, batch_p_pred, z, qz_mu, qz_logvar, _ \
                     = model(batch_u_in, batch_v_in, batch_p_in, batch_t_in)
-                loss = ...
+                loss = neural_ode_loss(batch_u_out, batch_v_out, batch_p_out, 
+                                       batch_u_pred, batch_v_pred, batch_p_pred,
+                                       z, qz_mu, qz_logvar, obs_std=0.3)
 
             loss.backward()
             optimizer.step()
@@ -168,9 +194,11 @@ if __name__ == "__main__":
                                     mean_squared_error(val_v_pred, val_v_out) + 
                                     mean_squared_error(val_p_pred, val_p_out))
                     else:
-                        val_u_pred, val_v_pred, val_p_pred, z, z_mu, z_logvar, _ \
+                        val_u_pred, val_v_pred, val_p_pred, z, qz_mu, qz_logvar, _ \
                             = model(val_u_in, val_v_in, val_p_in, all_t_in)
-                        val_loss = ...
+                        val_loss = neural_ode_loss(val_u_out, val_v_out, val_p_out, 
+                                                   val_u_pred, val_v_pred, val_p_pred,
+                                                   z, qz_mu, qz_logvar, obs_std=0.3)
 
                     val_loss_item = val_loss.item()
                     pbar.set_postfix({'train loss': loss.item(),
