@@ -102,16 +102,31 @@ if __name__ == "__main__":
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(IMAGE_DIR, exist_ok=True)
 
+    count = 0
     fine_systems, coarse_systems = [], []
-    for i in range(args.num):
+    while count < args.num:
         config = generate_random_config(nt, nit, nx, ny, dt, rho, nu)
         print('Generating **fine** navier-stokes system: ({}/{})'.format(i + 1, args.num))
         fine_system = generate_system(config)  # make fine system!
         config['nx'] = 10; config['ny'] = 10   # make coarse system!
         print('Generating **coarse** navier-stokes system: ({}/{})'.format(i + 1, args.num))
         coarse_system = generate_system(config)
+
+        # randomly initializing boundary conditions sometimes gets us into
+        # trouble, so ignore when that happens.
+        if (np.sum(np.isnan(if fine_system['u'])) > 0 or 
+            np.sum(np.isnan(if fine_system['v'])) > 0 or 
+            np.sum(np.isnan(if fine_system['p'])) > 0):
+            continue
+
+        if (np.sum(np.isnan(if coarse_system['u'])) > 0 or 
+            np.sum(np.isnan(if coarse_system['v'])) > 0 or 
+            np.sum(np.isnan(if coarse_system['p'])) > 0):
+            continue
+
         fine_systems.append(fine_system)
         coarse_systems.append(coarse_system)
+        count += 1
 
     with open(os.path.join(DATA_DIR, '{}_fine_systems.pickle'.format(args.num)), 'wb') as fp:
         pickle.dump(fine_systems, fp)
@@ -126,7 +141,8 @@ if __name__ == "__main__":
     y = np.linspace(0, 2, ny)
     X, Y = np.meshgrid(x, y)
 
-    for i in range(args.num):
+    print('Plotting functions')
+    for i in tqdm(range(args.num)):
         u, v, p = fine_systems[i]['u'], fine_systems[i]['v'], fine_systems[i]['p']
         fig = plt.figure(figsize=(11, 7), dpi=100)
         plt.contourf(X, Y, p[-1], alpha=0.5, cmap=cm.viridis)
