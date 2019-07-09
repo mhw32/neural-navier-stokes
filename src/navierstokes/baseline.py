@@ -12,67 +12,52 @@ import pickle
 import numpy as np
 from tqdm import tqdm
 
-from src.navierstokes.generate import DATA_DIR
-from src.navierstokes.utils import dynamics_prediction_error_numpy
-from src.navierstokes.utils import spatial_coarsen, AverageMeter
+from src.navierstokes.generate import DATA_DIR, DATA_SM_DIR
+from src.navierstokes.utils import (dynamics_prediction_error_numpy,
+                                    spatial_coarsen, AverageMeter, load_systems)
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), 'results')
 
 
-def coarsen_fine_systems(fine_systems, coarse_systems):
-    fine_config = fine_systems[0]['config']
-    coarse_config = coarse_systems[0]['config']
-
-    fine_x = np.linspace(0, 2, fine_config['nx'])
-    fine_y = np.linspace(0, 2, fine_config['ny'])
-    fine_X, fine_Y = np.meshgrid(fine_x, fine_y)
-
-    agg_x = fine_config['nx'] // coarse_config['nx']
-    agg_y = fine_config['ny'] // coarse_config['ny']
-
+def coarsen_fine_systems(X_fine, Y_fine, u_fine, v_fine, p_fine):
     # coarsen the fine systems
     print('Coarsening "fine" systems:')
-    coarsened_systems = []
-    for i in tqdm(range(len(fine_systems))):
-        u_seq, v_seq, p_seq = (fine_systems[i]['u'],
-                               fine_systems[i]['v'], 
-                               fine_systems[i]['p'])
+    u_coarsened, v_coarsened, p_coarsened = [], [], []
+    for i in tqdm(range(len(u_fine))):
+        u_seq, v_seq, p_seq = u_fine[i], v_fine[i], p_fine[i]
         _, _, u_seq, v_seq, p_seq = spatial_coarsen(
-            fine_X, fine_Y, u_seq, v_seq, p_seq,
-            agg_x=agg_x, agg_y=agg_y)
+            X_fine, Y_fine, u_seq, v_seq, p_seq,
+            agg_x=5, agg_y=5)  # HARDCODE for now
 
-        coarsened_system_i = copy.deepcopy(fine_systems[i])
-        coarsened_system_i['config']['nx'] = coarse_config['nx']
-        coarsened_system_i['config']['ny'] = coarse_config['ny']
-        coarsened_system_i['u'] = u_seq
-        coarsened_system_i['v'] = v_seq
-        coarsened_system_i['p'] = p_seq
-        coarsened_systems.append(coarsened_system_i)
+        u_coarsened.append(u_seq.copy())
+        v_coarsened.append(v_seq.copy())
+        p_coarsened.append(p_seq.copy())
     
-    return coarsened_systems
+    u_coarsened = np.stack(u_coarsened)
+    v_coarsened = np.stack(v_coarsened)
+    p_coarsened = np.stack(p_coarsened)
+
+    return u_coarsened, v_coarsened, p_coarsened
 
 
 if __name__ == "__main__":
     np.random.seed(1337)
 
-    with open(os.path.join(DATA_DIR, '1000_fine_systems.pickle'), 'rb') as fp:
-        fine_systems = pickle.load(fp)
+    u_fine, v_fine, p_fine = load_systems(DATA_DIR, fine=True)
+    u_coarse, v_coarse, p_coarse = load_systems(DATA_DIR, fine=False)
 
-    with open(os.path.join(DATA_DIR, '1000_coarse_systems.pickle'), 'rb') as fp:
-        coarse_systems = pickle.load(fp)
-
-    coarsened_systems = coarsen_fine_systems(fine_systems, coarsened_systems)
+    N = len(u_fine)
+    nx, ny = u_fine.shape[2], u_fine.shape[3]
+    x_fine = np.linspace(0, 2, nx)  # slightly hardcoded
+    y_fine = np.linspace(0, 2, ny)
+    X_fine, Y_fine = np.meshgrid(x_fine, y_fine)
+    u_coarsened, v_coarsened, p_coarsened = coarsen_fine_systems(u_fine, v_fine, p_fine)
 
     print('Computing error for coarse systems:')
     u_errors, v_errors, p_errors = [], [], []
-    for i in tqdm(range(len(coarse_systems))):
-        u_seq, v_seq, p_seq = (coarse_systems[i]['u'],
-                               coarse_systems[i]['v'], 
-                               coarse_systems[i]['p'])
-        u_hat_seq, v_hat_seq, p_hat_seq = (
-            coarsened_systems[i]['u'], coarsened_systems[i]['v'], 
-            coarsened_systems[i]['p'])
-
+    for i in tqdm(range(N)):
+        u_seq, v_seq, p_seq = u_coarse[i], v_coarse[i], p_coarse[i]
+        u_hat_seq, v_hat_seq, p_hat_seq = u_coarsened[i], v_coarsened[i], p_coarsened[i]
         u_error_i, v_error_i, p_error_i = dynamics_prediction_error_numpy(
             u_seq, v_seq, p_seq, u_hat_seq, v_hat_seq, p_hat_seq)
         u_errors.append(u_error_i)

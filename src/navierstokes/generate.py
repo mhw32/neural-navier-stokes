@@ -16,8 +16,10 @@ from src.navierstokes.flow import (
 
 if 'ccncluster' in os.uname()[1]:
     DATA_DIR = '/mnt/fs5/wumike/navierstokes/data'
+    DATA_SM_DIR = '/mnt/fs5/wumike/navierstokes/data_small'
 else:
     DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+    DATA_SM_DIR = os.path.join(os.path.dirname(__file__), 'data_small')
 
 IMAGE_DIR = os.path.join(DATA_DIR, 'images')
 NUMPY_DIR = os.path.join(DATA_DIR, 'numpy')

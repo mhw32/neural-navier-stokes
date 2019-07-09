@@ -2,6 +2,7 @@ import os
 import torch
 import shutil
 import numpy as np
+from tqdm import tqdm
 
 MODEL_DIR = os.path.join(os.path.dirname(__file__), 'model')
 MODEL_DIR = os.path.realpath(MODEL_DIR)
@@ -140,3 +141,27 @@ def normal_kl(mu1, lv1, mu2, lv2):
 
     kl = lstd2 - lstd1 + ((v1 + (mu1 - mu2) ** 2.) / (2. * v2)) - .5
     return kl
+
+
+def load_systems(data_dir, fine=True):
+    subdir = 'fine' if fine else 'coarse'
+    basename = os.path.realpath(os.path.join(data_dir, 'numpy', subdir))
+    filenames = os.listdir(basename)
+    n = len(filenames)
+
+    print('Loading data from {} ({} files).'.format(basename, n))   
+    
+    u_mat, v_mat, p_mat = [], [], []
+    for i in tqdm(range(n)):
+        name = 'system_{}.npz'.format(i)
+        assert name in filenames
+        data_i = np.load(os.path.join(basename, name))
+        u_mat.append(data_i['u'])
+        v_mat.append(data_i['v'])
+        p_mat.append(data_i['p'])
+
+    u_mat = np.stack(u_mat)
+    v_mat = np.stack(v_mat)
+    p_mat = np.stack(p_mat)
+
+    return u_mat, v_mat, p_mat
