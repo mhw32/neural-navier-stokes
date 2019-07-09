@@ -74,7 +74,7 @@ if __name__ == "__main__":
     os.makedirs(model_dir, exist_ok=True)
 
     print('loading fine systems')
-    u_fine, v_fine, p_fine = load_systems(DATA_DIR, fine=True)
+    u_fine, v_fine, p_fine = load_systems(DATA_SM_DIR, fine=True)
 
     N = len(u_fine)
     nx, ny = u_fine.shape[2], u_fine.shape[3]
@@ -86,11 +86,11 @@ if __name__ == "__main__":
 
     # set some hyperparameters
     grid_dim = nx
-    T = x_fine.shape[1]
+    T = u_fine.shape[1]
     dt = 0.001
     timesteps = np.arange(T) * dt
 
-    N = x_fine.shape[0]
+    N = u_fine.shape[0]
     N_train = int(0.8 * N)
     N_val = int(0.1 * N)
 
@@ -143,13 +143,13 @@ if __name__ == "__main__":
             start_T = np.random.choice(np.arange(T - 1 - args.batch_time), size=args.batch_size)
             batch_I = np.random.choice(np.arange(N_train), size=args.batch_size)
 
-            batch_u_in = numpy_to_torch(train_u_in[batch_I, start_T:start_T+args.batch_time, ...], device)
-            batch_v_in = numpy_to_torch(train_v_in[batch_I, start_T:start_T+args.batch_time, ...], device)
-            batch_p_in = numpy_to_torch(train_p_in[batch_I, start_T:start_T+args.batch_time, ...], device)
+            batch_u_in = numpy_to_torch(train_u_in[batch_I][:, start_T:start_T+args.batch_time, ...], device)
+            batch_v_in = numpy_to_torch(train_v_in[batch_I][:, start_T:start_T+args.batch_time, ...], device)
+            batch_p_in = numpy_to_torch(train_p_in[batch_I][:, start_T:start_T+args.batch_time, ...], device)
             batch_t_in = numpy_to_torch(t_in[start_T:start_T+args.batch_time], device)
-            batch_u_out = numpy_to_torch(train_u_out[batch_I, start_T:start_T+args.batch_time, ...], device)
-            batch_v_out = numpy_to_torch(train_v_out[batch_I, start_T:start_T+args.batch_time, ...], device)
-            batch_p_out = numpy_to_torch(train_p_out[batch_I, start_T:start_T+args.batch_time, ...], device)
+            batch_u_out = numpy_to_torch(train_u_out[batch_I][:, start_T:start_T+args.batch_time, ...], device)
+            batch_v_out = numpy_to_torch(train_v_out[batch_I][:, start_T:start_T+args.batch_time, ...], device)
+            batch_p_out = numpy_to_torch(train_p_out[batch_I][:, start_T:start_T+args.batch_time, ...], device)
 
             optimizer.zero_grad()
             

@@ -20,8 +20,8 @@ class RNNDiffEq(nn.Module):
     """
     def __init__(self, grid_dim, rnn_dim=64, hidden_dim=64, n_filters=32):
         super(RNNDiffEq, self).__init__()
-        self.bc_encoder = BoundaryConditionEncoder(grid_dim, rnn_dim, channels=channels,
-                                                   hidden_dim=hidden_dim, n_filters=n_filters)
+        self.bc_encoder = BoundaryConditionEncoder(
+            grid_dim, rnn_dim, hidden_dim=hidden_dim, n_filters=n_filters)
         self.spatial_encoder = SpatialEncoder(grid_dim, hidden_dim=hidden_dim,
                                               n_filters=n_filters)
         self.spatial_decoder = SpatialDecoder(grid_dim, hidden_dim=hidden_dim,
@@ -105,6 +105,7 @@ class SpatialDecoder(nn.Module):
 class BoundaryConditionEncoder(nn.Module):
     def __init__(self, grid_dim, out_dim, channels=3, 
                  hidden_dim=64, n_filters=32):
+        super().__init__()
         self.x0_bc = BoundaryConditionNetwork(
             grid_dim, channels=channels, 
             hidden_dim=hidden_dim, n_filters=n_filters)
@@ -135,6 +136,7 @@ class BoundaryConditionNetwork(nn.Module):
     """
     def __init__(self, grid_dim, channels=3, 
                  hidden_dim=64, n_filters=32):
+        super().__init__()
         self.boundary_encoder = nn.Sequential(
             nn.Conv1d(channels, n_filters, 2, padding=0),
             nn.ReLU())
