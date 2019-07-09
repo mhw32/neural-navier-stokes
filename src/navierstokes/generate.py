@@ -16,10 +16,13 @@ from src.navierstokes.flow import (
 
 if 'ccncluster' in os.uname()[1]:
     DATA_DIR = '/mnt/fs5/wumike/navierstokes/data'
-    IMAGE_DIR = '/mnt/fs5/wumike/navierstokes/data/images'
 else:
     DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
-    IMAGE_DIR = os.path.join(os.path.dirname(__file__), 'data/images')
+
+IMAGE_DIR = os.path.join(DATA_DIR, 'images')
+NUMPY_DIR = os.path.join(DATA_DIR, 'numpy')
+FINE_DIR = os.path.join(NUMPY_DIR, 'fine')
+COARSE_DIR = os.path.join(NUMPY_DIR, 'coarse')
 
 
 def generate_random_config(nt, nit, nx, ny, dt, rho, nu):
@@ -232,15 +235,24 @@ if __name__ == "__main__":
             np.sum(np.isnan(coarse_system['p'])) > 0):
             continue
 
+        np.savez(os.path.join(FINE_DIR, 'system_{}.npz'.format(count)), 
+                 u=fine_system['u'], v=fine_system['v'], p=fine_system['p'])
+        np.savez(os.path.join(COARSE_DIR, 'system_{}.npz'.format(count)), 
+                 u=fine_system['u'], v=fine_system['v'], p=fine_system['p'])
+
         fine_systems.append(fine_system)
         coarse_systems.append(coarse_system)
         count += 1
 
+    print('Saving large pickle files (1/2)')
     with open(os.path.join(DATA_DIR, '{}_fine_systems.pickle'.format(args.num)), 'wb') as fp:
         pickle.dump(fine_systems, fp)
 
+    print('Saving large pickle files (2/2)')
     with open(os.path.join(DATA_DIR, '{}_coarse_systems.pickle'.format(args.num)), 'wb') as fp:
         pickle.dump(coarse_systems, fp)
+
+    # also save numpy 
 
     # for each system, save image so we can get a sense of
     # how different these things are
@@ -250,7 +262,8 @@ if __name__ == "__main__":
     X, Y = np.meshgrid(x, y)
 
     print('Plotting functions')
-    for i in tqdm(range(100)):
+    n_plot = min(100, args.num)
+    for i in tqdm(range(n_plot)):
         u, v, p = fine_systems[i]['u'], fine_systems[i]['v'], fine_systems[i]['p']
         fig = plt.figure(figsize=(11, 7), dpi=100)
         plt.contourf(X, Y, p[-1], alpha=0.5, cmap=cm.viridis)
