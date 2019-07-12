@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # pip install git+https://github.com/rtqichen/torchdiffeq
-from torchdiffeq import odeint
+from torchdiffeq import odeint_adjoint as odeint
 
 # ----------------------------------------------------------------------
 # Implementation of a Deterministic RNN
@@ -167,85 +167,35 @@ def _get_conv_output_dim(I, K, P, S):
 
 class ODEDiffEq(nn.Module):
     """
-    Latent variable model with built-in ODE to predict next element 
-    in a differential equation. This model is stochastic by definition.
-    Uses an RNN internally for encoding sequential data.
-
-    Args (in Forward)
-    ----
-    x_seq: torch.Tensor (size: batch_size x T x grid_dim x grid_dim)
-           the input 
+    Supervised model with built-in ODE to predict next element 
+    in a differential equation. Turns out this is almost the same
+    except we need to handle the input/output scheme a little differently.
     """
-    def __init__(self, grid_dim, latent_dim=16, rnn_dim=64, hidden_dim=64, n_filters=32):
-        super(ODEDiffEq, self).__init__()
-        self.ode_func = LatentODEfunc(latent_dim, hidden_dim=hidden_dim)
-        self.bc_encoder = BoundaryConditionEncoder(grid_dim, rnn_dim, channels=channels,
-                                                   hidden_dim=hidden_dim, n_filters=n_filters)
+    def __init__(self, grid_dim, rnn_dim=64, hidden_dim=64, n_filters=32):
+        super(RNNDiffEq, self).__init__()
+        self.bc_encoder = BoundaryConditionEncoder(
+            grid_dim, rnn_dim, hidden_dim=hidden_dim, n_filters=n_filters)
         self.spatial_encoder = SpatialEncoder(grid_dim, hidden_dim=hidden_dim,
                                               n_filters=n_filters)
         self.spatial_decoder = SpatialDecoder(grid_dim, hidden_dim=hidden_dim,
                                               n_filters=n_filters)
         self.rnn = nn.GRU(hidden_dim, rnn_dim, batch_first=True)
-        self.hidden_to_latent = nn.Linear(hidden_dim, latent_dim * 2)
-        self.latent_dim = latent_dim
 
-    def infer(self, u_seq, v_seq, p_seq, rnn_h0=None):
-        batch_size, T, grid_dim = u_seq.size(0), u_seq.size(1), u_seq.size(2)
-        seq = torch.cat([u_seq.unsqueeze(2), v_seq.unsqueeze(2), 
-                         p_seq.unsqueeze(2)], dim=2)
+    def forward(self, t_seq, obs_seq):
+        batch_size, T, comp_dim, grid_dim = obs_seq.size()
+    
+        # pull out boundary conditions (which should be constant over time)
+        bc_x0, bc_xn = obs_seq[:, 0, :, 0, :], obs_seq[:, 0, :, -1, :]
+        bc_y0, bc_yn = obs_seq[:, 0, :, :, 0], obs_seq[:, 0, :, :, -1]
+        rnn_h0 = self.bc_encoder(bc_x0, bc_xn, bc_y0, bc_yn)
+        rnn_h0 = rnn_h0.unsqueeze(0)
 
-        if rnn_h0 is None:
-            # pull out boundary conditions (which should be constant over time)
-            bc_x0, bc_xn = seq[:, 0, :, 0, :], seq[:, 0, :, -1, :]
-            bc_y0, bc_yn = seq[:, 0, :, :, 0], seq[:, 0, :, :, -1]
-            rnn_h0 = self.bc_encoder(bc_x0, bc_xn, bc_y0, bc_yn)
-
-        seq = seq.view(batch_size * T, 3, grid_dim, grid_dim)
-        hidden_seq = self.spatial_encoder(seq)
+        obs_seq = obs_seq.view(batch_size * T, 3, grid_dim, grid_dim)
+        hidden_seq = self.spatial_encoder(obs_seq)
         hidden_seq = hidden_seq.view(batch_size, T, -1)  # batch_size, T, hidden_dim
-        _, rnn_h = self.rnn(hidden_seq, rnn_h0)
-        latent_chunk = self.hidden_to_latent(rnn_h.squeeze(0))
-        latent_mu, latent_logvar = torch.chunk(latent_chunk, 2, dim=1)
-        latent = self.reparameterize(latent_mu, latent_logvar)
-        
-        return latent, latent_mu, latent_logvar, rnn_h
+        output_seq, rnn_h = self.rnn(hidden_seq, rnn_h0)
+        output_seq = output_seq.contiguous().view(batch_size * T, -1)
+        output_seq = self.spatial_decoder(output_seq)  # batch_size x channel x grid_dim**2
+        output_seq = output_seq.view(batch_size, T, 3, grid_dim, grid_dim)
 
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5*logvar)
-        eps = torch.randn_like(std)
-        return eps.mul(std).add_(mu)
-
-    def forward(self, u_seq, v_seq, p_seq, t_seq, rnn_h0=None):
-        z0, qz0_mean, qz0_logvar, rnn_h = self.infer(u_seq, v_seq, p_seq, rnn_h0=rnn_h0)
-        # forward in time and solve ode for reconstructions
-        pred_z = odeint(self.ode_func, z0, t_seq).permute(1, 0, 2)
-        batch_size, T, dim = pred_z.size()
-        pred_z_flat = pred_z.view(batch_size * T, dim)
-        pred_x_flat = self.spatial_decoder(pred_z_flat)
-        pred_x = pred_x_flat.view(batch_size, T, 3, grid_dim, grid_dim)
-
-        next_u_seq, next_v_seq, next_p_seq = out[:, :, 0], out[:, :, 1], out[:, :, 2]
-        next_u_seq = next_u_seq.contiguous()
-        next_v_seq = next_v_seq.contiguous()
-        next_p_seq = next_p_seq.contiguous()
-
-        return next_u_seq, next_v_seq, next_p_seq, z0, qz0_mean, qz0_logvar, rnn_h
-
-
-class LatentODEfunc(nn.Module):
-    def __init__(self, latent_dim, hidden_dim=64):
-        super(LatentODEfunc, self).__init__()
-        self.elu = nn.ELU(inplace=True)
-        self.fc1 = nn.Linear(latent_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc4 = nn.Linear(hidden_dim, latent_dim)
-        self.nfe = 0
-
-    def forward(self, t, x):
-        self.nfe += 1
-        out = self.elu(self.fc1(x))
-        out = self.elu(self.fc2(out))
-        out = self.elu(self.fc3(out))
-        out = self.fc4(out)
-        return out
+        return output_seq
