@@ -8,6 +8,10 @@ MODEL_DIR = os.path.join(os.path.dirname(__file__), 'model')
 MODEL_DIR = os.path.realpath(MODEL_DIR)
 
 
+def numpy_to_torch(array, device):
+    return torch.from_numpy(array).float().to(device)
+
+
 def spatial_coarsen(X, Y, u_seq, v_seq, p_seq, agg_x=4, agg_y=4):
     """Given dynamics of a certain coarseness, we want to 
     aggregate by averaging over regions in the spatial grid.
@@ -115,6 +119,13 @@ def save_checkpoint(state, is_best, folder='./', filename='checkpoint.pth.tar'):
                         os.path.join(folder, 'model_best.pth.tar'))
 
 
+def mean_squared_error(pred, true):
+    batch_size = pred.size(0)
+    pred, true = pred.view(batch_size, -1), true.view(batch_size, -1)
+    mse = torch.mean(torch.pow(pred - true, 2), dim=1)
+    return torch.mean(mse)  # over batch size
+
+
 def log_normal_pdf(x, mean, logvar):
     # sigma = 0.5 * torch.exp(logvar)
     # return dist.Normal(mean, sigma).log_prob(x)
@@ -155,3 +166,27 @@ def load_systems(data_dir, fine=True):
     p_mat = np.stack(p_mat)
 
     return u_mat, v_mat, p_mat
+
+
+
+def neural_ode_loss(u_out, v_out, p_out, u_pred, v_pred, p_pred,
+                    z, qz_mu, qz_logvar, obs_std=0.3):
+    """Latent variable model objective using latent Neural ODE."""
+    device = u_out.device
+    noise_std_ = torch.zeros(pred_x.size()).to(device) + obs_std  # hardcoded logvar
+    noise_logvar = 2. * torch.log(noise_std_).to(device)
+
+    logp_u = log_normal_pdf(u_out, u_pred, noise_logvar)
+    logp_v = log_normal_pdf(v_out, v_pred, noise_logvar)
+    logp_p = log_normal_pdf(p_out, p_pred, noise_logvar)
+
+    logp_u = logp_u.sum(-1).sum(-1)
+    logp_v = logp_v.sum(-1).sum(-1)
+    logp_p = logp_p.sum(-1).sum(-1)
+    logp = logp_u + logp_v + logp_p  # sum 3 components together
+
+    pz_mu = torch.zeros_like(z)
+    pz_logvar = torch.zeros_like(z)
+    analytic_kl = normal_kl(qz_mu, qz_logvar, pz_mu, pz_logvar).sum(-1)
+    loss = torch.mean(-logp + analytic_kl, dim=0)
+    return loss

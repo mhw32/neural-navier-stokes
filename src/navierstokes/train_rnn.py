@@ -8,46 +8,12 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 from src.navierstokes.generate import DATA_DIR, DATA_SM_DIR
-from src.navierstokes.models import RNNDiffEq, ODEDiffEq
+from src.navierstokes.models import RNNDiffEq
 from src.navierstokes.utils import (
     spatial_coarsen, AverageMeter, save_checkpoint, 
     MODEL_DIR, dynamics_prediction_error_torch, 
-    log_normal_pdf, normal_kl, load_systems)
+    mean_squared_error, load_systems, numpy_to_torch)
 from src.navierstokes.baseline import coarsen_fine_systems
-
-
-def mean_squared_error(pred, true):
-    batch_size = pred.size(0)
-    pred, true = pred.view(batch_size, -1), true.view(batch_size, -1)
-    mse = torch.mean(torch.pow(pred - true, 2), dim=1)
-    return torch.mean(mse)  # over batch size
-
-
-def neural_ode_loss(u_out, v_out, p_out, u_pred, v_pred, p_pred,
-                    z, qz_mu, qz_logvar, obs_std=0.3):
-    """Latent variable model objective using latent Neural ODE."""
-    device = u_out.device
-    noise_std_ = torch.zeros(pred_x.size()).to(device) + obs_std  # hardcoded logvar
-    noise_logvar = 2. * torch.log(noise_std_).to(device)
-
-    logp_u = log_normal_pdf(u_out, u_pred, noise_logvar)
-    logp_v = log_normal_pdf(v_out, v_pred, noise_logvar)
-    logp_p = log_normal_pdf(p_out, p_pred, noise_logvar)
-
-    logp_u = logp_u.sum(-1).sum(-1)
-    logp_v = logp_v.sum(-1).sum(-1)
-    logp_p = logp_p.sum(-1).sum(-1)
-    logp = logp_u + logp_v + logp_p  # sum 3 components together
-
-    pz_mu = torch.zeros_like(z)
-    pz_logvar = torch.zeros_like(z)
-    analytic_kl = normal_kl(qz_mu, qz_logvar, pz_mu, pz_logvar).sum(-1)
-    loss = torch.mean(-logp + analytic_kl, dim=0)
-    return loss
-
-
-def numpy_to_torch(array, device):
-    return torch.from_numpy(array).float().to(device)
 
 
 if __name__ == "__main__":
@@ -68,6 +34,7 @@ if __name__ == "__main__":
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
+    # for reproducibility
     torch.manual_seed(1337)
     np.random.seed(1337)
 
@@ -88,9 +55,6 @@ if __name__ == "__main__":
     # set some hyperparameters
     grid_dim = u_coarsened.shape[2]
     T = u_coarsened.shape[1]
-    dt = 0.001
-    
-    timesteps = np.arange(T) * dt
 
     N = u_fine.shape[0]
     N_train = int(0.8 * N)
@@ -124,11 +88,7 @@ if __name__ == "__main__":
 
     print('Initialize model and optimizer.')
 
-    if args.model == 'rnn':
-        model = RNNDiffEq(grid_dim)
-    elif args.model == 'ode':
-        model = ODEDiffEq(grid_dim)
-
+    model = RNNDiffEq(grid_dim)
     model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -161,36 +121,18 @@ if __name__ == "__main__":
             batch_v_out = numpy_to_torch(build_batch(train_v_out, batch_I, start_T, args.batch_time), device)
             batch_p_out = numpy_to_torch(build_batch(train_p_out, batch_I, start_T, args.batch_time), device)
 
-            # we pretend each batch_t_in starts from 0
-            batch_t = numpy_to_torch(timesteps[: args.batch_time], device)
-
             optimizer.zero_grad()
             
-            if args.model == 'rnn':
-                batch_u_pred, batch_v_pred, batch_p_pred, _ = model(
-                    batch_u_in, batch_v_in, batch_p_in)
-                loss = (mean_squared_error(batch_u_pred, batch_u_out) + 
-                        mean_squared_error(batch_v_pred, batch_v_out) + 
-                        mean_squared_error(batch_p_pred, batch_p_out))
-            else:
-                batch_obs_in = torch.cat([  batch_u_in.unsqueeze(2), 
-                                            batch_v_in.unsqueeze(2), 
-                                            batch_p_in.unsqueeze(2)], dim=2)
-                batch_obs_pred = odeint(model, batch_obs_in, batch_t)
-                batch_u_pred, batch_v_pred, batch_p_pred = torch.chunk(batch_obs_pred, 3, dim=2)
-                batch_u_pred = batch_u_pred.contiguous()
-                batch_v_pred = batch_v_pred.contiguous()
-                batch_p_pred = batch_p_pred.contiguous()
-
-                loss = (mean_squared_error(batch_u_pred, batch_u_out) + 
-                        mean_squared_error(batch_v_pred, batch_v_out) + 
-                        mean_squared_error(batch_p_pred, batch_p_out))
+            batch_u_pred, batch_v_pred, batch_p_pred, _ = model(
+                batch_u_in, batch_v_in, batch_p_in)
+            loss = (mean_squared_error(batch_u_pred, batch_u_out) + 
+                    mean_squared_error(batch_v_pred, batch_v_out) + 
+                    mean_squared_error(batch_p_pred, batch_p_out))
 
             loss.backward()
             optimizer.step()
             pbar.update() 
-            pbar.set_postfix({'train loss': loss.item(),
-                              'val_loss': val_loss_item})
+            pbar.set_postfix({'train loss': loss.item(), 'val_loss': val_loss_item})
 
             if iteration % 10 == 0 and iteration > 0:
                 model.eval()
@@ -200,26 +142,10 @@ if __name__ == "__main__":
                     _val_v_in, _val_v_out = numpy_to_torch(val_v_in, device), numpy_to_torch(val_v_out, device)
                     _val_p_in, _val_p_out = numpy_to_torch(val_p_in, device), numpy_to_torch(val_p_out, device)
                     
-                    t = numpy_to_torch(timesteps, device)
-
-                    if args.model == 'rnn':
-                        val_u_pred, val_v_pred, val_p_pred, _ = model(_val_u_in, _val_v_in, _val_p_in)
-                        val_loss = (mean_squared_error(val_u_pred, _val_u_out) + 
-                                    mean_squared_error(val_v_pred, _val_v_out) + 
-                                    mean_squared_error(val_p_pred, _val_p_out))
-                    else:
-                        _val_obs_in = torch.cat([   _val_u_in.unsqueeze(2), 
-                                                    _val_v_in.unsqueeze(2), 
-                                                    _val_p_in.unsqueeze(2)], dim=2)
-                        val_obs_pred = odeint(model, _val_obs_in, t)
-                        val_u_pred, val_v_pred, val_p_pred = torch.chunk(val_obs_pred, 3, dim=2)
-                        val_u_pred = val_u_pred.contiguous()
-                        val_v_pred = val_v_pred.contiguous()
-                        val_p_pred = val_p_pred.contiguous()
-
-                        val_loss = (mean_squared_error(val_u_pred, val_u_out) + 
-                                    mean_squared_error(val_v_pred, val_v_out) + 
-                                    mean_squared_error(val_p_pred, val_p_out))
+                    val_u_pred, val_v_pred, val_p_pred, _ = model(_val_u_in, _val_v_in, _val_p_in)
+                    val_loss = (mean_squared_error(val_u_pred, _val_u_out) + 
+                                mean_squared_error(val_v_pred, _val_v_out) + 
+                                mean_squared_error(val_p_pred, _val_p_out))
 
                     val_loss_item = val_loss.item()
                     pbar.set_postfix({'train loss': loss.item(),
@@ -251,18 +177,7 @@ if __name__ == "__main__":
         
         t = numpy_to_torch(timesteps, device)
 
-        if args.model == 'rnn':
-            test_u_pred, test_v_pred, test_p_pred, _ = model(_test_u_in, _test_v_in, _test_p_in)
-        else:
-            _test_obs_in = torch.cat([  _test_u_in.unsqueeze(2), 
-                                        _test_v_in.unsqueeze(2), 
-                                        _test_p_in.unsqueeze(2)], dim=2)
-            test_obs_pred = odeint(model, _test_obs_in, t)
-            test_u_pred, test_v_pred, test_p_pred = torch.chunk(test_obs_pred, 3, dim=2)
-            test_u_pred = test_u_pred.contiguous()
-            test_v_pred = test_v_pred.contiguous()
-            test_p_pred = test_p_pred.contiguous()
-
+        test_u_pred, test_v_pred, test_p_pred, _ = model(_test_u_in, _test_v_in, _test_p_in)
         test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
             _test_u_out, _test_v_out, _test_p_out,
             test_u_pred, test_v_pred, test_p_pred, dim=2)
@@ -285,33 +200,23 @@ if __name__ == "__main__":
         _test_v_in, _test_v_out = numpy_to_torch(test_v_in, device), numpy_to_torch(test_v_out, device)
         _test_p_in, _test_p_out = numpy_to_torch(test_p_in, device), numpy_to_torch(test_p_out, device)
         
-        t = numpy_to_torch(timesteps, device)
-
         # take just the first timestep
-        u0, v0, p0 = _test_u_in[:, 0], _test_v_in[:, 0], _test_p_in[:, 0]
-        u0, v0, p0 = u0.unsqueeze(1), v0.unsqueeze(1), p0.unsqueeze(1)
-        obs0 = torch.cat([u0.unsqueeze(2), v0.unsqueeze(2), p0.unsqueeze(2)], dim=2)
+        u, v, p = _test_u_in[:, 0], _test_v_in[:, 0], _test_p_in[:, 0]
+        u, v, p = u.unsqueeze(1), v.unsqueeze(1), p.unsqueeze(1)
 
-        if args.model == 'rnn':
-            test_u_pred, test_v_pred, test_p_pred = [], [], []
+        test_u_pred, test_v_pred, test_p_pred = [], [], []
 
-            rnn_h0 = None  # this will cause us to read the initial conditions
+        rnn_h0 = None  # this will cause us to read the initial conditions
 
-            for _ in range(T - 1):
-                u, v, p, rnn_h0 = model(u, v, p, rnn_h0=rnn_h0)
-                test_u_pred.append(copy.deepcopy(u))
-                test_v_pred.append(copy.deepcopy(v))
-                test_p_pred.append(copy.deepcopy(p))
-            
-            test_u_pred = torch.cat(test_u_pred, dim=1)
-            test_v_pred = torch.cat(test_v_pred, dim=1)
-            test_p_pred = torch.cat(test_p_pred, dim=1)
-        else:
-            test_obs_pred = odeint(model, obs0, t)
-            test_u_pred, test_v_pred, test_p_pred = torch.chunk(test_obs_pred, 3, dim=2)
-            test_u_pred = test_u_pred.contiguous()
-            test_v_pred = test_v_pred.contiguous()
-            test_p_pred = test_p_pred.contiguous()
+        for _ in range(T - 1):
+            u, v, p, rnn_h0 = model(u, v, p, rnn_h0=rnn_h0)
+            test_u_pred.append(copy.deepcopy(u))
+            test_v_pred.append(copy.deepcopy(v))
+            test_p_pred.append(copy.deepcopy(p))
+        
+        test_u_pred = torch.cat(test_u_pred, dim=1)
+        test_v_pred = torch.cat(test_v_pred, dim=1)
+        test_p_pred = torch.cat(test_p_pred, dim=1)
 
         test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
             _test_u_out, _test_v_out, _test_p_out,
@@ -324,55 +229,49 @@ if __name__ == "__main__":
         np.savez(os.path.join(model_dir, 'test_error_no_teacher_forcing.npz'),
                  u_mse=test_u_mse, v_mse=test_v_mse, p_mse=test_p_mse)
 
-    if args.model == 'rnn':
-        # this is only applicable for the RNN model.
+    print('Once more into the breach')
+    checkpoint = torch.load(os.path.join(model_dir, 'model_best.pth.tar'))
+    model.load_state_dict(checkpoint['state_dict'])
+    model = model.eval()
+
+    with torch.no_grad():
+        print('Applying model to test set (20step teacher forcing)')
+        _test_u_in, _test_u_out = numpy_to_torch(test_u_in, device), numpy_to_torch(test_u_out, device)
+        _test_v_in, _test_v_out = numpy_to_torch(test_v_in, device), numpy_to_torch(test_v_out, device)
+        _test_p_in, _test_p_out = numpy_to_torch(test_p_in, device), numpy_to_torch(test_p_out, device)
+
+        #  we give it 20 timesteps
+        head_start = 20
+
+        test_u_pred, test_v_pred, test_p_pred, rnn_h0 = model(
+            _test_u_in[:, :head_start], _test_v_in[:, :head_start], 
+            _test_p_in[:, :head_start])
+
+        # now no more teacher forcing
+        test_u_pred, test_v_pred, test_p_pred = [], [], []
+
+        # take just the first step
+        u, v, p = _test_u_in[:, head_start], _test_v_in[:, head_start], _test_p_in[:, head_start]
+        u, v, p = u.unsqueeze(1), v.unsqueeze(1), p.unsqueeze(1)
+
+        for _ in range(T - 1 - head_start):
+            u, v, p, rnn_h0 = model(u, v, p, rnn_h0=rnn_h0)
+            
+            test_u_pred.append(copy.deepcopy(u))
+            test_v_pred.append(copy.deepcopy(v))
+            test_p_pred.append(copy.deepcopy(p))
         
-        print('Once more into the breach')
-        checkpoint = torch.load(os.path.join(model_dir, 'model_best.pth.tar'))
-        model.load_state_dict(checkpoint['state_dict'])
-        model = model.eval()
+        test_u_pred = torch.cat(test_u_pred, dim=1)
+        test_v_pred = torch.cat(test_v_pred, dim=1)
+        test_p_pred = torch.cat(test_p_pred, dim=1)
 
-        with torch.no_grad():
-            print('Applying model to test set (20step teacher forcing)')
-            _test_u_in, _test_u_out = numpy_to_torch(test_u_in, device), numpy_to_torch(test_u_out, device)
-            _test_v_in, _test_v_out = numpy_to_torch(test_v_in, device), numpy_to_torch(test_v_out, device)
-            _test_p_in, _test_p_out = numpy_to_torch(test_p_in, device), numpy_to_torch(test_p_out, device)
-            t = numpy_to_torch(test_t_in, device)
+        test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
+            _test_u_out[:, head_start:], _test_v_out[:, head_start:], _test_p_out[:, head_start:],
+            test_u_pred, test_v_pred, test_p_pred, dim=2)
+        
+        test_u_mse = test_u_mse.cpu().numpy()
+        test_v_mse = test_v_mse.cpu().numpy()
+        test_p_mse = test_p_mse.cpu().numpy()
 
-            #  we give it 20 timesteps
-            head_start = 20
-
-            test_u_pred, test_v_pred, test_p_pred, rnn_h0 = model(
-                _test_u_in[:, :head_start], _test_v_in[:, :head_start], 
-                _test_p_in[:, :head_start])
-
-            # now no more teacher forcing
-            test_u_pred, test_v_pred, test_p_pred = [], [], []
-
-            # take just the first step
-            u, v, p = _test_u_in[:, head_start], _test_v_in[:, head_start], _test_p_in[:, head_start]
-            u = u.unsqueeze(1)
-            v = v.unsqueeze(1)
-            p = p.unsqueeze(1)
-
-            for _ in range(T - 1 - head_start):
-                u, v, p, rnn_h0 = model(u, v, p, rnn_h0=rnn_h0)
-                
-                test_u_pred.append(copy.deepcopy(u))
-                test_v_pred.append(copy.deepcopy(v))
-                test_p_pred.append(copy.deepcopy(p))
-            
-            test_u_pred = torch.cat(test_u_pred, dim=1)
-            test_v_pred = torch.cat(test_v_pred, dim=1)
-            test_p_pred = torch.cat(test_p_pred, dim=1)
-
-            test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
-                _test_u_out[:, head_start:], _test_v_out[:, head_start:], _test_p_out[:, head_start:],
-                test_u_pred, test_v_pred, test_p_pred, dim=2)
-            
-            test_u_mse = test_u_mse.cpu().numpy()
-            test_v_mse = test_v_mse.cpu().numpy()
-            test_p_mse = test_p_mse.cpu().numpy()
-
-            np.savez(os.path.join(model_dir, 'test_error_20steps_teacher_forcing.npz'),
-                    u_mse=test_u_mse, v_mse=test_v_mse, p_mse=test_p_mse)
+        np.savez(os.path.join(model_dir, 'test_error_20steps_teacher_forcing.npz'),
+                u_mse=test_u_mse, v_mse=test_v_mse, p_mse=test_p_mse)
