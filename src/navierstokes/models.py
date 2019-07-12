@@ -171,31 +171,31 @@ class ODEDiffEq(nn.Module):
     in a differential equation. Turns out this is almost the same
     except we need to handle the input/output scheme a little differently.
     """
-    def __init__(self, grid_dim, rnn_dim=64, hidden_dim=64, n_filters=32):
+    def __init__(self, grid_dim, hidden_dim=64, n_filters=32):
         super(RNNDiffEq, self).__init__()
         self.bc_encoder = BoundaryConditionEncoder(
-            grid_dim, rnn_dim, hidden_dim=hidden_dim, n_filters=n_filters)
+            grid_dim, hidden_dim, hidden_dim=hidden_dim, n_filters=n_filters)
         self.spatial_encoder = SpatialEncoder(grid_dim, hidden_dim=hidden_dim,
                                               n_filters=n_filters)
         self.spatial_decoder = SpatialDecoder(grid_dim, hidden_dim=hidden_dim,
                                               n_filters=n_filters)
-        self.rnn = nn.GRU(hidden_dim, rnn_dim, batch_first=True)
+        self.combiner = nn.Sequential(
+            nn.Linear(hidden_dim * 2, hidden_dim * 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim * 2, hidden_dim))
 
-    def forward(self, t_seq, obs_seq):
-        batch_size, T, comp_dim, grid_dim = obs_seq.size()
-    
-        # pull out boundary conditions (which should be constant over time)
-        bc_x0, bc_xn = obs_seq[:, 0, :, 0, :], obs_seq[:, 0, :, -1, :]
-        bc_y0, bc_yn = obs_seq[:, 0, :, :, 0], obs_seq[:, 0, :, :, -1]
-        rnn_h0 = self.bc_encoder(bc_x0, bc_xn, bc_y0, bc_yn)
-        rnn_h0 = rnn_h0.unsqueeze(0)
+    def forward(self, t, obs):
+        batch_size, comp_dim, grid_dim, _ = obs.size()
 
-        obs_seq = obs_seq.view(batch_size * T, 3, grid_dim, grid_dim)
-        hidden_seq = self.spatial_encoder(obs_seq)
-        hidden_seq = hidden_seq.view(batch_size, T, -1)  # batch_size, T, hidden_dim
-        output_seq, rnn_h = self.rnn(hidden_seq, rnn_h0)
-        output_seq = output_seq.contiguous().view(batch_size * T, -1)
-        output_seq = self.spatial_decoder(output_seq)  # batch_size x channel x grid_dim**2
-        output_seq = output_seq.view(batch_size, T, 3, grid_dim, grid_dim)
+        x0_bc, xn_bc = obs[: :, 0, :], obs[:, :, -1, :]
+        y0_bc, yn_bc = obs[:, :, :, 0], seq[:, :, :, -1]
+        h_bc = self.bc_encoder(x0_bc, xn_bc, y0_bc, yn_bc)
 
-        return output_seq
+        h_obs = self.spatial_encoder(obs)
+        hidden = torch.cat((h_bc, h_obs), dim=1)
+        hidden = self.combiner(hidden)
+
+        out = self.spatial_decoder(hidden)  # batch_size x channel x grid_dim**2
+        out = out.view(batch_size, 3, grid_dim, grid_dim)
+
+        return out
