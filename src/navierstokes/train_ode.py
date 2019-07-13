@@ -89,6 +89,8 @@ if __name__ == "__main__":
     val_loss_item = np.inf
 
     if not args.test_only:
+        store_val_loss = np.zeros(args.epochs // 10 - 1) 
+
         pbar = tqdm(total=args.epochs)
         for iteration in range(args.epochs):
             model.train()
@@ -152,6 +154,8 @@ if __name__ == "__main__":
                     pbar.set_postfix({'train loss': loss.item(),
                                       'val_loss': val_loss_item}) 
 
+                    store_val_loss[iteration // 10 - 1] = val_loss_item
+
                     if val_loss.item() < best_loss:
                         best_loss = val_loss.item()
                         is_best = True
@@ -159,7 +163,9 @@ if __name__ == "__main__":
                     save_checkpoint({
                         'state_dict': model.state_dict(),
                         'val_loss': val_loss.item(),
-                    }, is_best, model_dir)    
+                    }, is_best, model_dir)
+                    
+                    np.save(os.path.join(model_dir, 'val_loss.npy'), store_val_loss)
 
         pbar.close()
 
