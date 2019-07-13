@@ -206,7 +206,7 @@ class ODEDiffEqElement(nn.Module):
         super(ODEDiffEqElement, self).__init__()
         self.i, self.j = i, j
         self.net = nn.Sequential(
-            nn.Linear(3 + hidden_dim, hidden_dim),
+            nn.Linear(3, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim*2),
             nn.ReLU(),
@@ -214,6 +214,5 @@ class ODEDiffEqElement(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_dim, 3))
 
-    def forward(self, t, obs_ij, h_bc):
-        obs = torch.cat([obs_ij, h_bc], dim=1)
-        return self.net(obs)
+    def forward(self, t, obs_ij):
+        return self.net(obs_ij)

@@ -15,6 +15,7 @@ import numpy as np
 from tqdm import tqdm
 
 import torch
+import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from src.navierstokes.generate import DATA_DIR, DATA_SM_DIR
