@@ -20,7 +20,6 @@ from torchdiffeq import odeint_adjoint as odeint
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, default='rnn', help='rnn|ode')
     parser.add_argument('--batch-time', type=int, default=50, 
                         help='batch of timesteps [default: 50]')
     parser.add_argument('--batch-size', type=int, default=100,
@@ -39,7 +38,7 @@ if __name__ == "__main__":
     torch.manual_seed(1337)
     np.random.seed(1337)
 
-    model_dir = os.path.join(MODEL_DIR, args.model)
+    model_dir = os.path.join(MODEL_DIR, 'ode')
     os.makedirs(model_dir, exist_ok=True)
 
     print('loading fine systems')
