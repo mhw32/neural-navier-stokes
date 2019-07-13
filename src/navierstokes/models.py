@@ -199,3 +199,21 @@ class ODEDiffEq(nn.Module):
         out = self.spatial_decoder(hidden)  # batch_size x channel x grid_dim**2
         out = out.view(batch_size, 3, self.grid_dim, self.grid_dim)
         return out
+
+
+class ODEDiffEqElement(nn.Module):
+    def __init__(self, i, j, grid_dim, hidden_dim=64, n_filters=32):
+        super(ODEDiffEqElement, self).__init__()
+        self.i, self.j = i, j
+        self.net = nn.Sequential(
+            nn.Linear(3 + hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim*2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim*2, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 3))
+
+    def forward(self, t, obs_ij, h_bc):
+        obs = torch.cat([obs_ij, h_bc], dim=1)
+        return self.net(obs)
