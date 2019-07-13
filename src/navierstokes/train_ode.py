@@ -14,10 +14,7 @@ from src.navierstokes.utils import (
     MODEL_DIR, dynamics_prediction_error_torch, 
     mean_squared_error, load_systems, numpy_to_torch)
 from src.navierstokes.baseline import coarsen_fine_systems
-
-
-def numpy_to_torch(array, device):
-    return torch.from_numpy(array).float().to(device)
+from torchdiffeq import odeint_adjoint as odeint
 
 
 if __name__ == "__main__":
@@ -116,15 +113,14 @@ if __name__ == "__main__":
             batch_obs = torch.cat([ batch_u.unsqueeze(2), batch_v.unsqueeze(2), 
                                     batch_p.unsqueeze(2)], dim=2)
             # batch_obs (shape: T x B x 3 x C x H x W)
-            batch_obs = batch_obs.permute(1, 0, 2, 3, 4, 5).contiguous()
+            batch_obs = batch_obs.permute(1, 0, 2, 3, 4).contiguous()
             batch_obs0 = batch_obs[0].clone()  # shape: B x 3 x C x H x W
-
+            
             # we pretend each batch_t starts from 0
             batch_t = numpy_to_torch(timesteps[:args.batch_time], device)
 
             optimizer.zero_grad()
-            
-            # batch_obs (shape: T x B x 3 x C x H x W)
+           
             batch_obs_pred = odeint(model, batch_obs0, batch_t)
             loss = torch.mean(torch.pow(batch_obs_pred - batch_obs, 2))
 
@@ -145,7 +141,7 @@ if __name__ == "__main__":
                     val_obs = torch.cat([val_u.unsqueeze(2), val_v.unsqueeze(2), 
                                          val_p.unsqueeze(2)], dim=2)
                     # val_obs (shape: T x N x 3 x C x H x W)
-                    val_obs = val_obs.permute(1, 0, 2, 3, 4, 5).contiguous()
+                    val_obs = val_obs.permute(1, 0, 2, 3, 4).contiguous()
                     val_obs0 = val_obs[0].clone()  # shape: N x 3 x C x H x W
                     t = numpy_to_torch(timesteps, device)
 

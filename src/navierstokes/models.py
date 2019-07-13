@@ -172,7 +172,7 @@ class ODEDiffEq(nn.Module):
     except we need to handle the input/output scheme a little differently.
     """
     def __init__(self, grid_dim, hidden_dim=64, n_filters=32):
-        super(RNNDiffEq, self).__init__()
+        super(ODEDiffEq, self).__init__()
         self.bc_encoder = BoundaryConditionEncoder(
             grid_dim, hidden_dim, hidden_dim=hidden_dim, n_filters=n_filters)
         self.spatial_encoder = SpatialEncoder(grid_dim, hidden_dim=hidden_dim,
@@ -183,12 +183,13 @@ class ODEDiffEq(nn.Module):
             nn.Linear(hidden_dim * 2, hidden_dim * 2),
             nn.ReLU(),
             nn.Linear(hidden_dim * 2, hidden_dim))
+        self.grid_dim = grid_dim
 
     def forward(self, t, obs):
-        batch_size, comp_dim, grid_dim, _ = obs.size()
+        batch_size = obs.size(0)
 
-        x0_bc, xn_bc = obs[: :, 0, :], obs[:, :, -1, :]
-        y0_bc, yn_bc = obs[:, :, :, 0], seq[:, :, :, -1]
+        x0_bc, xn_bc = obs[:, :, 0, :], obs[:, :, -1, :]
+        y0_bc, yn_bc = obs[:, :, :, 0], obs[:, :, :, -1]
         h_bc = self.bc_encoder(x0_bc, xn_bc, y0_bc, yn_bc)
 
         h_obs = self.spatial_encoder(obs)
@@ -196,6 +197,5 @@ class ODEDiffEq(nn.Module):
         hidden = self.combiner(hidden)
 
         out = self.spatial_decoder(hidden)  # batch_size x channel x grid_dim**2
-        out = out.view(batch_size, 3, grid_dim, grid_dim)
-
+        out = out.view(batch_size, 3, self.grid_dim, self.grid_dim)
         return out
