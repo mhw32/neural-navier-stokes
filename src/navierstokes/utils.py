@@ -168,6 +168,22 @@ def load_systems(data_dir, fine=True):
     return u_mat, v_mat, p_mat
 
 
+def linear_systems(n=1000, t=200, dt=0.001, grid_dim=50):
+    """Randomly pick a intercept and slope."""
+    u_intercept = np.repeat(np.random.uniform(0, 1, size=n)[:, np.newaxis], t, axis=1)
+    v_intercept = np.repeat(np.random.uniform(0, 1, size=n)[:, np.newaxis], t, axis=1)
+    p_intercept = np.repeat(np.random.uniform(0, 1, size=n)[:, np.newaxis], t, axis=1)
+    u_slope = np.repeat(np.random.uniform(0, 1, size=n)[:, np.newaxis], t, axis=1)
+    v_slope = np.repeat(np.random.uniform(0, 1, size=n)[:, np.newaxis], t, axis=1)
+    p_slope = np.repeat(np.random.uniform(0, 1, size=n)[:, np.newaxis], t, axis=1)
+
+    timesteps = np.repeat(np.arange(t)[np.newaxis, :], n, axis=0) * dt
+    u_mat = timesteps * u_slope + u_intercept
+    v_mat = timesteps * v_slope + v_intercept
+    p_mat = timesteps * p_slope + p_intercept
+
+    return u_mat, v_mat, p_mat
+
 
 def neural_ode_loss(u_out, v_out, p_out, u_pred, v_pred, p_pred,
                     z, qz_mu, qz_logvar, obs_std=0.3):
