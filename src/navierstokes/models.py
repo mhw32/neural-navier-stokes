@@ -207,12 +207,15 @@ class ODEDiffEqElement(nn.Module):
         self.i, self.j = i, j
         self.net = nn.Sequential(
             nn.Linear(3, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim*2),
-            nn.ReLU(),
-            nn.Linear(hidden_dim*2, hidden_dim),
-            nn.ReLU(),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Tanh(),
             nn.Linear(hidden_dim, 3))
+
+        for m in self.net.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, mean=0, std=0.1)
+                nn.init.constant_(m.bias, val=0) 
 
     def forward(self, t, obs_ij):
         return self.net(obs_ij)
