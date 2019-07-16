@@ -24,7 +24,7 @@ else:
     DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 
 
-def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c, 
+def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c, nu, 
                            constant_derivatives=False):
     dx, dy = 2. / (nx - 1), 2. / (ny - 1)
 
@@ -90,7 +90,7 @@ def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,
               'u_bc': u_bc, 'v_bc': v_bc, 'p_bc': p_bc,
               'nt': nt, 'nit': nit, 'nx': nx, 'ny': ny,
               'dt': dt, 'rho': rho, 'nu': nu, 'F': F, 
-              'c': c, 'constant_derivative': constant_derivative}
+              'c': c, 'nu': nu, 'constant_derivative': constant_derivative}
     
     return config
 
@@ -267,7 +267,7 @@ if __name__ == "__main__":
     count = 0
     fine_systems, coarse_systems = [], []
     while count < args.num:
-        fine_config = generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,
+        fine_config = generate_random_config(nt, nit, nx, ny, dt, rho, nu, c, nu, 
                                              constant_derivative=constant_derivative)
         print('Generating **fine** {} system: ({}/{})'.format(args.system, count + 1, args.num))
         fine_system = generate_system(args.system, fine_config)  # make fine system!
