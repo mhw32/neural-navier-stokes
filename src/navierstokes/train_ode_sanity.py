@@ -83,8 +83,8 @@ if __name__ == "__main__":
 
     print('Initialize model and optimizer.')
 
-    module = ODEDiffEqElement(args.x_coord, args.y_coord, grid_dim,
-                              hidden_dim=64, n_filters=32)
+    model = ODEDiffEqElement(args.x_coord, args.y_coord, grid_dim,
+                             hidden_dim=64, n_filters=32)
     model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
