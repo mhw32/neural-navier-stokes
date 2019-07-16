@@ -48,9 +48,9 @@ if __name__ == "__main__":
 
     print('loading fine systems')
     if args.cubic:
-        u_fine, v_fine, p_fine = cubic_systems(dt=0.1)
+        u_fine, v_fine, p_fine = cubic_systems(dt=0.01)
     else:
-        u_fine, v_fine, p_fine = linear_systems(dt=0.1)
+        u_fine, v_fine, p_fine = linear_systems(dt=0.01)
 
     N = u_fine.shape[0]
     nx, ny = u_fine.shape[2], u_fine.shape[3]
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     # set some hyperparameters
     grid_dim = u_coarsened.shape[2]
     T = u_coarsened.shape[1]
-    dt = 0.1
+    dt = 0.01
     timesteps = np.arange(T) * dt
 
     N = u_fine.shape[0]
