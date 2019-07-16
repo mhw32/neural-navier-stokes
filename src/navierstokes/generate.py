@@ -9,6 +9,10 @@ import pickle
 import numpy as np
 from tqdm import tqdm
 from src.navierstokes.flow import (
+    LinearConvectionSystem,
+    NonlinearConvectionSystem,
+    DiffusionSystem,
+    BurgersSystem,
     NavierStokesSystem,
     MomentumBoundaryCondition,
     PressureBoundaryCondition,
@@ -16,18 +20,12 @@ from src.navierstokes.flow import (
 
 if 'ccncluster' in os.uname()[1]:
     DATA_DIR = '/mnt/fs5/wumike/navierstokes/data'
-    DATA_SM_DIR = '/mnt/fs5/wumike/navierstokes/data_small'
 else:
     DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
-    DATA_SM_DIR = os.path.join(os.path.dirname(__file__), 'data_small')
-
-IMAGE_DIR = os.path.join(DATA_DIR, 'images')
-NUMPY_DIR = os.path.join(DATA_DIR, 'numpy')
-FINE_DIR = os.path.join(NUMPY_DIR, 'fine')
-COARSE_DIR = os.path.join(NUMPY_DIR, 'coarse')
 
 
-def generate_random_config(nt, nit, nx, ny, dt, rho, nu):
+def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c, 
+                           constant_derivatives=False):
     dx, dy = 2. / (nx - 1), 2. / (ny - 1)
 
     # randomly pick source 
@@ -87,25 +85,47 @@ def generate_random_config(nt, nit, nx, ny, dt, rho, nu):
     v_bc = v_bc_x0_lst + v_bc_xn_lst + v_bc_y0_lst + v_bc_yn_lst
     p_bc = p_bc_x0_lst + p_bc_xn_lst + p_bc_y0_lst + p_bc_yn_lst
 
+    # this config should work with all systems
     config = {'u_ic': u_ic, 'v_ic': v_ic, 'p_ic': p_ic,
               'u_bc': u_bc, 'v_bc': v_bc, 'p_bc': p_bc,
               'nt': nt, 'nit': nit, 'nx': nx, 'ny': ny,
-              'dt': dt, 'rho': rho, 'nu': nu, 'F': F}
+              'dt': dt, 'rho': rho, 'nu': nu, 'F': F, 
+              'c': c, 'constant_derivative': constant_derivative}
     
     return config
 
 
-def generate_system(config):
-    system = NavierStokesSystem(config['u_ic'], config['v_ic'], config['p_ic'], 
-                                config['u_bc'], config['v_bc'], config['p_bc'],
-                                nt=config['nt'], nit=config['nit'], 
-                                nx=config['nx'], ny=config['ny'], dt=config['dt'],
-                                rho=config['rho'], nu=config['nu'], F=config['F'])
-    u, v, p = system.simulate()
-    return {'u': u, 'v': v, 'p': p, 'config': config}
+def generate_system(system, config):
+    if system == 'linear_convection':
+        system = LinearConvectionSystem(config['u_ic'], config['u_bc'], 
+                                        nt=config['nt'], nit=config['nit'], 
+                                        nx=config['nx'], ny=config['ny'], 
+                                        dt=config['dt'], c=config['c'])
+        u = system.simulate()
+        return {'u': u, 'config': config}
+    elif system == 'nonlinear_convection':
+        system = NonlinearConvectionSystem(config['u_ic'], config['v_ic'],
+                                           config['u_bc'], config['v_bc'],
+                                           nt=config['nt'], nit=config['nit'], 
+                                           nx=config['nx'], ny=config['ny'], 
+                                           dt=config['dt'])
+        u = system.simulate()
+    elif system == 'diffusion':
+        raise NotImplementedError
+    elif system == 'burgers':
+        raise NotImplementedError
+    elif system == 'navier_stokes':
+        system = NavierStokesSystem(config['u_ic'], config['v_ic'], config['p_ic'], 
+                                    config['u_bc'], config['v_bc'], config['p_bc'],
+                                    nt=config['nt'], nit=config['nit'], 
+                                    nx=config['nx'], ny=config['ny'], dt=config['dt'],
+                                    rho=config['rho'], nu=config['nu'], F=config['F'])
+        u, v, p = system.simulate()
+        return {'u': u, 'v': v, 'p': p, 'config': config}
 
 
 def fine_to_coarse_config(fine_config):
+    # NOTE: again keep this as general as possible!
     # make a coarse config from the fine config
     coarse_config = copy.deepcopy(fine_config)
     coarse_config['nx'] = 10; coarse_config['ny'] = 10  # hardcoded!
@@ -120,6 +140,7 @@ def fine_to_coarse_config(fine_config):
     v_bc = copy.deepcopy(coarse_config['v_bc'])
     p_bc = copy.deepcopy(coarse_config['p_bc'])
 
+    # split into 4 sets for the 4 sides of a square
     u_bc_x0, u_bc_xn, u_bc_y0, u_bc_yn = u_bc[:50], u_bc[50:100], u_bc[100:150], u_bc[150:]
     v_bc_x0, v_bc_xn, v_bc_y0, v_bc_yn = v_bc[:50], v_bc[50:100], v_bc[100:150], v_bc[150:]
     p_bc_x0, p_bc_xn, p_bc_y0, p_bc_yn = p_bc[:50], p_bc[50:100], p_bc[100:150], p_bc[150:]
@@ -193,6 +214,25 @@ def fine_to_coarse_config(fine_config):
     return coarse_config
 
 
+def check_system(system):
+    pass_check = True
+    if 'u' in system:
+        if np.sum(np.isnan(system['u'])) > 0:
+            pass_check = False
+    if 'v' in system:
+        if np.sum(np.isnan(system['v'])) > 0:
+            pass_check = False
+    if 'p' in system:
+        if np.sum(np.isnan(system['p'])) > 0:
+            pass_check = False
+    
+    return pass_check
+
+
+def save_system(save_path, system):
+    np.savez(save_path, **system)
+
+
 if __name__ == "__main__":
     import matplotlib
     matplotlib.use('Agg')
@@ -201,79 +241,63 @@ if __name__ == "__main__":
 
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument('--system', type=str, default='navierstokes',
+                        help='linear|nonlinear|linear_convection|nonlinear_convection|diffusion|burgers|navier_stokes')
     parser.add_argument('--num', type=int, default=100,
                         help='number of systems to generate (default: 100)')
     args = parser.parse_args()
 
     # these are fixed hyperparameters
     nt, nit, nx, ny = 200, 50, 50, 50
-    dt, rho, nu = 0.001, 1, 0.1
+    dt, rho, nu, c = 0.001, 1, 0.1, 1
 
-    os.makedirs(DATA_DIR, exist_ok=True)
-    os.makedirs(IMAGE_DIR, exist_ok=True)
-    os.makedirs(FINE_DIR, exist_ok=True)
-    os.makedirs(COARSE_DIR, exist_ok=True)
+    data_dir = os.path.join(DATA_DIR, args.system)
+    image_dir = os.path.join(data_dir, 'images')
+    numpy_dir = os.path.join(data_dir, 'numpy')
+    fine_dir = os.path.join(numpy_dir, 'fine')
+    coarse_dir = os.path.join(numpy_dir, 'coarse')
+
+    os.makedirs(data_dir, exist_ok=True)
+    os.makedirs(image_dir, exist_ok=True)
+    os.makedirs(fine_dir, exist_ok=True)
+    os.makedirs(coarse_dir, exist_ok=True)
+
+    constant_derivative = (True if args.system in ['linear', 'nonlinear'] else False)
 
     count = 0
     fine_systems, coarse_systems = [], []
     while count < args.num:
-        fine_config = generate_random_config(nt, nit, nx, ny, dt, rho, nu)
-        print('Generating **fine** navier-stokes system: ({}/{})'.format(count + 1, args.num))
-        fine_system = generate_system(fine_config)  # make fine system!
+        fine_config = generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,
+                                             constant_derivative=constant_derivative)
+        print('Generating **fine** {} system: ({}/{})'.format(args.system, count + 1, args.num))
+        fine_system = generate_system(args.system, fine_config)  # make fine system!
         
         # lots of logic to preserve random choices but subsample
         coarse_config = fine_to_coarse_config(fine_config)
-        print('Generating **coarse** navier-stokes system: ({}/{})'.format(count + 1, args.num))
-        coarse_system = generate_system(coarse_config)
+        print('Generating **coarse** {} system: ({}/{})'.format(args.system, count + 1, args.num))
+        coarse_system = generate_system(args.system, coarse_config)
 
         # randomly initializing boundary conditions sometimes gets us into
         # trouble, so ignore when that happens.
-        if (np.sum(np.isnan(fine_system['u'])) > 0 or 
-            np.sum(np.isnan(fine_system['v'])) > 0 or 
-            np.sum(np.isnan(fine_system['p'])) > 0):
+        if not check_system(fine_system):
             continue
 
-        if (np.sum(np.isnan(coarse_system['u'])) > 0 or 
-            np.sum(np.isnan(coarse_system['v'])) > 0 or 
-            np.sum(np.isnan(coarse_system['p'])) > 0):
+        if not check_system(coarse_system):
             continue
 
-        np.savez(os.path.join(FINE_DIR, 'system_{}.npz'.format(count)), 
-                 u=fine_system['u'], v=fine_system['v'], p=fine_system['p'])
-        np.savez(os.path.join(COARSE_DIR, 'system_{}.npz'.format(count)), 
-                 u=coarse_system['u'], v=coarse_system['v'], p=coarse_system['p'])
+        save_system(os.path.join(fine_dir, 'system_{}.npz'.format(count)),
+                    fine_system)
+        save_system(os.path.join(coarse_dir, 'system_{}.npz'.format(count)),
+                    coarse_system)
 
         fine_systems.append(fine_system)
         coarse_systems.append(coarse_system)
         count += 1
 
     print('Saving large pickle files (1/2)')
-    with open(os.path.join(DATA_DIR, '{}_fine_systems.pickle'.format(args.num)), 'wb') as fp:
+    with open(os.path.join(data_dir, '{}_fine_systems.pickle'.format(args.num)), 'wb') as fp:
         pickle.dump(fine_systems, fp)
 
     print('Saving large pickle files (2/2)')
-    with open(os.path.join(DATA_DIR, '{}_coarse_systems.pickle'.format(args.num)), 'wb') as fp:
+    with open(os.path.join(data_dir, '{}_coarse_systems.pickle'.format(args.num)), 'wb') as fp:
         pickle.dump(coarse_systems, fp)
-
-    # also save numpy 
-
-    # for each system, save image so we can get a sense of
-    # how different these things are
-
-    x = np.linspace(0, 2, nx)
-    y = np.linspace(0, 2, ny)
-    X, Y = np.meshgrid(x, y)
-
-    print('Plotting functions')
-    n_plot = min(100, args.num)
-    for i in tqdm(range(n_plot)):
-        u, v, p = fine_systems[i]['u'], fine_systems[i]['v'], fine_systems[i]['p']
-        fig = plt.figure(figsize=(11, 7), dpi=100)
-        plt.contourf(X, Y, p[-1], alpha=0.5, cmap=cm.viridis)
-        plt.colorbar()
-        plt.contour(X, Y, p[-1], cmap=cm.viridis)
-        plt.streamplot(X, Y, u[-1], v[-1])
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.savefig(os.path.join(IMAGE_DIR, 'streamplot_system_{}.pdf'.format(i)))
-        plt.close()

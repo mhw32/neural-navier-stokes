@@ -149,7 +149,117 @@ class PressureBoundaryCondition(BoundaryCondition):
     pass
 
 
-class NavierStokesSystem(object):
+
+class BaseDynamicalSystem(object):
+    """Class for future dynamical models to inherit from."""
+    
+    def step(self):
+        raise NotImplementedError
+    
+    def simulate(self):
+        raise NotImplementedError
+
+
+class LinearConvectionSystem(BaseDynamicalSystem):
+    def __init__(self, u_ic, u_bc, nt=200, nit=50, nx=50, ny=50, dt=0.001, 
+                 c=1, constant_derivative=False):
+        super().__init__()
+        self.u_ic = u_ic.copy()
+        self.u_bc = u_bc
+        self.nt, self.dt, self.nx, self.ny = nt, dt, nx, ny
+        self.dx, self.dy = 2. / (self.nx - 1), 2. / (self.ny - 1)
+        self.nit, self.c = nit, c
+        self.constant_derivative = constant_derivative
+
+    def step(self, u):
+        un = u.copy()
+
+        dt, dx, dy = self.dt, self.dx, self.dy
+        c = self.c
+
+        if self.constant_derivative:
+            u[1:, 1:] = un[1:, 1:] - c * dt
+        else:
+            u[1:, 1:] = (un[1:, 1:] - (c * dt / dx * (un[1:, 1:] - un[1:, :-1])) -
+                                      (c * dt / dy * (un[1:, 1:] - un[:-1, 1:])))
+
+        # set boundary conditions
+        for bc in self.u_bc:
+            u = bc.apply(u)
+
+        return u
+
+    def simulate(self):
+        u_list = []
+        u = self.u_ic
+
+        for n in tqdm(range(self.nt)):
+            u = self.step(u)
+            u_list.append(u.copy())
+
+        u_list = np.stack(u_list)
+        return u_list
+
+
+class NonlinearConvectionSystem(BaseDynamicalSystem):
+    def __init__(self, u_ic, v_ic, u_bc, v_bc, nt=200, nit=50, nx=50, ny=50, dt=0.001, 
+                 constant_derivative=False):
+        super().__init__()
+        self.u_ic, self.v_ic = u_ic.copy(), v_ic.copy()
+        self.u_bc, self.v_bc = u_bc, v_bc
+        self.nt, self.dt, self.nx, self.ny = nt, dt, nx, ny
+        self.dx, self.dy = 2. / (self.nx - 1), 2. / (self.ny - 1)
+        self.nit = nit
+        self.constant_derivative = constant_derivative
+
+    def step(self, u, v):
+        un, vn = u.copy(), v.copy()
+
+        dt, dx, dy = self.dt, self.dx, self.dy
+
+        if self.constant_derivative:
+            u[1:, 1:] = un[1:, 1:] - un[1:, 1:] * dt - vn[1:, 1:] * dt
+            v[1:, 1:] = vn[1:, 1:] - vn[1:, 1:] * dt - un[1:, 1:] * dt
+        else:
+            u[1:, 1:] = (un[1:, 1:] - 
+                         (un[1:, 1:] * dt / dx * (un[1:, 1:] - un[1:, :-1])) -
+                          vn[1:, 1:] * dt / dy * (un[1:, 1:] - un[:-1, 1:]))
+            v[1:, 1:] = (vn[1:, 1:] -
+                         (un[1:, 1:] * dt / dx * (vn[1:, 1:] - vn[1:, :-1])) -
+                          vn[1:, 1:] * dt / dy * (vn[1:, 1:] - vn[:-1, 1:]))
+
+        # set boundary conditions
+        for bc in self.u_bc:
+            u = bc.apply(u)
+
+        for bc in self.v_bc:
+            v = bc.apply(v)
+
+        return u, v
+
+    def simulate(self):
+        u_list, v_list = [], []
+        u, v = self.u_ic, self.v_ic
+
+        for n in tqdm(range(self.nt)):
+            u, v = self.step(u, v)
+            u_list.append(u.copy())
+            v_list.append(v.copy())
+
+        u_list = np.stack(u_list)
+        v_list = np.stack(v_list)
+        return u_list, v_list
+
+
+class DiffusionSystem(BaseDynamicalSystem):
+    pass
+
+
+class BurgersSystem(BaseDynamicalSystem):
+    pass
+
+
+class NavierStokesSystem(BaseDynamicalSystem):
     """Wrapper class around a Navier Stokes system.
     
     Args:
