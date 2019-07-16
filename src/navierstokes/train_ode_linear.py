@@ -123,10 +123,8 @@ if __name__ == "__main__":
 
             optimizer.zero_grad()
 
-            batch_obs0_ij = batch_obs0[:, :, args.x_coord, args.y_coord]
-            batch_obs_ij = batch_obs[:, :, :, args.x_coord, args.y_coord]
-            batch_obs_pred_ij = odeint(model, batch_obs0_ij, batch_t)
-            loss = torch.mean(torch.pow(batch_obs_pred_ij - batch_obs_ij, 2))
+            batch_obs_pred = odeint(model, batch_obs0, batch_t)
+            loss = torch.mean(torch.pow(batch_obs_pred - batch_obs, 2))
             
             loss.backward()
             optimizer.step()
@@ -149,10 +147,8 @@ if __name__ == "__main__":
                     val_obs0 = val_obs[0].clone()  # shape: N x 3 x C x H x W
                     t = numpy_to_torch(timesteps, device)
 
-                    val_obs0_ij = val_obs0[:, :, args.x_coord, args.y_coord]
-                    val_obs_ij = val_obs[:, :, :, args.x_coord, args.y_coord]        
-                    val_obs_pred_ij = odeint(model, val_obs0_ij, t)
-                    val_loss = torch.mean(torch.pow(val_obs_pred_ij -  val_obs_ij, 2))
+                    val_obs_pred = odeint(model, val_obs0, t)
+                    val_loss = torch.mean(torch.pow(val_obs_pred - val_obs, 2))
 
                     val_loss_item = val_loss.item()
                     pbar.set_postfix({'train loss': loss.item(),
