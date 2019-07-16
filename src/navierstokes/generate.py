@@ -111,8 +111,8 @@ def generate_system(system, config):
                                            nx=config['nx'], ny=config['ny'], 
                                            dt=config['dt'],
                                            constant_derivative=config['constant_derivative'])
-        u = system.simulate()
-        return {'u': u, 'config': config}
+        u, v = system.simulate()
+        return {'u': u, 'v': v, 'config': config}
     elif system == 'diffusion':
         system = DiffusionSystem(config['u_ic'], config['u_bc'], 
                                  nt=config['nt'], nit=config['nit'],

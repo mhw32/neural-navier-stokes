@@ -21,7 +21,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--system', type=str, default='navier_stokes',
-                        'linear|nonlinear|linear_convection|nonlinear_convection|diffusion|burgers|navier_stokes')
+                        help='linear|nonlinear|linear_convection|nonlinear_convection|diffusion|burgers|navier_stokes')
     parser.add_argument('--batch-time', type=int, default=50, 
                         help='batch of timesteps [default: 50]')
     parser.add_argument('--batch-size', type=int, default=100,

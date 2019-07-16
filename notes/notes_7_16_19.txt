@@ -1,0 +1,1 @@
+du/dt = c   train loss=6.93e-7  val_loss=5.4e-6

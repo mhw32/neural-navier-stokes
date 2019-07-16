@@ -12,7 +12,7 @@ import pickle
 import numpy as np
 from tqdm import tqdm
 
-from src.navierstokes.generate import DATA_DIR, DATA_SM_DIR
+from src.navierstokes.generate import DATA_DIR
 from src.navierstokes.utils import (dynamics_prediction_error_numpy,
                                     spatial_coarsen, AverageMeter, load_systems)
 

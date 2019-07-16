@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from src.navierstokes.generate import DATA_DIR, DATA_SM_DIR
+from src.navierstokes.generate import DATA_DIR
 from src.navierstokes.models import ODEDiffEqElement
 from src.navierstokes.utils import (
     spatial_coarsen, AverageMeter, save_checkpoint, 
@@ -22,7 +22,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--system', type=str, default='navier_stokes',
-                        'linear|nonlinear|linear_convection|nonlinear_convection|diffusion|burgers|navier_stokes')
+                        help='linear|nonlinear|linear_convection|nonlinear_convection|diffusion|burgers|navier_stokes')
     parser.add_argument('--x-coord', type=int, default=5)
     parser.add_argument('--y-coord', type=int, default=5)
     parser.add_argument('--batch-time', type=int, default=50, 
@@ -57,6 +57,8 @@ if __name__ == "__main__":
     X_fine, Y_fine = np.meshgrid(x_fine, y_fine)
     u_coarsened, v_coarsened, p_coarsened = coarsen_fine_systems(
         X_fine, Y_fine, u_fine, v_fine, p_fine)
+
+    import pdb; pdb.set_trace()
 
     # set some hyperparameters
     grid_dim = u_coarsened.shape[2]
