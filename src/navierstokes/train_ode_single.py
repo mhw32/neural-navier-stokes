@@ -21,6 +21,8 @@ from torchdiffeq import odeint_adjoint as odeint
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument('--system', type=str, default='navier_stokes',
+                        'linear|nonlinear|linear_convection|nonlinear_convection|diffusion|burgers|navier_stokes')
     parser.add_argument('--x-coord', type=int, default=5)
     parser.add_argument('--y-coord', type=int, default=5)
     parser.add_argument('--batch-time', type=int, default=50, 

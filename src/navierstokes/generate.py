@@ -96,19 +96,21 @@ def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,
 
 
 def generate_system(system, config):
-    if system == 'linear_convection':
+    if system == 'linear_convection' or system == 'linear':
         system = LinearConvectionSystem(config['u_ic'], config['u_bc'], 
                                         nt=config['nt'], nit=config['nit'], 
                                         nx=config['nx'], ny=config['ny'], 
-                                        dt=config['dt'], c=config['c'])
+                                        dt=config['dt'], c=config['c'],
+                                        constant_derivative=config['constant_derivative'])
         u = system.simulate()
         return {'u': u, 'config': config}
-    elif system == 'nonlinear_convection':
+    elif system == 'nonlinear_convection' or system == 'nonlinear':
         system = NonlinearConvectionSystem(config['u_ic'], config['v_ic'],
                                            config['u_bc'], config['v_bc'],
                                            nt=config['nt'], nit=config['nit'], 
                                            nx=config['nx'], ny=config['ny'], 
-                                           dt=config['dt'])
+                                           dt=config['dt'],
+                                           constant_derivative=config['constant_derivative'])
         u = system.simulate()
         return {'u': u, 'config': config}
     elif system == 'diffusion':
