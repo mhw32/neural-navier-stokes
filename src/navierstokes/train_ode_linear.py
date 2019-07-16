@@ -43,7 +43,7 @@ if __name__ == "__main__":
     os.makedirs(model_dir, exist_ok=True)
 
     print('loading fine systems')
-    u_fine, v_fine, p_fine = linear_systems()
+    u_fine, v_fine, p_fine = linear_systems(dt=0.1)
 
     N = u_fine.shape[0]
     nx, ny = u_fine.shape[2], u_fine.shape[3]
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     # set some hyperparameters
     grid_dim = u_coarsened.shape[2]
     T = u_coarsened.shape[1]
-    dt = 0.001
+    dt = 0.1
     timesteps = np.arange(T) * dt
 
     N = u_fine.shape[0]

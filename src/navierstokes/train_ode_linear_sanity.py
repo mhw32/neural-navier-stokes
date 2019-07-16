@@ -13,7 +13,8 @@ from src.navierstokes.models import ODEDiffEqElement
 from src.navierstokes.utils import (
     spatial_coarsen, AverageMeter, save_checkpoint, 
     MODEL_DIR, dynamics_prediction_error_torch, 
-    mean_squared_error, linear_systems, numpy_to_torch)
+    mean_squared_error, linear_systems, 
+    cubic_systems, numpy_to_torch)
 from src.navierstokes.baseline import coarsen_fine_systems
 from torchdiffeq import odeint_adjoint as odeint
 
@@ -23,6 +24,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--x-coord', type=int, default=5)
     parser.add_argument('--y-coord', type=int, default=5)
+    parser.add_argument('--cubic', action='store_true', default=False)
     parser.add_argument('--batch-time', type=int, default=50, 
                         help='batch of timesteps [default: 50]')
     parser.add_argument('--batch-size', type=int, default=100,
@@ -45,7 +47,10 @@ if __name__ == "__main__":
     os.makedirs(model_dir, exist_ok=True)
 
     print('loading fine systems')
-    u_fine, v_fine, p_fine = linear_systems()
+    if args.cubic:
+        u_fine, v_fine, p_fine = cubic_systems(dt=0.1)
+    else:
+        u_fine, v_fine, p_fine = linear_systems(dt=0.1)
 
     N = u_fine.shape[0]
     nx, ny = u_fine.shape[2], u_fine.shape[3]
@@ -58,7 +63,7 @@ if __name__ == "__main__":
     # set some hyperparameters
     grid_dim = u_coarsened.shape[2]
     T = u_coarsened.shape[1]
-    dt = 0.001
+    dt = 0.1
     timesteps = np.arange(T) * dt
 
     N = u_fine.shape[0]
