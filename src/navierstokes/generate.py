@@ -24,8 +24,8 @@ else:
     DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 
 
-def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c, nu, 
-                           constant_derivatives=False):
+def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,  
+                           constant_derivative=False):
     dx, dy = 2. / (nx - 1), 2. / (ny - 1)
 
     # randomly pick source 
@@ -110,10 +110,22 @@ def generate_system(system, config):
                                            nx=config['nx'], ny=config['ny'], 
                                            dt=config['dt'])
         u = system.simulate()
+        return {'u': u, 'config': config}
     elif system == 'diffusion':
-        raise NotImplementedError
+        system = DiffusionSystem(config['u_ic'], config['u_bc'], 
+                                 nt=config['nt'], nit=config['nit'],
+                                 nx=config['nx'], ny=config['ny'],
+                                 dt=config['dt'], nu=config['nu'])
+        u = system.simulate()
+        return {'u': u, 'config': config}
     elif system == 'burgers':
-        raise NotImplementedError
+        system = BurgersSystem(config['u_ic'], config['v_ic'], config['p_ic'],
+                               config['u_bc'], config['v_bc'], config['p_bc'],
+                               nt=config['nt'], nit=config['nit'],
+                               nx=config['nx'], ny=config['ny'],
+                               dt=config['dt'], nu=config['nu'])
+        u, v = system.simulate()
+        return {'u': u, 'v': v, 'config': config}
     elif system == 'navier_stokes':
         system = NavierStokesSystem(config['u_ic'], config['v_ic'], config['p_ic'], 
                                     config['u_bc'], config['v_bc'], config['p_bc'],
@@ -267,7 +279,7 @@ if __name__ == "__main__":
     count = 0
     fine_systems, coarse_systems = [], []
     while count < args.num:
-        fine_config = generate_random_config(nt, nit, nx, ny, dt, rho, nu, c, nu, 
+        fine_config = generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,  
                                              constant_derivative=constant_derivative)
         print('Generating **fine** {} system: ({}/{})'.format(args.system, count + 1, args.num))
         fine_system = generate_system(args.system, fine_config)  # make fine system!
