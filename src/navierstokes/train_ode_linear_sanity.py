@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from src.navierstokes.generate import DATA_DIR, DATA_SM_DIR
-from src.navierstokes.models import ODEDiffEq
+from src.navierstokes.models import ODEDiffEqElement
 from src.navierstokes.utils import (
     spatial_coarsen, AverageMeter, save_checkpoint, 
     MODEL_DIR, dynamics_prediction_error_torch, 
@@ -21,6 +21,8 @@ from torchdiffeq import odeint_adjoint as odeint
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument('--x-coord', type=int, default=5)
+    parser.add_argument('--y-coord', type=int, default=5)
     parser.add_argument('--batch-time', type=int, default=50, 
                         help='batch of timesteps [default: 50]')
     parser.add_argument('--batch-size', type=int, default=100,
@@ -81,7 +83,8 @@ if __name__ == "__main__":
 
     print('Initialize model and optimizer.')
 
-    model = ODEDiffEq(grid_dim, hidden_dim=64, n_filters=32)
+    model = ODEDiffEqElement(args.x_coord, args.y_coord, grid_dim,
+                             hidden_dim=64, n_filters=32)
     model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
