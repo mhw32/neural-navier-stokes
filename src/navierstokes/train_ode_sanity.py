@@ -1,13 +1,3 @@
-"""
-Trying to predict the entire system with an ODE 
-fails rather miserably. Instead, maybe we can 
-apply finite difference to define a spatial grid 
-on the PDE. Then for each element in the spatial
-grid, we can try to approximate it locally with 
-an ODE. In other words, instead of a single ODE, 
-use an ODE per element. 
-"""
-
 import os
 import sys
 import copy
@@ -31,6 +21,8 @@ from torchdiffeq import odeint_adjoint as odeint
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument('--x-coord', type=int, default=5)
+    parser.add_argument('--y-coord', type=int, default=5)
     parser.add_argument('--batch-time', type=int, default=50, 
                         help='batch of timesteps [default: 50]')
     parser.add_argument('--batch-size', type=int, default=100,
@@ -91,13 +83,8 @@ if __name__ == "__main__":
 
     print('Initialize model and optimizer.')
 
-    module_list = []
-    for i in range(grid_dim):
-        for j in range(grid_dim):
-            module = ODEDiffEqElement(
-                i, j, grid_dim, hidden_dim=64, n_filters=32)
-            module_list.append(module)
-    model = nn.ModuleList(module_list)
+    module = ODEDiffEqElement(args.x_coord, args.y_coord, grid_dim,
+                              hidden_dim=64, n_filters=32)
     model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -139,17 +126,11 @@ if __name__ == "__main__":
 
             optimizer.zero_grad()
 
-            loss = 0
-            for i in range(grid_dim):
-                for j in range(grid_dim):
-                    ij = i * grid_dim + j
-                    batch_obs0_ij = batch_obs0[:, :, i, j].clone()
-                    batch_obs_ij = batch_obs[:, :, :, i, j].clone()
-                    batch_obs_pred_ij = odeint(model[ij], batch_obs0_ij, batch_t)
-                    loss_ij = torch.mean(torch.pow(batch_obs_pred_ij - 
-                                                   batch_obs_ij, 2))
-                    loss = loss + loss_ij
-
+            batch_obs0_ij = batch_obs0[:, :, args.x_coord, args.y_coord]
+            batch_obs_ij = batch_obs[:, :, :, args.x_coord, args.y_coord]
+            batch_obs_pred_ij = odeint(model, batch_obs0_ij, batch_t)
+            loss = torch.mean(torch.pow(batch_obs_pred_ij - batch_obs_ij, 2))
+            
             loss.backward()
             optimizer.step()
             pbar.update() 
@@ -171,16 +152,10 @@ if __name__ == "__main__":
                     val_obs0 = val_obs[0].clone()  # shape: N x 3 x C x H x W
                     t = numpy_to_torch(timesteps, device)
 
-                    val_loss = 0
-                    for i in range(grid_dim):
-                        for j in range(grid_dim):
-                            ij = i * grid_dim + j
-                            val_obs0_ij = val_obs0[:, :, i, j].clone()
-                            val_obs_ij = val_obs[:, :, :, i, j].clone()
-                            val_obs_pred_ij = odeint(model[ij], val_obs0_ij, t)
-                            val_loss_ij = torch.mean(torch.pow(
-                                val_obs_pred_ij -  val_obs_ij, 2))
-                            val_loss = val_loss + val_loss_ij
+                    val_obs0_ij = val_obs0[:, :, args.x_coord, args.y_coord]
+                    val_obs_ij = val_obs[:, :, :, args.x_coord, args.y_coord]        
+                    val_obs_pred_ij = odeint(model, val_obs0_ij, t)
+                    val_loss = torch.mean(torch.pow(val_obs_pred_ij -  val_obs_ij, 2))
 
                     val_loss_item = val_loss.item()
                     pbar.set_postfix({'train loss': loss.item(),
@@ -200,48 +175,3 @@ if __name__ == "__main__":
                     np.save(os.path.join(model_dir, 'val_loss.npy'), store_val_loss)
 
         pbar.close()
-
-    # load the best model
-    print('Loading best weights (by validation error).')
-    checkpoint = torch.load(os.path.join(model_dir, 'model_best.pth.tar'))
-    model.load_state_dict(checkpoint['state_dict'])
-    model = model.eval()
-
-    with torch.no_grad():
-        print('Applying model to test set (no teacher forcing)')
-        test_u = numpy_to_torch(test_u_mat, device)  # B x T x H x W
-        test_v = numpy_to_torch(test_v_mat, device)  # B x T x H x W
-        test_p = numpy_to_torch(test_p_mat, device)  # B x T x H x W
-        
-        test_u = test_u.permute(1, 0, 2, 3, 4)  # T x B x H x W
-        test_v = test_v.permute(1, 0, 2, 3, 4)  # T x B x H x W
-        test_p = test_p.permute(1, 0, 2, 3, 4)  # T x B x H x W
-
-        t = numpy_to_torch(timesteps, device)
-
-        test_obs = torch.cat([test_u.unsqueeze(2), test_v.unsqueeze(2), 
-                              test_p.unsqueeze(2)], dim=2)
-        obs0 = test_obs[0]
-
-        pred_obs = torch.zeros_like(test_obs).numpy()
-        for i in range(grid_dim):
-            for j in range(grid_dim):
-                ij = i * grid_dim + j
-                obs0_ij = obs0[:, :, i, j].clone()
-                pred_obs_ij = odeint(model[ij], obs0_ij, t)
-                pred_obs[:, :, :, i, j] = pred_obs_ij.cpu().numpy()
-        pred_obs = torch.from_numpy(pred_obs).float()
-        pred_obs = pred_obs.to(device)
-
-        pred_u, pred_v, pred_p = torch.chunk(pred_obs, 3, dim=2)
-        pred_u, pred_v, pred_p = pred_u.contiguous(), pred_v.contiguous(), pred_p.contiguous()
-
-        test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
-            test_u, test_v, test_p, pred_u, pred_v, pred_p, dim=2)
-        
-        test_u_mse = test_u_mse.cpu().numpy()
-        test_v_mse = test_v_mse.cpu().numpy()
-        test_p_mse = test_p_mse.cpu().numpy()
-
-        np.savez(os.path.join(model_dir, 'test_error_no_teacher_forcing.npz'),
-                 u_mse=test_u_mse, v_mse=test_v_mse, p_mse=test_p_mse)
