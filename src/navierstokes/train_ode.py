@@ -20,6 +20,8 @@ from torchdiffeq import odeint_adjoint as odeint
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument('--system', type=str, default='navier_stokes',
+                        'linear|nonlinear|linear_convection|nonlinear_convection|diffusion|burgers|navier_stokes')
     parser.add_argument('--batch-time', type=int, default=50, 
                         help='batch of timesteps [default: 50]')
     parser.add_argument('--batch-size', type=int, default=100,
@@ -42,7 +44,8 @@ if __name__ == "__main__":
     os.makedirs(model_dir, exist_ok=True)
 
     print('loading fine systems')
-    u_fine, v_fine, p_fine = load_systems(DATA_DIR, fine=True)
+    data_dir = os.path.join(DATA_DIR, args.system)
+    u_fine, v_fine, p_fine = load_systems(data_dir, fine=True)
 
     N = u_fine.shape[0]
     nx, ny = u_fine.shape[2], u_fine.shape[3]

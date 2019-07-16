@@ -157,74 +157,22 @@ def load_systems(data_dir, fine=True):
         name = 'system_{}.npz'.format(i)
         assert name in filenames
         data_i = np.load(os.path.join(basename, name))
+
+        assert 'u' in data_i
         u_mat.append(data_i['u'])
-        v_mat.append(data_i['v'])
-        p_mat.append(data_i['p'])
+
+        if 'v' in data_i:
+            v_mat.append(data_i['v'])
+        else:  # if the system doesnt require this, then return 0s
+            v_mat.append(np.zeros_like(data_i['u']))
+
+        if 'p' in data_i:
+            p_mat.append(data_i['p'])
+        else:  # if the system doesnt require this, then return 0s
+            p_mat.append(np.zeros_like(data_i['u']))
 
     u_mat = np.stack(u_mat)
     v_mat = np.stack(v_mat)
     p_mat = np.stack(p_mat)
 
     return u_mat, v_mat, p_mat
-
-
-def linear_systems(n=1000, t=200, dt=0.001, grid_dim=50):
-    """
-    Randomly pick a intercept and slope.
-    Generate according to 
-        du/dt = slope
-    with initial conditions being the intercept.
-    """
-    # unique intercept for each spatial index and system
-    u_intercept = np.repeat(np.random.uniform(0, 1, size=n*grid_dim**2)[:, np.newaxis], t, axis=1)
-    v_intercept = np.repeat(np.random.uniform(0, 1, size=n*grid_dim**2)[:, np.newaxis], t, axis=1)
-    p_intercept = np.repeat(np.random.uniform(0, 1, size=n*grid_dim**2)[:, np.newaxis], t, axis=1)
-    
-    u_intercept = np.swapaxes(u_intercept.reshape(n, grid_dim, grid_dim, t), -1, 1)
-    v_intercept = np.swapaxes(v_intercept.reshape(n, grid_dim, grid_dim, t), -1, 1)
-    p_intercept = np.swapaxes(p_intercept.reshape(n, grid_dim, grid_dim, t), -1, 1)
-
-    # one slope for each spatial index (same for all systems)
-    u_slope = np.random.uniform(0, 1, size=grid_dim**2).reshape(grid_dim, grid_dim)
-    v_slope = np.random.uniform(0, 1, size=grid_dim**2).reshape(grid_dim, grid_dim)
-    p_slope = np.random.uniform(0, 1, size=grid_dim**2).reshape(grid_dim, grid_dim)
-
-    u_slope = u_slope[np.newaxis, np.newaxis, :, :]
-    v_slope = v_slope[np.newaxis, np.newaxis, :, :]
-    p_slope = p_slope[np.newaxis, np.newaxis, :, :]
-
-    u_slope = np.repeat(np.repeat(u_slope, n, axis=0), t, axis=1)
-    v_slope = np.repeat(np.repeat(v_slope, n, axis=0), t, axis=1)
-    p_slope = np.repeat(np.repeat(p_slope, n, axis=0), t, axis=1)
-
-    timesteps = np.repeat(np.arange(t)[np.newaxis, :], n, axis=0) * dt
-    timesteps = timesteps[:, :, np.newaxis, np.newaxis]
-
-    u_mat = timesteps * u_slope + u_intercept
-    v_mat = timesteps * v_slope + v_intercept
-    p_mat = timesteps * p_slope + p_intercept
-
-    return u_mat, v_mat, p_mat
-
-
-def neural_ode_loss(u_out, v_out, p_out, u_pred, v_pred, p_pred,
-                    z, qz_mu, qz_logvar, obs_std=0.3):
-    """Latent variable model objective using latent Neural ODE."""
-    device = u_out.device
-    noise_std_ = torch.zeros(pred_x.size()).to(device) + obs_std  # hardcoded logvar
-    noise_logvar = 2. * torch.log(noise_std_).to(device)
-
-    logp_u = log_normal_pdf(u_out, u_pred, noise_logvar)
-    logp_v = log_normal_pdf(v_out, v_pred, noise_logvar)
-    logp_p = log_normal_pdf(p_out, p_pred, noise_logvar)
-
-    logp_u = logp_u.sum(-1).sum(-1)
-    logp_v = logp_v.sum(-1).sum(-1)
-    logp_p = logp_p.sum(-1).sum(-1)
-    logp = logp_u + logp_v + logp_p  # sum 3 components together
-
-    pz_mu = torch.zeros_like(z)
-    pz_logvar = torch.zeros_like(z)
-    analytic_kl = normal_kl(qz_mu, qz_logvar, pz_mu, pz_logvar).sum(-1)
-    loss = torch.mean(-logp + analytic_kl, dim=0)
-    return loss
