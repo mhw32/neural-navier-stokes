@@ -169,8 +169,12 @@ def load_systems(data_dir, fine=True):
 
 
 def linear_systems(n=1000, t=200, dt=0.001, grid_dim=50):
-    """Randomly pick a intercept and slope."""
-
+    """
+    Randomly pick a intercept and slope.
+    Generate according to 
+        du/dt = slope
+    with initial conditions being the intercept.
+    """
     # unique intercept for each spatial index and system
     u_intercept = np.repeat(np.random.uniform(0, 1, size=n*grid_dim**2)[:, np.newaxis], t, axis=1)
     v_intercept = np.repeat(np.random.uniform(0, 1, size=n*grid_dim**2)[:, np.newaxis], t, axis=1)
@@ -181,9 +185,9 @@ def linear_systems(n=1000, t=200, dt=0.001, grid_dim=50):
     p_intercept = np.swapaxes(p_intercept.reshape(n, grid_dim, grid_dim, t), -1, 1)
 
     # one slope for each spatial index (same for all systems)
-    u_slope = np.random.uniform(0, 1, size=grid_dim**2)
-    v_slope = np.random.uniform(0, 1, size=grid_dim**2)
-    p_slope = np.random.uniform(0, 1, size=grid_dim**2)
+    u_slope = np.random.uniform(0, 1, size=grid_dim**2).reshape(grid_dim, grid_dim)
+    v_slope = np.random.uniform(0, 1, size=grid_dim**2).reshape(grid_dim, grid_dim)
+    p_slope = np.random.uniform(0, 1, size=grid_dim**2).reshape(grid_dim, grid_dim)
 
     u_slope = u_slope[np.newaxis, np.newaxis, :, :]
     v_slope = v_slope[np.newaxis, np.newaxis, :, :]
@@ -199,41 +203,6 @@ def linear_systems(n=1000, t=200, dt=0.001, grid_dim=50):
     u_mat = timesteps * u_slope + u_intercept
     v_mat = timesteps * v_slope + v_intercept
     p_mat = timesteps * p_slope + p_intercept
-
-    return u_mat, v_mat, p_mat
-
-
-def cubic_systems(n=1000, t=200, dt=0.001, grid_dim=50):
-    """Randomly pick a intercept and slope."""
-    
-    # unique intercept for each spatial index and system
-    u_intercept = np.repeat(np.random.uniform(0, 1, size=n*grid_dim**2)[:, np.newaxis], t, axis=1)
-    v_intercept = np.repeat(np.random.uniform(0, 1, size=n*grid_dim**2)[:, np.newaxis], t, axis=1)
-    p_intercept = np.repeat(np.random.uniform(0, 1, size=n*grid_dim**2)[:, np.newaxis], t, axis=1)
-    
-    u_intercept = np.swapaxes(u_intercept.reshape(n, grid_dim, grid_dim, t), -1, 1)
-    v_intercept = np.swapaxes(v_intercept.reshape(n, grid_dim, grid_dim, t), -1, 1)
-    p_intercept = np.swapaxes(p_intercept.reshape(n, grid_dim, grid_dim, t), -1, 1)
-
-    # one slope for each spatial index (same for all systems)
-    u_slope = np.random.uniform(0, 1, size=grid_dim**2)
-    v_slope = np.random.uniform(0, 1, size=grid_dim**2)
-    p_slope = np.random.uniform(0, 1, size=grid_dim**2)
-
-    u_slope = u_slope[np.newaxis, np.newaxis, :, :]
-    v_slope = v_slope[np.newaxis, np.newaxis, :, :]
-    p_slope = p_slope[np.newaxis, np.newaxis, :, :]
-
-    u_slope = np.repeat(np.repeat(u_slope, n, axis=0), t, axis=1)
-    v_slope = np.repeat(np.repeat(v_slope, n, axis=0), t, axis=1)
-    p_slope = np.repeat(np.repeat(p_slope, n, axis=0), t, axis=1)
-
-    timesteps = np.repeat(np.arange(t)[np.newaxis, :], n, axis=0) * dt
-    timesteps = timesteps[:, :, np.newaxis, np.newaxis]
-
-    u_mat = timesteps**3 * u_slope + u_intercept
-    v_mat = timesteps**3 * v_slope + v_intercept
-    p_mat = timesteps**3 * p_slope + p_intercept
 
     return u_mat, v_mat, p_mat
 
