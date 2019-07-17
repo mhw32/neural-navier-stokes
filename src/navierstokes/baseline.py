@@ -16,8 +16,6 @@ from src.navierstokes.generate import DATA_DIR
 from src.navierstokes.utils import (dynamics_prediction_error_numpy,
                                     spatial_coarsen, AverageMeter, load_systems)
 
-RESULTS_DIR = os.path.join(os.path.dirname(__file__), 'results')
-
 
 def coarsen_fine_systems(X_fine, Y_fine, u_fine, v_fine, p_fine):
     # coarsen the fine systems
@@ -41,10 +39,17 @@ def coarsen_fine_systems(X_fine, Y_fine, u_fine, v_fine, p_fine):
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--system', type=str, default='navier_stokes',
+                                    help='linear|nonlinear|linear_convection|nonlinear_convection|diffusion|burgers|navier_stokes')
+    args = parser.parse_args()
+
     np.random.seed(1337)
 
-    u_fine, v_fine, p_fine = load_systems(DATA_DIR, fine=True)
-    u_coarse, v_coarse, p_coarse = load_systems(DATA_DIR, fine=False)
+    data_dir = os.path.join(DATA_DIR, args.system)
+    u_fine, v_fine, p_fine = load_systems(data_dir, fine=True)
+    u_coarse, v_coarse, p_coarse = load_systems(data_dir, fine=False)
     
     N = u_fine.shape[0]
     N_train = int(0.8 * N)
@@ -90,8 +95,7 @@ if __name__ == "__main__":
     v_err_std = np.std(v_errors, axis=0)
     p_err_std = np.std(p_errors, axis=0)
 
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    np.savez(os.path.join(RESULTS_DIR, 'baseline_error.npz'), 
+    np.savez(os.path.join(data_dir, 'baseline_error.npz'), 
              u_error_mean=u_err_mean, v_error_mean=v_err_mean,
              p_error_mean=p_err_mean, u_error_std=u_err_std,
              v_error_std=v_err_std, p_error_std=p_err_std)
