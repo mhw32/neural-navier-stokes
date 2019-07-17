@@ -29,8 +29,8 @@ if __name__ == "__main__":
                         help='batch of timesteps [default: 50]')
     parser.add_argument('--batch-size', type=int, default=100,
                         help='batch size [default: 100]')
-    parser.add_argument('--epochs', type=int, default=2000,
-                        help='number of epochs [default: 2000]')
+    parser.add_argument('--epochs', type=int, default=200,
+                        help='number of epochs [default: 200]')
     parser.add_argument('--lr', type=float, default=3e-4,
                         help='learning rate [default: 3e-4]')
     parser.add_argument('--test-only', action='store_true', default=False)
@@ -43,7 +43,8 @@ if __name__ == "__main__":
     torch.manual_seed(1337)
     np.random.seed(1337)
 
-    model_dir = os.path.join(MODEL_DIR, args.system)
+    sub_dir = '{}_{}'.format(args.x_coord, args.y_coord)
+    model_dir = os.path.join(MODEL_DIR, args.system, sub_dir)
     os.makedirs(model_dir, exist_ok=True)
 
     print('loading fine systems')
