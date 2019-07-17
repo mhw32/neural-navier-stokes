@@ -184,20 +184,21 @@ if __name__ == "__main__":
         test_v = numpy_to_torch(test_v_mat, device)  # B x T x C x H x W
         test_p = numpy_to_torch(test_p_mat, device)  # B x T x C x H x W
         
-        test_u = test_u.permute(1, 0, 2, 3, 4)  # T x B x C x H x W
-        test_v = test_v.permute(1, 0, 2, 3, 4)  # T x B x C x H x W
-        test_p = test_p.permute(1, 0, 2, 3, 4)  # T x B x C x H x W
+        test_u = test_u.permute(1, 0, 2, 3)  # T x B x H x W
+        test_v = test_v.permute(1, 0, 2, 3)  # T x B x H x W
+        test_p = test_p.permute(1, 0, 2, 3)  # T x B x H x W
 
         t = numpy_to_torch(timesteps, device)
 
         # take just the first timestep
-        u0, v0, p0 = test_u[0], test_v[0], test_p[0]  # B x C x H x W
-        # obs0 (shape: B x 3 x C x H x W)
-        obs0 = torch.cat([u0.unsqueeze(1), v0.unsqueeze(1), p0.unsqueeze(1)], dim=2)
+        u0, v0, p0 = test_u[0], test_v[0], test_p[0]  # B x H x W
+        # obs0 (shape: B x 3 x H x W)
+        obs0 = torch.cat([u0.unsqueeze(1), v0.unsqueeze(1), p0.unsqueeze(1)], dim=1)
 
         pred_obs = odeint(model, obs0, t)  # shape: T x B x C x H x W
         pred_u, pred_v, pred_p = torch.chunk(pred_obs, 3, dim=2)
         pred_u, pred_v, pred_p = pred_u.contiguous(), pred_v.contiguous(), pred_p.contiguous()
+        pred_u, pred_v, pred_p = pred_u.squeeze(2), pred_v.squeeze(2), pred_p.squeeze(2)
 
         test_u_mse, test_v_mse, test_p_mse = dynamics_prediction_error_torch(
             test_u, test_v, test_p, pred_u, pred_v, pred_p, dim=2)
