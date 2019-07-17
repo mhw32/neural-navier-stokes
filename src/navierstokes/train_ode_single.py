@@ -43,7 +43,7 @@ if __name__ == "__main__":
     torch.manual_seed(1337)
     np.random.seed(1337)
 
-    model_dir = os.path.join(MODEL_DIR, 'ode_grid')
+    model_dir = os.path.join(MODEL_DIR, args.system)
     os.makedirs(model_dir, exist_ok=True)
 
     print('loading fine systems')

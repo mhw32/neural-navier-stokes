@@ -32,9 +32,9 @@ def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,
     F = np.random.choice([0, 1], p=[0.8, 0.2])
 
     # randomly generate initial conditions
-    u_ic = np.random.uniform(0, 1, (nx, ny))
-    v_ic = np.random.uniform(0, 1, (nx, ny))
-    p_ic = np.random.uniform(0, 1, (nx, ny))
+    u_ic = np.random.randn(nx, ny) * 0.01
+    v_ic = np.random.randn(nx, ny) * 0.01
+    p_ic = np.random.randn(nx, ny) * 0.01
 
     # create random boundary conditions
     u_bc_x0_lst, u_bc_xn_lst, u_bc_y0_lst, u_bc_yn_lst = [], [], [], []
