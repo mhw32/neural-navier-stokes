@@ -32,13 +32,13 @@ def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,
     # randomly pick source 
     F = np.random.choice([0, 1], p=[0.8, 0.2])
 
-    # for now, we will use the same initial 
-    # conditions (to highlight differences in boundary)
     if zero_init_conditions:
         u_ic = np.zeros((nx, ny)) 
         v_ic = np.zeros((nx, ny))  
         p_ic = np.zeros((nx, ny))  
     else:
+        # use non-zero IC for linear/nonlinear because
+        # everything is index-independent
         u_ic = np.random.uniform(0, 1, (nx, ny))
         v_ic = np.random.uniform(0, 1, (nx, ny))
         p_ic = np.random.uniform(0, 1, (nx, ny))
@@ -48,19 +48,45 @@ def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,
     v_bc_x0_lst, v_bc_xn_lst, v_bc_y0_lst, v_bc_yn_lst = [], [], [], []
     p_bc_x0_lst, p_bc_xn_lst, p_bc_y0_lst, p_bc_yn_lst = [], [], [], []
     
+    # Assumption for numerical stability: all the boundary elements in a row
+    # or column boundary are identical. 
+
+    u_x0_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
+    u_xn_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
+    u_x0_boundary_value = np.random.randn()
+    u_xn_boundary_value = np.random.randn()
+    u_x0_boundary_dict = {u_x0_boundary_type: u_x0_boundary_value}
+    u_xn_boundary_dict = {u_xn_boundary_type: u_xn_boundary_value}
+
+    v_x0_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
+    v_xn_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
+    v_x0_boundary_value = np.random.randn()
+    v_xn_boundary_value = np.random.randn()
+    v_x0_boundary_dict = {v_x0_boundary_type: v_x0_boundary_value}
+    v_xn_boundary_dict = {v_xn_boundary_type: v_xn_boundary_value}
+
+    p_x0_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
+    p_xn_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
+    p_x0_boundary_value = np.random.randn()
+    p_xn_boundary_value = np.random.randn()
+    p_x0_boundary_dict = {p_x0_boundary_type: p_x0_boundary_value}
+    p_xn_boundary_dict = {p_xn_boundary_type: p_xn_boundary_value}
+
     for i in range(nx):
-        boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
-        boundary_value = np.random.randn()
-        boundary_dict = {boundary_type: boundary_value}
+        u_bc_x0 = MomentumBoundaryCondition(i, 0, 0, nx - 1, 0, ny - 1, 
+                                            dx, dy, **u_x0_boundary_dict)
+        u_bc_xn = MomentumBoundaryCondition(i, ny - 1, 0, nx - 1, 0, ny - 1, 
+                                            dx, dy, **u_xn_boundary_dict)
 
-        u_bc_x0 = MomentumBoundaryCondition(i, 0, 0, nx - 1, 0, ny - 1, dx, dy, **boundary_dict)
-        u_bc_xn = MomentumBoundaryCondition(i, ny - 1, 0, nx - 1, 0, ny - 1, dx, dy, **boundary_dict)
+        v_bc_x0 = MomentumBoundaryCondition(i, 0, 0, nx - 1, 0, ny - 1, 
+                                            dx, dy, **v_x0_boundary_dict)
+        v_bc_xn = MomentumBoundaryCondition(i, ny - 1, 0, nx - 1, 0, ny - 1, 
+                                            dx, dy, **v_xn_boundary_dict)
 
-        v_bc_x0 = MomentumBoundaryCondition(i, 0, 0, nx - 1, 0, ny - 1, dx, dy, **boundary_dict)
-        v_bc_xn = MomentumBoundaryCondition(i, ny - 1, 0, nx - 1, 0, ny - 1, dx, dy, **boundary_dict)
-
-        p_bc_x0 = PressureBoundaryCondition(i, 0, 0, nx - 1, 0, ny - 1, dx, dy, **boundary_dict)
-        p_bc_xn = PressureBoundaryCondition(i, ny - 1, 0, nx - 1, 0, ny - 1, dx, dy, **boundary_dict)
+        p_bc_x0 = PressureBoundaryCondition(i, 0, 0, nx - 1, 0, ny - 1, 
+                                            dx, dy, **p_x0_boundary_dict)
+        p_bc_xn = PressureBoundaryCondition(i, ny - 1, 0, nx - 1, 0, ny - 1, 
+                                            dx, dy, **p_xn_boundary_dict)
 
         # append in a very particular order
         u_bc_x0_lst.append(u_bc_x0)
@@ -70,19 +96,42 @@ def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,
         p_bc_x0_lst.append(p_bc_x0)
         p_bc_xn_lst.append(p_bc_xn)
 
+    u_y0_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
+    u_yn_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
+    u_y0_boundary_value = np.random.randn()
+    u_yn_boundary_value = np.random.randn()
+    u_y0_boundary_dict = {u_y0_boundary_type: u_y0_boundary_value}
+    u_yn_boundary_dict = {u_yn_boundary_type: u_yn_boundary_value}
+
+    v_y0_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
+    v_yn_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
+    v_y0_boundary_value = np.random.randn()
+    v_yn_boundary_value = np.random.randn()
+    v_y0_boundary_dict = {v_y0_boundary_type: v_y0_boundary_value}
+    v_yn_boundary_dict = {v_yn_boundary_type: v_yn_boundary_value}
+
+    p_y0_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
+    p_yn_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
+    p_y0_boundary_value = np.random.randn()
+    p_yn_boundary_value = np.random.randn()
+    p_y0_boundary_dict = {p_y0_boundary_type: p_y0_boundary_value}
+    p_yn_boundary_dict = {p_yn_boundary_type: p_yn_boundary_value} 
+
     for j in range(ny):
-        boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
-        boundary_value = np.random.randn()
-        boundary_dict = {boundary_type: boundary_value} 
+        u_bc_y0 = MomentumBoundaryCondition(0, j, 0, nx - 1, 0, ny - 1, 
+                                            dx, dy, **u_y0_boundary_dict)
+        u_bc_yn = MomentumBoundaryCondition(nx - 1, j, 0, nx - 1, 0, ny - 1, 
+                                            dx, dy, **u_yn_boundary_dict)
 
-        u_bc_y0 = MomentumBoundaryCondition(0, j, 0, nx - 1, 0, ny - 1, dx, dy, **boundary_dict)
-        u_bc_yn = MomentumBoundaryCondition(nx - 1, j, 0, nx - 1, 0, ny - 1, dx, dy, **boundary_dict)
+        v_bc_y0 = MomentumBoundaryCondition(0, j, 0, nx - 1, 0, ny - 1, 
+                                            dx, dy, **v_y0_boundary_dict)
+        v_bc_yn = MomentumBoundaryCondition(nx - 1, j, 0, nx - 1, 0, ny - 1, 
+                                            dx, dy, **v_yn_boundary_dict)
 
-        v_bc_y0 = MomentumBoundaryCondition(0, j, 0, nx - 1, 0, ny - 1, dx, dy, **boundary_dict)
-        v_bc_yn = MomentumBoundaryCondition(nx - 1, j, 0, nx - 1, 0, ny - 1, dx, dy, **boundary_dict)
-
-        p_bc_y0 = PressureBoundaryCondition(0, j, 0, nx - 1, 0, ny - 1, dx, dy, **boundary_dict)
-        p_bc_yn = PressureBoundaryCondition(nx - 1, j, 0, nx - 1, 0, ny - 1, dx, dy, **boundary_dict)
+        p_bc_y0 = PressureBoundaryCondition(0, j, 0, nx - 1, 0, ny - 1, 
+                                            dx, dy, **p_y0_boundary_dict)
+        p_bc_yn = PressureBoundaryCondition(nx - 1, j, 0, nx - 1, 0, ny - 1,
+                                            dx, dy, **p_yn_boundary_dict)
 
         u_bc_y0_lst.append(u_bc_y0)
         u_bc_yn_lst.append(u_bc_yn)
