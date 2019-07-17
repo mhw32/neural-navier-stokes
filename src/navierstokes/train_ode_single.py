@@ -179,3 +179,45 @@ if __name__ == "__main__":
                     np.save(os.path.join(model_dir, 'val_loss.npy'), store_val_loss)
 
         pbar.close()
+
+
+    checkpoint = torch.load(os.path.join(model_dir, 'model_best.pth.tar'))
+    model.load_state_dict(checkpoint['state_dict'])
+    model = model.eval()
+
+    with torch.no_grad():
+        print('Applying model to test set (no teacher forcing)')
+        test_u = numpy_to_torch(test_u_mat, device)  # B x T x C x H x W
+        test_v = numpy_to_torch(test_v_mat, device)  # B x T x C x H x W
+        test_p = numpy_to_torch(test_p_mat, device)  # B x T x C x H x W
+        
+        test_u = test_u.permute(1, 0, 2, 3)  # T x B x H x W
+        test_v = test_v.permute(1, 0, 2, 3)  # T x B x H x W
+        test_p = test_p.permute(1, 0, 2, 3)  # T x B x H x W
+
+        test_u = test_u[:, :, args.x_coord, args.y_coord]
+        test_v = test_v[:, :, args.x_coord, args.y_coord]
+        test_p = test_p[:, :, args.x_coord, args.y_coord]
+        
+        t = numpy_to_torch(timesteps, device)
+        
+        # take just the first timestep
+        u0, v0, p0 = test_u[0], test_v[0], test_p[0]  # B
+        # obs0 (shape: B x 3)
+        obs0 = torch.cat([u0.unsqueeze(1), v0.unsqueeze(1), p0.unsqueeze(1)], dim=1)
+
+        pred_obs = odeint(model, obs0, t)  # shape: T x B x 3
+        pred_u, pred_v, pred_p = torch.chunk(pred_obs, 3, dim=2)
+        pred_u, pred_v, pred_p = pred_u.contiguous(), pred_v.contiguous(), pred_p.contiguous()
+        pred_u, pred_v, pred_p = pred_u.squeeze(2), pred_v.squeeze(2), pred_p.squeeze(2)
+
+        test_u_mse = torch.pow(pred_u - test_u, 2)
+        test_v_mse = torch.pow(pred_v - test_v, 2)
+        test_p_mse = torch.pow(pred_p - test_p, 2)
+
+        test_u_mse = test_u_mse.cpu().numpy()
+        test_v_mse = test_v_mse.cpu().numpy()
+        test_p_mse = test_p_mse.cpu().numpy()
+
+        np.savez(os.path.join(model_dir, 'test_error_no_teacher_forcing.npz'),
+                 u_mse=test_u_mse, v_mse=test_v_mse, p_mse=test_p_mse)
