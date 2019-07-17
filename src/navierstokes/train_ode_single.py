@@ -173,6 +173,7 @@ if __name__ == "__main__":
                     save_checkpoint({
                         'state_dict': model.state_dict(),
                         'val_loss': val_loss.item(),
+                        'args': args,
                     }, is_best, model_dir)
                     
                     np.save(os.path.join(model_dir, 'val_loss.npy'), store_val_loss)

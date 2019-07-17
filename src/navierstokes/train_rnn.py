@@ -160,6 +160,7 @@ if __name__ == "__main__":
                     save_checkpoint({
                         'state_dict': model.state_dict(),
                         'val_loss': val_loss.item(),
+                        'args': args,
                     }, is_best, model_dir)    
 
         pbar.close()
