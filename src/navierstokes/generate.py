@@ -308,7 +308,7 @@ if __name__ == "__main__":
     np.random.seed(1337)
 
     # these are fixed hyperparameters
-    nt, nit, nx, ny = 200, 50, 51, 51  # 51 o make boundary conditions nice
+    nt, nit, nx, ny = 200, 50, 50, 50 
     dt, rho, nu, c = 0.001, 1, 0.1, 1
 
     data_dir = os.path.join(DATA_DIR, args.system)

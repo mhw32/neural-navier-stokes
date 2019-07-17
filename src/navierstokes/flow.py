@@ -217,6 +217,7 @@ class NonlinearConvectionSystem(BaseDynamicalSystem):
 
         dt, dx, dy = self.dt, self.dx, self.dy
 
+        np.seterr('raise')
         if self.constant_derivative:
             u[1:, 1:] = un[1:, 1:] - un[1:, 1:] * dt - vn[1:, 1:] * dt
             v[1:, 1:] = vn[1:, 1:] - vn[1:, 1:] * dt - un[1:, 1:] * dt
@@ -413,7 +414,7 @@ class NavierStokesSystem(BaseDynamicalSystem):
         pn = p.copy()
 
         dt, dx, dy = self.dt, self.dx, self.dy
-        rho, nu = self.rho, self.nu, self.F
+        rho, nu, F = self.rho, self.nu, self.F
 
         dx, dy = self.dx, self.dy
         for q in range(self.nit):
