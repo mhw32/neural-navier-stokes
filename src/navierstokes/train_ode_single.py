@@ -58,8 +58,6 @@ if __name__ == "__main__":
     u_coarsened, v_coarsened, p_coarsened = coarsen_fine_systems(
         X_fine, Y_fine, u_fine, v_fine, p_fine)
 
-    import pdb; pdb.set_trace()
-
     # set some hyperparameters
     grid_dim = u_coarsened.shape[2]
     T = u_coarsened.shape[1]
