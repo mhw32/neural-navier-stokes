@@ -194,7 +194,7 @@ def fine_to_coarse_config(fine_config):
     # NOTE: again keep this as general as possible!
     # make a coarse config from the fine config
     coarse_config = copy.deepcopy(fine_config)
-    coarse_config['nx'] = 11; coarse_config['ny'] = 11  # hardcoded!
+    coarse_config['nx'] = 10; coarse_config['ny'] = 10  # hardcoded!
     coarse_config['u_ic'] = np.zeros((coarse_config['nx'], coarse_config['ny']))
     coarse_config['v_ic'] = np.zeros((coarse_config['nx'], coarse_config['ny']))
     coarse_config['p_ic'] = np.zeros((coarse_config['nx'], coarse_config['ny']))

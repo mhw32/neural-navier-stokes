@@ -1,4 +1,7 @@
+import os
 import numpy as np
+from tqdm import tqdm
+
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt, cm
@@ -38,7 +41,7 @@ if __name__ == "__main__":
     X, Y = np.meshgrid(x, y)
 
     print('Plotting functions')
-    n_plot = 100
+    n_plot = 10
     for i in tqdm(range(n_plot)):
         u, v, p = u_fine[i], v_fine[i], p_fine[i]
         fig = plt.figure(figsize=(11, 7), dpi=100)
@@ -50,6 +53,10 @@ if __name__ == "__main__":
         plt.ylabel('Y')
         plt.savefig(os.path.join(image_dir, 'fine_system_streamplot_{}.pdf'.format(i)))
         plt.close()
+
+    x = np.linspace(0, 2, nx // 5)
+    y = np.linspace(0, 2, ny // 5)
+    X, Y = np.meshgrid(x, y)
 
     for i in tqdm(range(n_plot)):
         u, v, p = u_coarse[i], v_coarse[i], p_coarse[i]
