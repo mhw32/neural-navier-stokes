@@ -7,7 +7,7 @@ from tqdm import tqdm
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
-from src.navierstokes.generate import DATA_DIR, DATA_SM_DIR
+from src.navierstokes.generate import DATA_DIR
 from src.navierstokes.models import ODEDiffEq
 from src.navierstokes.utils import (
     spatial_coarsen, AverageMeter, save_checkpoint, 
@@ -40,7 +40,7 @@ if __name__ == "__main__":
     torch.manual_seed(1337)
     np.random.seed(1337)
 
-    model_dir = os.path.join(MODEL_DIR, 'ode')
+    model_dir = os.path.join(MODEL_DIR, 'ode', args.system)
     os.makedirs(model_dir, exist_ok=True)
 
     print('loading fine systems')
