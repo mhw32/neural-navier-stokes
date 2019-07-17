@@ -25,23 +25,16 @@ else:
 
 
 def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,  
-                           constant_derivative=False, 
-                           zero_init_conditions=False):
+                           constant_derivative=False):
     dx, dy = 2. / (nx - 1), 2. / (ny - 1)
 
     # randomly pick source 
     F = np.random.choice([0, 1], p=[0.8, 0.2])
 
-    if zero_init_conditions:
-        u_ic = np.zeros((nx, ny)) 
-        v_ic = np.zeros((nx, ny))  
-        p_ic = np.zeros((nx, ny))  
-    else:
-        # use non-zero IC for linear/nonlinear because
-        # everything is index-independent
-        u_ic = np.random.uniform(0, 1, (nx, ny))
-        v_ic = np.random.uniform(0, 1, (nx, ny))
-        p_ic = np.random.uniform(0, 1, (nx, ny))
+    # randomly generate initial conditions
+    u_ic = np.random.uniform(0, 1, (nx, ny))
+    v_ic = np.random.uniform(0, 1, (nx, ny))
+    p_ic = np.random.uniform(0, 1, (nx, ny))
 
     # create random boundary conditions
     u_bc_x0_lst, u_bc_xn_lst, u_bc_y0_lst, u_bc_yn_lst = [], [], [], []
@@ -378,14 +371,12 @@ if __name__ == "__main__":
     os.makedirs(coarse_dir, exist_ok=True)
 
     constant_derivative = (True if args.system in ['linear', 'nonlinear'] else False)
-    zero_init_conditions = (False if args.system in ['linear', 'nonlinear'] else True)
 
     count = 0
     fine_systems, coarse_systems = [], []
     while count < args.num:
         fine_config = generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,  
-                                             constant_derivative=constant_derivative,
-                                             zero_init_conditions=zero_init_conditions)
+                                             constant_derivative=constant_derivative)
         print('Generating **fine** {} system: ({}/{})'.format(args.system, count + 1, args.num))
         fine_system = generate_system(args.system, fine_config)  # make fine system!
         
