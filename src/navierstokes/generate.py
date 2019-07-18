@@ -155,7 +155,7 @@ def generate_system(system, config):
                                         dt=config['dt'], c=config['c'],
                                         constant_derivative=config['constant_derivative'])
         u = system.simulate()
-        return {'u': u, 'config': config}
+        return u, np.zeros_like(u), np.zeros_like(u)
     elif system == 'nonlinear_convection' or system == 'nonlinear':
         system = NonlinearConvectionSystem(config['u_ic'], config['v_ic'],
                                            config['u_bc'], config['v_bc'],
@@ -164,14 +164,14 @@ def generate_system(system, config):
                                            dt=config['dt'],
                                            constant_derivative=config['constant_derivative'])
         u, v = system.simulate()
-        return {'u': u, 'v': v, 'config': config}
+        return u, v, np.zeros_like(u)
     elif system == 'diffusion':
         system = DiffusionSystem(config['u_ic'], config['u_bc'], 
                                  nt=config['nt'], nit=config['nit'],
                                  nx=config['nx'], ny=config['ny'],
                                  dt=config['dt'], nu=config['nu'])
         u = system.simulate()
-        return {'u': u, 'config': config}
+        return u, np.zeros_like(u), np.zeros_like(u)
     elif system == 'burgers':
         system = BurgersSystem(config['u_ic'], config['v_ic'], config['p_ic'],
                                config['u_bc'], config['v_bc'], config['p_bc'],
@@ -179,7 +179,7 @@ def generate_system(system, config):
                                nx=config['nx'], ny=config['ny'],
                                dt=config['dt'], nu=config['nu'])
         u, v = system.simulate()
-        return {'u': u, 'v': v, 'config': config}
+        return u, v, np.zeros_like(u)
     elif system == 'navier_stokes':
         system = NavierStokesSystem(config['u_ic'], config['v_ic'], config['p_ic'], 
                                     config['u_bc'], config['v_bc'], config['p_bc'],
@@ -187,7 +187,7 @@ def generate_system(system, config):
                                     nx=config['nx'], ny=config['ny'], dt=config['dt'],
                                     rho=config['rho'], nu=config['nu'], F=config['F'])
         u, v, p = system.simulate()
-        return {'u': u, 'v': v, 'p': p, 'config': config}
+        return u, v, p
 
 
 def fine_to_coarse_config(fine_config):
@@ -320,16 +320,16 @@ def fine_to_coarse_config(fine_config):
     return coarse_config
 
 
-def check_system(system):
+def check_system(u, v, p):
     pass_check = True
-    if 'u' in system:
-        if np.sum(np.isnan(system['u'])) > 0:
+    if u is not None:
+        if np.sum(np.isnan(u)) > 0:
             pass_check = False
-    if 'v' in system:
-        if np.sum(np.isnan(system['v'])) > 0:
+    if v is not None:
+        if np.sum(np.isnan(v)) > 0:
             pass_check = False
-    if 'p' in system:
-        if np.sum(np.isnan(system['p'])) > 0:
+    if p is not None:
+        if np.sum(np.isnan(p)) > 0:
             pass_check = False
     
     return pass_check
@@ -351,6 +351,8 @@ if __name__ == "__main__":
                         help='linear|nonlinear|linear_convection|nonlinear_convection|diffusion|burgers|navier_stokes')
     parser.add_argument('--num', type=int, default=100,
                         help='number of systems to generate (default: 100)')
+    parser.add_argument('--block-size', type=int, default=100,
+                        help='store N systems together (default: 100)')
     args = parser.parse_args()
 
     np.random.seed(1337)
@@ -373,39 +375,52 @@ if __name__ == "__main__":
     constant_derivative = (True if args.system in ['linear', 'nonlinear'] else False)
 
     count = 0
-    fine_systems, coarse_systems = [], []
+    block_count = 0
+    fine_systems_u, fine_systems_v, fine_systems_p = [], [], []
+    coarse_systems_u, coarse_systems_v, coarse_systems_p = [], [], []
+
     while count < args.num:
         fine_config = generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,  
                                              constant_derivative=constant_derivative)
         print('Generating **fine** {} system: ({}/{})'.format(args.system, count + 1, args.num))
-        fine_system = generate_system(args.system, fine_config)  # make fine system!
+        fine_u, fine_v, fine_p = generate_system(args.system, fine_config)  # make fine system!
         
         # lots of logic to preserve random choices but subsample
         coarse_config = fine_to_coarse_config(fine_config)
         print('Generating **coarse** {} system: ({}/{})'.format(args.system, count + 1, args.num))
-        coarse_system = generate_system(args.system, coarse_config)
+        coarse_u, coarse_v, coarse_p = generate_system(args.system, coarse_config)
 
         # randomly initializing boundary conditions sometimes gets us into
         # trouble, so ignore when that happens.
-        if not check_system(fine_system):
+        if not check_system(fine_u, fine_v, fine_p):
             continue
 
-        if not check_system(coarse_system):
+        if not check_system(coarse_u, coarse_v, coarse_p):
             continue
 
-        save_system(os.path.join(fine_dir, 'system_{}.npz'.format(count)),
-                    fine_system)
-        save_system(os.path.join(coarse_dir, 'system_{}.npz'.format(count)),
-                    coarse_system)
-
-        fine_systems.append(fine_system)
-        coarse_systems.append(coarse_system)
+        fine_systems_u.append(fine_u)
+        fine_systems_v.append(fine_v)
+        fine_systems_p.append(fine_p)
+        coarse_systems_u.append(coarse_u)
+        coarse_systems_v.append(coarse_v)
+        coarse_systems_p.append(coarse_p)
+        
         count += 1
 
-    print('Saving large pickle files (1/2)')
-    with open(os.path.join(data_dir, '{}_fine_systems.pickle'.format(args.num)), 'wb') as fp:
-        pickle.dump(fine_systems, fp)
+        if len(fine_systems) > args.block_size:
+            fine_systems_u = np.stack(fine_systems_u)
+            fine_systems_v = np.stack(fine_systems_v)
+            fine_systems_p = np.stack(fine_systems_p)
+            coarse_systems_u = np.stack(coarse_systems_u)
+            coarse_systems_v = np.stack(coarse_systems_v)
+            coarse_systems_p = np.stack(coarse_systems_p)
 
-    print('Saving large pickle files (2/2)')
-    with open(os.path.join(data_dir, '{}_coarse_systems.pickle'.format(args.num)), 'wb') as fp:
-        pickle.dump(coarse_systems, fp)
+            save_system(os.path.join(fine_dir, 'system_{}.npz'.format(block_count)),
+                u=fine_systems_u, v=fine_systems_v, p=fine_systems_p)
+            save_system(os.path.join(coarse_dir, 'system_{}.npz'.format(block_count)),
+                u=coarse_systems_u, v=coarse_systems_v, p=coarse_systems_p)
+
+            fine_systems_u, fine_systems_v, fine_systems_p = [], [], []
+            coarse_systems_u, coarse_systems_v, coarse_systems_p = [], [], []
+
+            block_count += 1
