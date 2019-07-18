@@ -352,8 +352,8 @@ if __name__ == "__main__":
                         help='linear|nonlinear|linear_convection|nonlinear_convection|diffusion|burgers|navier_stokes')
     parser.add_argument('--num', type=int, default=1000,
                         help='number of systems to generate (default: 1000)')
-    parser.add_argument('--fine-grid-dim', type=int, default=50,
-                        help='granularity of fine grid [default: 50]')
+    parser.add_argument('--fine-grid-dim', type=int, default=100,
+                        help='granularity of fine grid [default: 100]')
     parser.add_argument('--coarse-grid-dim', type=int, default=10,
                         help='granularity of the coarse grid [dedafult: 10]')
     parser.add_argument('--block-size', type=int, default=100,

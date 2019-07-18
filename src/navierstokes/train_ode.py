@@ -42,7 +42,7 @@ if __name__ == "__main__":
     torch.manual_seed(1337)
     np.random.seed(1337)
 
-    model_dir = os.path.join(MODEL_DIR, 'ode', args.system)
+    model_dir = os.path.join(MODEL_DIR, 'res_ode' if args.resdensenet else 'ode', args.system)
     os.makedirs(model_dir, exist_ok=True)
 
     print('loading fine systems')
@@ -128,7 +128,7 @@ if __name__ == "__main__":
             batch_t = numpy_to_torch(timesteps[:args.batch_time], device)
 
             optimizer.zero_grad()
-           
+          
             batch_obs_pred = odeint(model, batch_obs0, batch_t)
             loss = torch.mean(torch.pow(batch_obs_pred - batch_obs, 2))
 
