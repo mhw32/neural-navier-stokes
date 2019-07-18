@@ -3,6 +3,7 @@ import torch
 import shutil
 import numpy as np
 from tqdm import tqdm
+from glob import glob
 
 MODEL_DIR = os.path.join(os.path.dirname(__file__), 'model')
 MODEL_DIR = os.path.realpath(MODEL_DIR)
@@ -151,7 +152,7 @@ def load_systems(data_dir, fine=True):
     n = len(filenames)
 
     print('Loading data from {} ({} files).'.format(basename, n))   
-    
+
     u_mat, v_mat, p_mat = [], [], []
     for i in tqdm(range(n)):
         name = 'system_{}.npz'.format(i)

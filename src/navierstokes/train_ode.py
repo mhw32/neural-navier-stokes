@@ -8,7 +8,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 from src.navierstokes.generate import DATA_DIR
-from src.navierstokes.models import ODEDiffEq
+from src.navierstokes.models import ODEDiffEq, ResidualODEDiffEq
 from src.navierstokes.utils import (
     spatial_coarsen, AverageMeter, save_checkpoint, 
     MODEL_DIR, dynamics_prediction_error_torch, 
@@ -30,6 +30,8 @@ if __name__ == "__main__":
                         help='number of epochs [default: 2000]')
     parser.add_argument('--lr', type=float, default=3e-4,
                         help='learning rate [default: 3e-4]')
+    parser.add_argument('--resdensenet', action='store_true', default=False,
+                        help='use latest fancy conv network [default: False]')
     parser.add_argument('--test-only', action='store_true', default=False)
     args = parser.parse_args()
 
@@ -85,7 +87,7 @@ if __name__ == "__main__":
 
     print('Initialize model and optimizer.')
 
-    model = ODEDiffEq(grid_dim)
+    model = ResidualODEDiffEq(grid_dim) if args.resdensenet else ODEDiffEq(grid_dim)
     model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
