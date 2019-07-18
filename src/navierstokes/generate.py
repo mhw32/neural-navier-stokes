@@ -412,7 +412,7 @@ if __name__ == "__main__":
         
         count += 1
 
-        if len(fine_systems) > args.block_size:
+        if len(fine_systems_u) >= args.block_size:
             fine_systems_u = np.stack(fine_systems_u)
             fine_systems_v = np.stack(fine_systems_v)
             fine_systems_p = np.stack(fine_systems_p)
@@ -421,9 +421,9 @@ if __name__ == "__main__":
             coarse_systems_p = np.stack(coarse_systems_p)
 
             save_system(os.path.join(fine_dir, 'system_{}.npz'.format(block_count)),
-                u=fine_systems_u, v=fine_systems_v, p=fine_systems_p)
+                {'u': fine_systems_u, 'v': fine_systems_v, 'p': fine_systems_p})
             save_system(os.path.join(coarse_dir, 'system_{}.npz'.format(block_count)),
-                u=coarse_systems_u, v=coarse_systems_v, p=coarse_systems_p)
+                {'u': coarse_systems_u, 'v': coarse_systems_v, 'p': coarse_systems_p})
 
             fine_systems_u, fine_systems_v, fine_systems_p = [], [], []
             coarse_systems_u, coarse_systems_v, coarse_systems_p = [], [], []
