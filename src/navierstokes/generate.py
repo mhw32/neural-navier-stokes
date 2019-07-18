@@ -190,11 +190,12 @@ def generate_system(system, config):
         return {'u': u, 'v': v, 'p': p, 'config': config}
 
 
-def fine_to_coarse_config(fine_config):
+def fine_to_coarse_config(fine_config, coarse_grid_dim):
     # NOTE: again keep this as general as possible!
     # make a coarse config from the fine config
     coarse_config = copy.deepcopy(fine_config)
-    coarse_config['nx'] = 10; coarse_config['ny'] = 10  # hardcoded!
+    fine_grid_dim = fine_config['nx']
+    coarse_config['nx'] = coarse_grid_dim; coarse_config['ny'] = coarse_grid_dim
     coarse_config['u_ic'] = np.zeros((coarse_config['nx'], coarse_config['ny']))
     coarse_config['v_ic'] = np.zeros((coarse_config['nx'], coarse_config['ny']))
     coarse_config['p_ic'] = np.zeros((coarse_config['nx'], coarse_config['ny']))
@@ -221,91 +222,91 @@ def fine_to_coarse_config(fine_config):
     _p_bc_x0, _p_bc_xn, _p_bc_y0, _p_bc_yn = [], [], [], []
 
     for i in range(fine_config['nx']):
-        if i % 5 == 0:
+        if i % const == 0:
             u_bc_x0_i = copy.deepcopy(u_bc_x0[i])
-            u_bc_x0_i.i = i // 5
-            u_bc_x0_i.j = u_bc_x0_i.j // 5
-            u_bc_x0_i.max_i = u_bc_x0_i.max_i // 5
-            u_bc_x0_i.max_j = u_bc_x0_i.max_j // 5
+            u_bc_x0_i.i = i // const
+            u_bc_x0_i.j = u_bc_x0_i.j // const
+            u_bc_x0_i.max_i = u_bc_x0_i.max_i // const
+            u_bc_x0_i.max_j = u_bc_x0_i.max_j // const
             _u_bc_x0.append(u_bc_x0_i)
             
             u_bc_xn_i = copy.deepcopy(u_bc_xn[i])
-            u_bc_xn_i.i = i // 5
-            u_bc_xn_i.j = u_bc_xn_i.j // 5
-            u_bc_xn_i.max_i = u_bc_xn_i.max_i // 5
-            u_bc_xn_i.max_j = u_bc_xn_i.max_j // 5
+            u_bc_xn_i.i = i // const
+            u_bc_xn_i.j = u_bc_xn_i.j // const
+            u_bc_xn_i.max_i = u_bc_xn_i.max_i // const
+            u_bc_xn_i.max_j = u_bc_xn_i.max_j // const
             _u_bc_xn.append(u_bc_xn_i)
             
             u_bc_y0_i = copy.deepcopy(u_bc_y0[i])
-            u_bc_y0_i.i = u_bc_y0_i.i // 5
-            u_bc_y0_i.j = i // 5
-            u_bc_y0_i.max_i = u_bc_x0_i.max_i // 5
-            u_bc_y0_i.max_j = u_bc_y0_i.max_j // 5
+            u_bc_y0_i.i = u_bc_y0_i.i // const
+            u_bc_y0_i.j = i // const
+            u_bc_y0_i.max_i = u_bc_x0_i.max_i // const
+            u_bc_y0_i.max_j = u_bc_y0_i.max_j // const
             _u_bc_y0.append(u_bc_y0_i)
             
             u_bc_yn_i = copy.deepcopy(u_bc_yn[i])
-            u_bc_yn_i.i = u_bc_yn_i.i // 5
-            u_bc_yn_i.j = i // 5
-            u_bc_yn_i.max_i = u_bc_yn_i.max_i // 5
-            u_bc_yn_i.max_j = u_bc_yn_i.max_j // 5
+            u_bc_yn_i.i = u_bc_yn_i.i // const
+            u_bc_yn_i.j = i // const
+            u_bc_yn_i.max_i = u_bc_yn_i.max_i // const
+            u_bc_yn_i.max_j = u_bc_yn_i.max_j // const
             _u_bc_yn.append(u_bc_yn_i)
 
             # do same for v
             v_bc_x0_i = copy.deepcopy(v_bc_x0[i])
-            v_bc_x0_i.i = i // 5
-            v_bc_x0_i.j = v_bc_x0_i.j // 5
-            v_bc_x0_i.max_i = v_bc_x0_i.max_i // 5
-            v_bc_x0_i.max_j = v_bc_x0_i.max_j // 5
+            v_bc_x0_i.i = i // const
+            v_bc_x0_i.j = v_bc_x0_i.j // const
+            v_bc_x0_i.max_i = v_bc_x0_i.max_i // const
+            v_bc_x0_i.max_j = v_bc_x0_i.max_j // const
             _v_bc_x0.append(v_bc_x0_i)
 
             v_bc_xn_i = copy.deepcopy(v_bc_xn[i])
-            v_bc_xn_i.i = i // 5
-            v_bc_xn_i.j = v_bc_xn_i.j // 5
-            v_bc_xn_i.max_i = v_bc_xn_i.max_i // 5
-            v_bc_xn_i.max_j = v_bc_xn_i.max_j // 5
+            v_bc_xn_i.i = i // const
+            v_bc_xn_i.j = v_bc_xn_i.j // const
+            v_bc_xn_i.max_i = v_bc_xn_i.max_i // const
+            v_bc_xn_i.max_j = v_bc_xn_i.max_j // const
             _v_bc_xn.append(v_bc_xn_i)
 
             v_bc_y0_i = copy.deepcopy(v_bc_y0[i])
-            v_bc_y0_i.i = v_bc_y0_i.i // 5
-            v_bc_y0_i.j = i // 5
-            v_bc_y0_i.max_i = v_bc_y0_i.max_i // 5
-            v_bc_y0_i.max_j = v_bc_y0_i.max_j // 5
+            v_bc_y0_i.i = v_bc_y0_i.i // const
+            v_bc_y0_i.j = i // const
+            v_bc_y0_i.max_i = v_bc_y0_i.max_i // const
+            v_bc_y0_i.max_j = v_bc_y0_i.max_j // const
             _v_bc_y0.append(v_bc_y0_i)
 
             v_bc_yn_i = copy.deepcopy(v_bc_yn[i])
-            v_bc_yn_i.i = v_bc_yn_i.i // 5
-            v_bc_yn_i.j = i // 5
-            v_bc_yn_i.max_i = v_bc_yn_i.max_i // 5
-            v_bc_yn_i.max_j = v_bc_yn_i.max_j // 5
+            v_bc_yn_i.i = v_bc_yn_i.i // const
+            v_bc_yn_i.j = i // const
+            v_bc_yn_i.max_i = v_bc_yn_i.max_i // const
+            v_bc_yn_i.max_j = v_bc_yn_i.max_j // const
             _v_bc_yn.append(v_bc_yn_i)
 
             # finally, do same for p
             p_bc_x0_i = copy.deepcopy(p_bc_x0[i])
-            p_bc_x0_i.i = i // 5
-            p_bc_x0_i.j = p_bc_x0_i.j // 5
-            p_bc_x0_i.max_i = p_bc_x0_i.max_i // 5
-            p_bc_x0_i.max_j = p_bc_x0_i.max_j // 5
+            p_bc_x0_i.i = i // const
+            p_bc_x0_i.j = p_bc_x0_i.j // const
+            p_bc_x0_i.max_i = p_bc_x0_i.max_i // const
+            p_bc_x0_i.max_j = p_bc_x0_i.max_j // const
             _p_bc_x0.append(p_bc_x0_i)
 
             p_bc_xn_i = copy.deepcopy(p_bc_xn[i])
-            p_bc_xn_i.i = i // 5
-            p_bc_xn_i.j = p_bc_xn_i.j // 5
-            p_bc_xn_i.max_i = p_bc_xn_i.max_i // 5
-            p_bc_xn_i.max_j = p_bc_xn_i.max_j // 5
+            p_bc_xn_i.i = i // const
+            p_bc_xn_i.j = p_bc_xn_i.j // const
+            p_bc_xn_i.max_i = p_bc_xn_i.max_i // const
+            p_bc_xn_i.max_j = p_bc_xn_i.max_j // const
             _p_bc_xn.append(p_bc_xn_i)
 
             p_bc_y0_i = copy.deepcopy(p_bc_y0[i])
-            p_bc_y0_i.i = p_bc_y0_i.i // 5
-            p_bc_y0_i.j = i // 5
-            p_bc_y0_i.max_i = p_bc_y0_i.max_i // 5
-            p_bc_y0_i.max_j = p_bc_y0_i.max_j // 5
+            p_bc_y0_i.i = p_bc_y0_i.i // const
+            p_bc_y0_i.j = i // const
+            p_bc_y0_i.max_i = p_bc_y0_i.max_i // const
+            p_bc_y0_i.max_j = p_bc_y0_i.max_j // const
             _p_bc_y0.append(p_bc_y0_i)
 
             p_bc_yn_i = copy.deepcopy(p_bc_yn[i])
-            p_bc_yn_i.i = p_bc_yn_i.i // 5
-            p_bc_yn_i.j = i // 5
-            p_bc_yn_i.max_i = p_bc_yn_i.max_i // 5
-            p_bc_yn_i.max_j = p_bc_yn_i.max_j // 5
+            p_bc_yn_i.i = p_bc_yn_i.i // const
+            p_bc_yn_i.j = i // const
+            p_bc_yn_i.max_i = p_bc_yn_i.max_i // const
+            p_bc_yn_i.max_j = p_bc_yn_i.max_j // const
             _p_bc_yn.append(p_bc_yn_i)
 
     _u_bc = _u_bc_x0 + _u_bc_xn + _u_bc_y0 + _u_bc_yn
@@ -349,14 +350,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--system', type=str, default='navierstokes',
                         help='linear|nonlinear|linear_convection|nonlinear_convection|diffusion|burgers|navier_stokes')
-    parser.add_argument('--num', type=int, default=100,
-                        help='number of systems to generate (default: 100)')
+    parser.add_argument('--num', type=int, default=1000,
+                        help='number of systems to generate (default: 1000)')
+    parser.add_argument('--fine-grid-dim', type=int, default=50,
+                        help='granularity of fine grid [default: 50]')
+    parser.add_argument('--coarse-grid-dim', type=int, default=10,
+                        help='granularity of the coarse grid [dedafult: 10]')
     args = parser.parse_args()
 
     np.random.seed(1337)
 
     # these are fixed hyperparameters
-    nt, nit, nx, ny = 200, 50, 50, 50 
+    nt, nit, nx, ny = 200, 50, args.fine_grid_dim, args.fine_grid_dim 
     dt, rho, nu, c = 0.001, 1, 0.1, 1
 
     data_dir = os.path.join(DATA_DIR, args.system)
@@ -381,7 +386,7 @@ if __name__ == "__main__":
         fine_system = generate_system(args.system, fine_config)  # make fine system!
         
         # lots of logic to preserve random choices but subsample
-        coarse_config = fine_to_coarse_config(fine_config)
+        coarse_config = fine_to_coarse_config(fine_config, args.coarse_grid_dim)
         print('Generating **coarse** {} system: ({}/{})'.format(args.system, count + 1, args.num))
         coarse_system = generate_system(args.system, coarse_config)
 

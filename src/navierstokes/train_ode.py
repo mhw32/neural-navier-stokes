@@ -46,6 +46,8 @@ if __name__ == "__main__":
     print('loading fine systems')
     data_dir = os.path.join(DATA_DIR, args.system)
     u_fine, v_fine, p_fine = load_systems(data_dir, fine=True)
+    u_coarse, v_coarse, p_coarse = load_systems(data_dir, fine=False)
+    factor = int(u_fine.shape[-1] / u_coarse.shape[-1])
 
     N = u_fine.shape[0]
     nx, ny = u_fine.shape[2], u_fine.shape[3]
@@ -53,7 +55,7 @@ if __name__ == "__main__":
     y_fine = np.linspace(0, 2, ny)
     X_fine, Y_fine = np.meshgrid(x_fine, y_fine)
     u_coarsened, v_coarsened, p_coarsened = coarsen_fine_systems(
-        X_fine, Y_fine, u_fine, v_fine, p_fine)
+        X_fine, Y_fine, u_fine, v_fine, p_fine, factor)
 
     # set some hyperparameters
     grid_dim = u_coarsened.shape[2]

@@ -17,7 +17,7 @@ from src.navierstokes.utils import (dynamics_prediction_error_numpy,
                                     spatial_coarsen, AverageMeter, load_systems)
 
 
-def coarsen_fine_systems(X_fine, Y_fine, u_fine, v_fine, p_fine):
+def coarsen_fine_systems(X_fine, Y_fine, u_fine, v_fine, p_fine, factor):
     # coarsen the fine systems
     print('Coarsening "fine" systems:')
     u_coarsened, v_coarsened, p_coarsened = [], [], []
@@ -25,7 +25,7 @@ def coarsen_fine_systems(X_fine, Y_fine, u_fine, v_fine, p_fine):
         u_seq, v_seq, p_seq = u_fine[i], v_fine[i], p_fine[i]
         _, _, u_seq, v_seq, p_seq = spatial_coarsen(
             X_fine, Y_fine, u_seq, v_seq, p_seq,
-            agg_x=5, agg_y=5)  # HARDCODE for now
+            agg_x=factor, agg_y=factor)  # HARDCODE for now
 
         u_coarsened.append(u_seq.copy())
         v_coarsened.append(v_seq.copy())
@@ -50,7 +50,8 @@ if __name__ == "__main__":
     data_dir = os.path.join(DATA_DIR, args.system)
     u_fine, v_fine, p_fine = load_systems(data_dir, fine=True)
     u_coarse, v_coarse, p_coarse = load_systems(data_dir, fine=False)
-    
+    factor = int(u_fine.shape[-1] / u_coarse.shape[-1])
+
     N = u_fine.shape[0]
     N_train = int(0.8 * N)
     N_val = int(0.1 * N)
@@ -70,7 +71,7 @@ if __name__ == "__main__":
     y_fine = np.linspace(0, 2, ny)
     X_fine, Y_fine = np.meshgrid(x_fine, y_fine)
     u_coarsened, v_coarsened, p_coarsened = coarsen_fine_systems(
-        X_fine, Y_fine, u_fine, v_fine, p_fine)
+        X_fine, Y_fine, u_fine, v_fine, p_fine, factor)
 
     print('Computing error for coarse systems:')
     u_errors, v_errors, p_errors = [], [], []
