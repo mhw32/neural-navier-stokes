@@ -171,9 +171,14 @@ def load_systems(data_dir, fine=True):
             p_mat.append(data_i['p'])
         else:  # if the system doesnt require this, then return 0s
             p_mat.append(np.zeros_like(data_i['u']))
-        
-    u_mat = np.stack(u_mat)
-    v_mat = np.stack(v_mat)
-    p_mat = np.stack(p_mat)
+    
+    if u_mat[0].ndim == 3:
+        u_mat = np.stack(u_mat)
+        v_mat = np.stack(v_mat)
+        p_mat = np.stack(p_mat)
+    else:
+        u_mat = np.concatenate(u_mat, axis=0)
+        v_mat = np.concatenate(v_mat, axis=0)
+        p_mat = np.concatenate(p_mat, axis=0)
 
     return u_mat, v_mat, p_mat
