@@ -88,6 +88,14 @@ if __name__ == "__main__":
     v_errors = np.stack(v_errors)
     p_errors = np.stack(p_errors)
 
+    idx = np.where(~np.isinf(
+        np.sum(u_errors + v_errors + p_errors, axis=1)
+    ))[0]
+
+    u_errors = u_errors[idx]
+    v_errors = v_errors[idx]
+    p_errors = p_errors[idx]
+
     u_err_mean = np.mean(u_errors, axis=0)
     v_err_mean = np.mean(v_errors, axis=0)
     p_err_mean = np.mean(p_errors, axis=0)

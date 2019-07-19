@@ -254,7 +254,6 @@ class RDN(nn.Module):
         self.conv3 = nn.Conv2d(nFeat, nChannel, kernel_size=3, padding=1, bias=True)
     
     def forward(self, x):
-        import pdb; pdb.set_trace()
         F_  = self.conv1(x)
         F_0 = self.conv2(F_)
         F_1 = self.RDB1(F_0)
