@@ -36,6 +36,18 @@ def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,
     v_ic = np.zeros((nx, ny))
     p_ic = np.zeros((nx, ny))
 
+    u_hat_x = int(np.random.choice(np.arange(10, nx-10)))
+    u_hat_y = int(np.random.choice(np.arange(10, ny-10)))
+    u_hat_v = np.random.uniform(1, 3)
+
+    v_hat_x = int(np.random.choice(np.arange(10, nx-10)))
+    v_hat_y = int(np.random.choice(np.arange(10, ny-10)))
+    v_hat_v = np.random.uniform(1, 3)
+
+    # set hat function for IC
+    u_ic[u_hat_x:u_hat_x+10,u_hat_y:u_hat_y+10] = u_hat_v
+    v_ic[v_hat_x:v_hat_x+10,v_hat_y:v_hat_y+10] = v_hat_v
+
     # create random boundary conditions
     u_bc_x0_lst, u_bc_xn_lst, u_bc_y0_lst, u_bc_yn_lst = [], [], [], []
     v_bc_x0_lst, v_bc_xn_lst, v_bc_y0_lst, v_bc_yn_lst = [], [], [], []
