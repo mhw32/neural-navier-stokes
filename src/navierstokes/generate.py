@@ -28,25 +28,37 @@ def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,
                            constant_derivative=False):
     dx, dy = 2. / (nx - 1), 2. / (ny - 1)
 
-    # randomly pick source 
-    F = np.random.choice([0, 1], p=[0.8, 0.2])
+    # for now, we set the source to 0 because i think its hard
+    # for a predictor to know the evolution with/without source.
+    F = 0  # F = np.random.choice([0, 1, -1], p=[0.8, 0.1, 0.1])
 
-    # randomly generate initial conditions
+    # initialize initial conditions to 0
     u_ic = np.zeros((nx, ny))
     v_ic = np.zeros((nx, ny))
     p_ic = np.zeros((nx, ny))
 
-    u_hat_x = int(np.random.choice(np.arange(10, nx-10)))
-    u_hat_y = int(np.random.choice(np.arange(10, ny-10)))
-    u_hat_v = np.random.uniform(1, 3)
+    # i think it is already hard enough but if we every want to make this 
+    # problem more interesting, we can add a initial condition
+    # add a top hat initialization
+    hat_nx = 25
+    hat_ny = 25
+    
+    u_hat_x = int(np.random.choice(np.arange(1, nx-hat_nx-1)))
+    u_hat_y = int(np.random.choice(np.arange(1, ny-hat_ny-1)))
+    u_hat_v = np.random.rand()
 
-    v_hat_x = int(np.random.choice(np.arange(10, nx-10)))
-    v_hat_y = int(np.random.choice(np.arange(10, ny-10)))
-    v_hat_v = np.random.uniform(1, 3)
+    v_hat_x = int(np.random.choice(np.arange(1, nx-hat_nx-1)))
+    v_hat_y = int(np.random.choice(np.arange(1, ny-hat_ny-1)))
+    v_hat_v = np.random.rand()
+
+    # p_hat_x = int(np.random.choice(np.arange(1, nx-hat_nx-1)))
+    # p_hat_y = int(np.random.choice(np.arange(1, ny-hat_ny-1)))
+    # p_hat_v = np.random.rand()
 
     # set hat function for IC
-    u_ic[u_hat_x:u_hat_x+10,u_hat_y:u_hat_y+10] = u_hat_v
-    v_ic[v_hat_x:v_hat_x+10,v_hat_y:v_hat_y+10] = v_hat_v
+    u_ic[u_hat_x:u_hat_x+hat_nx,u_hat_y:u_hat_y+hat_ny] = u_hat_v
+    v_ic[v_hat_x:v_hat_x+hat_nx,v_hat_y:v_hat_y+hat_ny] = v_hat_v
+    # p_ic[p_hat_x:p_hat_y+hat_nx,p_hat_y:p_hat_y+hat_ny] = p_hat_v
 
     # create random boundary conditions
     u_bc_x0_lst, u_bc_xn_lst, u_bc_y0_lst, u_bc_yn_lst = [], [], [], []
@@ -58,22 +70,22 @@ def generate_random_config(nt, nit, nx, ny, dt, rho, nu, c,
 
     u_x0_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
     u_xn_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
-    u_x0_boundary_value = np.random.randn()
-    u_xn_boundary_value = np.random.randn()
+    u_x0_boundary_value = np.random.rand()
+    u_xn_boundary_value = np.random.rand()
     u_x0_boundary_dict = {u_x0_boundary_type: u_x0_boundary_value}
     u_xn_boundary_dict = {u_xn_boundary_type: u_xn_boundary_value}
 
     v_x0_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
     v_xn_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
-    v_x0_boundary_value = np.random.randn()
-    v_xn_boundary_value = np.random.randn()
+    v_x0_boundary_value = np.random.rand()
+    v_xn_boundary_value = np.random.rand()
     v_x0_boundary_dict = {v_x0_boundary_type: v_x0_boundary_value}
     v_xn_boundary_dict = {v_xn_boundary_type: v_xn_boundary_value}
 
     p_x0_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
     p_xn_boundary_type = np.random.choice(['dirichlet', 'neumann'], p=[0.5, 0.5])
-    p_x0_boundary_value = np.random.randn()
-    p_xn_boundary_value = np.random.randn()
+    p_x0_boundary_value = np.random.rand()
+    p_xn_boundary_value = np.random.rand()
     p_x0_boundary_dict = {p_x0_boundary_type: p_x0_boundary_value}
     p_xn_boundary_dict = {p_xn_boundary_type: p_xn_boundary_value}
 
@@ -199,6 +211,7 @@ def generate_system(system, config):
                                     nx=config['nx'], ny=config['ny'], dt=config['dt'],
                                     rho=config['rho'], nu=config['nu'], F=config['F'])
         u, v, p = system.simulate()
+        print(np.max(np.abs(u)), np.max(np.abs(v)), np.max(np.abs(p)))
         return u, v, p
 
 
@@ -208,10 +221,14 @@ def fine_to_coarse_config(fine_config, coarse_grid_dim):
     coarse_config = copy.deepcopy(fine_config)
     fine_grid_dim = fine_config['nx']
     coarse_config['nx'] = coarse_grid_dim; coarse_config['ny'] = coarse_grid_dim
-    coarse_config['u_ic'] = np.zeros((coarse_config['nx'], coarse_config['ny']))
-    coarse_config['v_ic'] = np.zeros((coarse_config['nx'], coarse_config['ny']))
-    coarse_config['p_ic'] = np.zeros((coarse_config['nx'], coarse_config['ny']))
+  
     const = fine_config['nx'] // coarse_config['nx']
+
+    # copy over initial conditions
+    coarse_config['u_ic'] = copy.deepcopy(fine_config['u_ic'])[::const, ::const]
+    coarse_config['v_ic'] = copy.deepcopy(fine_config['v_ic'])[::const, ::const]
+    coarse_config['p_ic'] = copy.deepcopy(fine_config['p_ic'])[::const, ::const]
+
     # subsample the boundary conditions
     interval = np.arange(0, fine_config['nx'], const)
     
@@ -333,16 +350,28 @@ def fine_to_coarse_config(fine_config, coarse_grid_dim):
     return coarse_config
 
 
-def check_system(u, v, p):
+def check_system(u, v, p, max_value=1000):
+    """
+    Some of these systems (if we randomly choose initial
+    and boundary conditions) are very unstable and have
+    numerical issues. We just rejection sample and throw 
+    out these systems.
+    """
     pass_check = True
     if u is not None:
         if np.sum(np.isnan(u)) > 0:
             pass_check = False
+        if np.max(np.abs(u)) > max_value:
+            pass_check = False
     if v is not None:
         if np.sum(np.isnan(v)) > 0:
             pass_check = False
+        if np.max(np.abs(v)) > max_value:
+            pass_check = False
     if p is not None:
         if np.sum(np.isnan(p)) > 0:
+            pass_check = False
+        if np.max(np.abs(p)) > max_value:
             pass_check = False
     
     return pass_check
@@ -402,7 +431,7 @@ if __name__ == "__main__":
                                              constant_derivative=constant_derivative)
         print('Generating **fine** {} system: ({}/{})'.format(args.system, count + 1, args.num))
         fine_u, fine_v, fine_p = generate_system(args.system, fine_config)  # make fine system!
-        
+
         # lots of logic to preserve random choices but subsample
         coarse_config = fine_to_coarse_config(fine_config, args.coarse_grid_dim)
         print('Generating **coarse** {} system: ({}/{})'.format(args.system, count + 1, args.num))
