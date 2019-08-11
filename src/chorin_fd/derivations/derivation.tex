@@ -99,13 +99,7 @@ The remaining unknown is $p^{n+1}$. We can derive a form for it by taking the di
     \frac{\nabla \mathbf{u}^*}{\bigtriangleup t} &= \Delta p^{n+1}
 \end{align*}
 
-where the last step holds because $\nabla \mathbf{u}^{n+1} = 0$ by the continuity equation. We can also derive the following boundary condition (not shown here):
-
-\begin{equation}
-    \frac{\partial p}{\partial x} = \frac{\partial p}{\partial y} = 0
-\end{equation}
-
-Unfortunately, this is not a real constraint on the true NSE solution so this often results in simulation artifacts.
+where the last step holds because $\nabla \mathbf{u}^{n+1} = 0$ by the continuity equation.
 
 \paragraph{Spatial Discretization}
 
@@ -117,15 +111,44 @@ Start with (sorry added $\rho$ back in)
 \end{equation}
 
 This will be discretized to
+\begin{align*}
+    \frac{p^{n+1}_{i+1,j} - 2p^{n+1}_{i,j} + p^{n+1}_{i-1,j}}{\bigtriangleup x^2} + \frac{p^{n+1}_{i,j+1} - 2p^{n+1}_{i,j} + p^{n+1}_{i,j-1}}{\bigtriangleup y^2} &= \frac{\rho}{\bigtriangleup t}(\frac{\mathbf{u}^*_{i+1,j} - \mathbf{u}^*_{i-1,j}}{\bigtriangleup x} + \frac{\mathbf{u}^*_{i,j+1} - \mathbf{u}^*_{i,j-1}}{\bigtriangleup y}) \\
+    \frac{p^{n+1}_{i+1,j} - 2p^{n+1}_{i,j} + p^{n+1}_{i-1,j}}{\bigtriangleup x^2} + \frac{p^{n+1}_{i,j+1} - 2p^{n+1}_{i,j} + p^{n+1}_{i,j-1}}{\bigtriangleup y^2} &= C
+\end{align*}
+
+where we use $C$ as a short hand for the RHS. We now rely on numerical methods in elliptic PDEs to solve this:
+
+\begin{align}
+    \bigtriangleup y^2 (p_{i+1,j}-2p_{i,j}+p_{i-1,j}) + \bigtriangleup x^2 (p_{i,j+1}-2p_{i,j}+p_{i,j-1}) = \bigtriangleup x^2 \bigtriangleup y^2 C \\
+    \bigtriangleup y^2 (p_{i+1,j} - p_{i-1,j}) + \bigtriangleup x^2 (p_{i,j+1} - p_{i,j-1}) - 4\bigtriangleup x^2 \bigtriangleup y^2 p_{i,j} = C \\
+    p_{i,j} = \frac{1}{4}(\frac{p_{i+1,j} + p_{i-1,j}}{\bigtriangleup x^2} + \frac{p_{i,j+1} + p_{i,j-1}}{\bigtriangleup y^2} - C)
+\end{align}
+
+If we consider time discretization, then we get:
+
 \begin{equation}
-    \frac{p^{n+1}_{i+1,j} - 2p^{n+1}_{i,j} + p^{n+1}_{i-1,j}}{\bigtriangleup x^2} + \frac{p^{n+1}_{i,j+1} - 2p^{n+1}_{i,j} + p^{n+1}_{i,j-1}}{\bigtriangleup y^2} = \frac{\rho}{\bigtriangleup t}(\frac{\mathbf{u}^*_{i+1,j} - \mathbf{u}^*_{i-1,j}}{\bigtriangleup x} + \frac{\mathbf{u}^*_{i,j+1} - \mathbf{u}^*_{i,j-1}}{\bigtriangleup y})
+    p_{i,j}^{n+1} = \frac{1}{4}(\frac{p_{i+1,j}^n + p_{i-1,j}^n}{\bigtriangleup x^2} + \frac{p_{i,j+1}^n + p_{i,j-1}^n}{\bigtriangleup y^2} - C)
 \end{equation}
 
-We can use this to get $p^{n+1}_{i,j}$ for all $i,j$. Then we can use this to estimate $\nabla p^{n+1}$:
+This is called Jacobi Iteration. We can do slightly better if we use new values as we update them i.e.
 
 \begin{equation}
-    \nabla p^{n+1}_{i,j} \approx (\frac{p^{n+1}_{i+1,j} - p^{n+1}_{i-1,j}}{\bigtriangleup x}, \frac{p^{n+1}_{i,j+1} - p^{n+1}_{i,j-1}}{\bigtriangleup y})
+    p_{i,j}^{n+1} = \frac{1}{4}(\frac{p_{i+1,j}^n + p_{i-1,j}^{n+1}}{\bigtriangleup x^2} + \frac{p_{i,j+1}^n + p_{i,j-1}^{n+1}}{\bigtriangleup y^2} - C)
 \end{equation}
+
+To implement this, we would need to loop. We can also use a simple acceleration technique called successive over-relaxation (SOR).
+
+\begin{equation}
+    p_{i,j}^{n+1} = \beta * \frac{1}{4}(\frac{p_{i+1,j}^n + p_{i-1,j}^{n+1}}{\bigtriangleup x^2} + \frac{p_{i,j+1}^n + p_{i,j-1}^{n+1}}{\bigtriangleup y^2} - C) + (1-\beta) * p_{i,j}^{n}
+\end{equation}
+
+Now that we have computed $p^{n+1}$, we can estimate its gradient. Here we need to impose a boundary conditions!
+
+\begin{align*}
+    \nabla p^{n+1}_{i,j} &\approx (\frac{p^{n+1}_{i+1,j} - p^{n+1}_{i-1,j}}{\bigtriangleup x}, \frac{p^{n+1}_{i,j+1} - p^{n+1}_{i,j-1}}{\bigtriangleup y}) \\
+    \frac{\partial p}{\partial x} &= 0,
+    \frac{\partial p}{\partial y} = 0
+\end{align*}
 
 Then we can plug this into the Burgers. Recall (with explicit discretization)
 \begin{equation}
