@@ -1,1 +1,0 @@
-Try LDM, SLDM, neuralODE, RNN on spiral case. Then try nonlinear versions of *LDM.

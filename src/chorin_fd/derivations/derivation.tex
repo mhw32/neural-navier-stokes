@@ -1,0 +1,183 @@
+\documentclass[12pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amsthm,amssymb}
+\usepackage{graphicx}
+
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Z}{\mathbb{Z}}
+
+\newenvironment{theorem}[2][Theorem]{\begin{trivlist}
+\item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+\newenvironment{lemma}[2][Lemma]{\begin{trivlist}
+\item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+\newenvironment{exercise}[2][Exercise]{\begin{trivlist}
+\item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+\newenvironment{reflection}[2][Reflection]{\begin{trivlist}
+\item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+\newenvironment{proposition}[2][Proposition]{\begin{trivlist}
+\item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+\newenvironment{corollary}[2][Corollary]{\begin{trivlist}
+\item[\hskip \labelsep {\bfseries #1}\hskip \labelsep {\bfseries #2.}]}{\end{trivlist}}
+
+\begin{document}
+
+\title{Chorin's Projection Method with Finite Difference for 2D Incompressible Navier Stokes}
+\maketitle
+
+The reason why NSE is hard is a coupling between momentum and pressure via the continuity contraint. So we can just first pretend the pressure does not exist (e.g. Burger's equations) and solve that explicitly. Then we can project that intermediate velocity field onto a divergence free space. In other words, we split the NSE into solenoidal and irrotational components. Here we will use finite difference for everything (no staggered grid though).
+
+We begin with writing down the NSE:
+
+\begin{align*}
+    \frac{\partial{\mathbf{u}}}{\partial t} + (\mathbf{u} \cdot \nabla)\mathbf{u} + \nabla p &= \Delta \mathbf{u} \\
+    \nabla \mathbf{u} &= 0 \\
+    \mathbf{u} &= 0 \quad  \text{on} \quad  \partial \Omega \\
+\end{align*}
+
+where $\mathbf{u} = (u,v)$ is a two-dimensional velocity and $p$ is a scalar pressure. $\Omega$ is the domain whereas $\partial \Omega$ represents the boundary. These boundary conditions are called ``no-slip". This should generalize to cavity BC or general dirichlet.
+
+\paragraph{Chorin's Method}
+The first step of Chorin's is to ignore pressure.
+
+\begin{align*}
+    \frac{\partial{\mathbf{u}}}{\partial t} + (\mathbf{u} \cdot \nabla)\mathbf{u} &= \Delta \mathbf{u} \\
+    \mathbf{u} &= 0 \quad  \text{on} \quad  \partial \Omega \\
+\end{align*}
+
+Note this is just Burger's equation in 2D. We can discretize this in time in two ways. Define the solution to this ``intermediary" system as $\mathbf{u}^*$.
+
+\paragraph{Explicit Discretization}
+Here, we can use Adams-Bashford or Runge-Kutta. We usually use Adams-Bashford since less evaluations.
+
+\begin{equation}
+    \frac{\mathbf{u}^* - \mathbf{u}^n}{\bigtriangleup t} + (\mathbf{u}^{\frac{n+1}{2}} \cdot \nabla) \mathbf{u}^{\frac{n+1}{2}} = \Delta \mathbf{u}^{\frac{n+1}{2}}
+\end{equation}
+
+We can estimate the half time steps as:
+
+\begin{align*}
+    (\mathbf{u}^{\frac{n+1}{2}} \cdot \nabla) \mathbf{u}^{\frac{n+1}{2}} &\approx \frac{3}{2}(\mathbf{u}^{n} \cdot \nabla) \mathbf{u}^{n} - \frac{1}{2}(\mathbf{u}^{n-1} \cdot \nabla) \mathbf{u}^{n-1} \\
+    \Delta \mathbf{u}^{\frac{n+1}{2}} &\approx \frac{3}{2}(\Delta \mathbf{u}^n) - \frac{1}{2}(\Delta \mathbf{u}^{n-1})
+\end{align*}
+
+Set $\mathbf{u}^{-1} = \mathbf{u}^0$ when initializing this technique. This first step is then a first-order explicit Euler method.
+
+\paragraph{Semi-Implicit Discretization}
+Adams-Bashford for advection and Crank-Nicholson for diffusion. The benefit of this is that CN is an implicit method which is more expensive but better. I think (but am not sure) that you can only do this with (spatial) finite difference since you get explicit representations for the Laplacian.
+
+\begin{equation}
+    \frac{\mathbf{u}^* - \mathbf{u}^n}{\bigtriangleup t} + (\mathbf{u}^{\frac{n+1}{2}} \cdot \nabla) \mathbf{u}^{\frac{n+1}{2}} = \Delta (\frac{\mathbf{u}^{*} + \mathbf{u}^{n}}{2})
+\end{equation}
+
+We will revisit this later when we discretize space.
+
+\paragraph{Back to Chorin's}
+We can now take the remaining piece in NSE:
+
+\begin{equation}
+    \frac{\partial \mathbf{u}}{\partial t} = -\nabla p
+\end{equation}
+
+which can be discretized in space as:
+
+\begin{equation}
+    \frac{\mathbf{u}^{n+1} - \mathbf{u}^*}{\bigtriangleup t} = -\nabla p^{n+1}
+\end{equation}
+
+Notice we are using the intermediate time step now! We can rearrange this to get an update rule to march forward:
+
+\begin{equation}
+    \mathbf{u}^{n+1} = \mathbf{u}^* - \bigtriangleup t \nabla p^{n+1}
+\end{equation}
+
+The remaining unknown is $p^{n+1}$. We can derive a form for it by taking the divergence of both sides of this new equation.
+
+\begin{align*}
+    \nabla \cdot (\frac{\mathbf{u}^{n+1} - \mathbf{u}^*}{\bigtriangleup t}) &= \nabla \cdot (-\nabla p^{n+1}) \\
+    \frac{1}{\bigtriangleup t}(\mathbf{u}^{n+1} - \mathbf{u}^*) &= -\Delta p^{n+1} \\
+    \frac{\nabla \mathbf{u}^*}{\bigtriangleup t} &= \Delta p^{n+1}
+\end{align*}
+
+where the last step holds because $\nabla \mathbf{u}^{n+1} = 0$ by the continuity equation.
+
+\paragraph{Spatial Discretization}
+
+We will present central difference (with uniform grid) approximations for the pressure and burgers equation above.
+
+Start with (sorry added $\rho$ back in)
+\begin{equation}
+\frac{1}{\rho} \Delta p^{n+1} = \frac{\nabla \mathbf{u}^*}{\bigtriangleup t}
+\end{equation}
+
+This will be discretized to
+\begin{align*}
+    \frac{p^{n+1}_{i+1,j} - 2p^{n+1}_{i,j} + p^{n+1}_{i-1,j}}{\bigtriangleup x^2} + \frac{p^{n+1}_{i,j+1} - 2p^{n+1}_{i,j} + p^{n+1}_{i,j-1}}{\bigtriangleup y^2} &= \frac{\rho}{\bigtriangleup t}(\frac{\mathbf{u}^*_{i+1,j} - \mathbf{u}^*_{i-1,j}}{\bigtriangleup x} + \frac{\mathbf{u}^*_{i,j+1} - \mathbf{u}^*_{i,j-1}}{\bigtriangleup y}) \\
+    \frac{p^{n+1}_{i+1,j} - 2p^{n+1}_{i,j} + p^{n+1}_{i-1,j}}{\bigtriangleup x^2} + \frac{p^{n+1}_{i,j+1} - 2p^{n+1}_{i,j} + p^{n+1}_{i,j-1}}{\bigtriangleup y^2} &= C_{i,j}
+\end{align*}
+
+where we use $C_{i,j}$ as a short hand for the RHS. We now rely on numerical methods in elliptic PDEs to solve this:
+
+\begin{align}
+    \bigtriangleup y^2 (p_{i+1,j}-2p_{i,j}+p_{i-1,j}) + \bigtriangleup x^2 (p_{i,j+1}-2p_{i,j}+p_{i,j-1}) = \bigtriangleup x^2 \bigtriangleup y^2 C_{i,j} \\
+    \bigtriangleup y^2 (p_{i+1,j} - p_{i-1,j}) + \bigtriangleup x^2 (p_{i,j+1} - p_{i,j-1}) - 4\bigtriangleup x^2 \bigtriangleup y^2 p_{i,j} = C_{i,j} \\
+    p_{i,j} = \frac{1}{4}(\frac{p_{i+1,j} + p_{i-1,j}}{\bigtriangleup x^2} + \frac{p_{i,j+1} + p_{i,j-1}}{\bigtriangleup y^2} - C)
+\end{align}
+
+If we consider time discretization, then we get:
+
+\begin{equation}
+    p_{i,j}^{n+1} = \frac{1}{4}(\frac{p_{i+1,j}^n + p_{i-1,j}^n}{\bigtriangleup x^2} + \frac{p_{i,j+1}^n + p_{i,j-1}^n}{\bigtriangleup y^2} - C_{i,j})
+\end{equation}
+
+This is called Jacobi Iteration. We can do slightly better if we use new values as we update them i.e.
+
+\begin{equation}
+    p_{i,j}^{n+1} = \frac{1}{4}(\frac{p_{i+1,j}^n + p_{i-1,j}^{n+1}}{\bigtriangleup x^2} + \frac{p_{i,j+1}^n + p_{i,j-1}^{n+1}}{\bigtriangleup y^2} - C_{i,j})
+\end{equation}
+
+To implement this, we would need to loop. We can also use a simple acceleration technique called successive over-relaxation (SOR).
+
+\begin{equation}
+    p_{i,j}^{n+1} = \beta * \frac{1}{4}(\frac{p_{i+1,j}^n + p_{i-1,j}^{n+1}}{\bigtriangleup x^2} + \frac{p_{i,j+1}^n + p_{i,j-1}^{n+1}}{\bigtriangleup y^2} - C_{i,j}) + (1-\beta) * p_{i,j}^{n}
+\end{equation}
+
+Now that we have computed $p^{n+1}$, we can estimate its gradient. Here we need to impose a boundary conditions!
+
+\begin{align*}
+    \nabla p^{n+1}_{i,j} &\approx (\frac{p^{n+1}_{i+1,j} - p^{n+1}_{i-1,j}}{\bigtriangleup x}, \frac{p^{n+1}_{i,j+1} - p^{n+1}_{i,j-1}}{\bigtriangleup y}) \\
+    \frac{\partial p}{\partial x} &= 0,
+    \frac{\partial p}{\partial y} = 0
+\end{align*}
+
+Then we can plug this into the Burgers. Recall (with explicit discretization)
+\begin{equation}
+    \mathbf{u}^* = \mathbf{u}^n - \bigtriangleup t (\frac{3}{2}(\mathbf{u}^n \cdot \nabla)\mathbf{u}^n - \frac{1}{2}(\mathbf{u}^{n-1} \cdot \nabla)\mathbf{u}^{n-1}) + \bigtriangleup t (\frac{3}{2}\Delta \mathbf{u}^n - \frac{1}{2} \Delta u^{n-1})
+\end{equation}
+
+For exposition, we will write the discretization for the first dimension of $\mathbf{u}$: $u$.
+
+\begin{align*}
+u^* &= u^n - \bigtriangleup t (\frac{3}{2}(u^n\frac{\partial u^n}{\partial x} + v^n \frac{\partial u^n}{\partial y}) - \frac{1}{2}(u^{n-1}\frac{\partial u^{n-1}}{\partial x} + v^{n-1} \frac{\partial u^{n-1}}{\partial y}) \\
+    &\qquad + \bigtriangleup t (\frac{3}{2}(\frac{\partial^2 u^n}{\partial x^2} + \frac{\partial^2 u^n}{\partial y^2}) - \frac{1}{2}(\frac{\partial^2 u^{n-1}}{\partial x^2} + \frac{\partial^2 u^{n-1}}{\partial y^2}))
+\end{align*}
+
+We can discretize this further with centered difference by the following substitutions:
+
+\begin{align*}
+    \frac{\partial u^n}{\partial x} &= \frac{u^n_{i+1,j} - u^n_{i-1,j}}{\bigtriangleup x} \\
+    \frac{\partial^2 u^n}{\partial x^2} &= \frac{u^n_{i+1,j} - 2u^n_{i,j} + u^n_{i-1,j}}{\bigtriangleup x^2}
+\end{align*}
+
+Similar ones for $v^n$ and $u^{n-1}$.
+
+Then lastly, we can do the projection step:
+
+\begin{align*}
+    u^{n+1}_{i,j} &= u^*_{i,j} - \bigtriangleup t (\frac{p^{n+1}_{i+1,j} - p^{n+1}_{i-1,j}}{\bigtriangleup x}) \\
+    v^{n+1}_{i,j} &= v^*_{i,j} - \bigtriangleup t (\frac{p^{n+1}_{i,j+1} - p^{n+1}_{i,j-1}}{\bigtriangleup y}) \\
+\end{align*}
+
+\paragraph{Crank-Nicholson} TODO.
+
+\end{document}
