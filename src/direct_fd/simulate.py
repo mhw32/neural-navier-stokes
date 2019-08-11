@@ -1,54 +1,32 @@
 """
-Master function for generating a 2D Navier Stokes
-System. We will randomly bit initial conditions 
-and boundary conditions. 
-
-Optionally, users can optionally add variance in 
-a source term as well as add periodic boundary 
-conditions.
-
-Notes:
-    Dirichlet boundary conditions:
-        https://github.com/barbagroup/CFDPython
-
-    Neumann boundary conditions: 
-        http://folk.ntnu.no/leifh/teaching/tkt4140/._main056.html
-        
-    Periodic boundary conditions (Unsupported):
-        https://nbviewer.jupyter.org/github/barbagroup/CFDPython/blob/master/lessons/15_Step_12.ipynb
+Simulator for Two-Dimensional Incompressible Navier Stokes
+using Direct Finite Difference Discretization. This means 
+we must iteratively estimate pressure and impose somewhat
+superficial boundary conditions on pressure. 
 """
 
 import numpy as np
 from tqdm import tqdm
 
 
-class BaseDynamicalSystem(object):
-    """Class for future dynamical models to inherit from."""
-    
-    def step(self):
-        raise NotImplementedError
-    
-    def simulate(self):
-        raise NotImplementedError
-
-
-class NavierStokesSystem(BaseDynamicalSystem):
-    """Wrapper class around a 2D Incompressible Navier Stokes system.
+class NavierStokesSystem():
+    """
+    Wrapper class around a 2D Incompressible Navier Stokes system.
     
     Args:
     -----
     u_ic : np.array
            initial conditions for u-momentum
     v_ic : np.array
-               initial conditions for v-momentum
+           initial conditions for v-momentum
     p_ic : np.array
-               initial conditions for pressure
+           initial conditions for pressure
     u_bc : list
-           list of MomentumBoundaryCondition objects
+           list of BoundaryCondition objects
     v_bc : list
-           list of MomentumBoundaryCondition objects
+           list of BoundaryCondition objects
     p_bc : list
-           list of PressureBoundaryCondition objects
+           list of BoundaryCondition objects
     nt : integer
          number of time steps to run
     nit : integer
@@ -68,14 +46,14 @@ class NavierStokesSystem(BaseDynamicalSystem):
     """
 
     def __init__(self, u_ic, v_ic, p_ic, u_bc, v_bc, p_bc, 
-                 nt=200, nit=50, nx=50, ny=50, dt=0.001, rho=1, nu=.1, F=0):
+                 nt=200, nit=50, nx=50, ny=50, dt=0.001, rho=1, nu=.1):
         super().__init__()
         self.u_ic, self.v_ic, self.p_ic = u_ic, v_ic, p_ic
         self.u_bc, self.v_bc, self.p_bc = u_bc, v_bc, p_bc
         self.nt, self.dt, self.nx, self.ny = nt, dt, nx, ny
         # hard code to size of x over 2 (un-dimensionalize to [-1, 1])
         self.dx, self.dy = 2. / (self.nx - 1), 2. / (self.ny - 1)
-        self.nit, self.rho, self.nu, self.F = nit, rho, nu, F
+        self.nit, self.rho, self.nu = nit, rho, nu
 
     def _build_up_b(self, u, v):
         rho, dt, dx, dy = self.rho, self.dt, self.dx, self.dy
@@ -94,7 +72,7 @@ class NavierStokesSystem(BaseDynamicalSystem):
         pn = p.copy()
 
         dt, dx, dy = self.dt, self.dx, self.dy
-        rho, nu, F = self.rho, self.nu, self.F
+        rho, nu = self.rho, self.nu
 
         dx, dy = self.dx, self.dy
         for q in range(self.nit):
@@ -117,7 +95,7 @@ class NavierStokesSystem(BaseDynamicalSystem):
         p = self._pressure_poisson(p, b)
 
         dt, dx, dy = self.dt, self.dx, self.dy
-        rho, nu, F = self.rho, self.nu, self.F
+        rho, nu = self.rho, self.nu
 
         u[1:-1, 1:-1] = (un[1:-1, 1:-1]-
                          un[1:-1, 1:-1] * dt / dx *
@@ -128,8 +106,7 @@ class NavierStokesSystem(BaseDynamicalSystem):
                          nu * (dt / dx**2 *
                         (un[1:-1, 2:] - 2 * un[1:-1, 1:-1] + un[1:-1, 0:-2]) +
                          dt / dy**2 *
-                        (un[2:, 1:-1] - 2 * un[1:-1, 1:-1] + un[0:-2, 1:-1])) + 
-                         F * dt)
+                        (un[2:, 1:-1] - 2 * un[1:-1, 1:-1] + un[0:-2, 1:-1])))
         
         v[1:-1,1:-1] = (vn[1:-1, 1:-1] -
                         un[1:-1, 1:-1] * dt / dx *
@@ -179,11 +156,10 @@ if __name__ == "__main__":
     ny  = 50
     dt  = 0.001
     rho = 1
-    nu  = 0.1
-    F   = 0
+    nu  = 1
 
-    dx = 2./ (nx - 1.)
-    dy = 2./ (ny - 1.)
+    dx = 2. / (nx - 1.)
+    dy = 2. / (ny - 1.)
 
     u_ic = np.zeros((nx, ny))
     v_ic = np.zeros((nx, ny))
@@ -205,6 +181,7 @@ if __name__ == "__main__":
 
     p_bc = [
         DirichletBoundaryCondition(0, 'top', dx, dy),
+        NeumannBoundaryCondition(0, 'bottom', dx, dy),
         NeumannBoundaryCondition(0, 'left', dx, dy),
         NeumannBoundaryCondition(0, 'right', dx, dy),
     ]
@@ -212,7 +189,7 @@ if __name__ == "__main__":
     system = NavierStokesSystem(
         u_ic, v_ic, p_ic, u_bc, v_bc, p_bc, 
         nt=nt, nit=nit, nx=nx, ny=ny, dt=dt, 
-        rho=rho, nu=nu, F=F,
+        rho=rho, nu=nu,
     )
 
     u_data, v_data, p_data = system.simulate()
