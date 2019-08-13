@@ -113,9 +113,11 @@ plots_nl/
 
 **.png
 notebooks/
-**.pdf
 **.gif
 src/navierstokes/data
 **results/
 **model
 notebooks/
+
+**.aux
+
