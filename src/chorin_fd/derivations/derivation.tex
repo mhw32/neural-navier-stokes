@@ -95,11 +95,11 @@ The remaining unknown is $p^{n+1}$. We can derive a form for it by taking the di
 
 \begin{align*}
     \nabla \cdot (\frac{\mathbf{u}^{n+1} - \mathbf{u}^*}{\bigtriangleup t}) &= \nabla \cdot (-\nabla p^{n+1}) \\
-    \frac{1}{\bigtriangleup t}(\mathbf{u}^{n+1} - \mathbf{u}^*) &= -\Delta p^{n+1} \\
-    \frac{\nabla \mathbf{u}^*}{\bigtriangleup t} &= \Delta p^{n+1}
+    \frac{1}{\bigtriangleup t}(\nabla \cdot \mathbf{u}^{n+1} - \nabla \cdot \mathbf{u}^*) &= -\Delta p^{n+1} \\
+    \frac{\nabla \cdot \mathbf{u}^*}{\bigtriangleup t} &= \Delta p^{n+1}
 \end{align*}
 
-where the last step holds because $\nabla \mathbf{u}^{n+1} = 0$ by the continuity equation.
+where the last step holds because $\nabla \cdot \mathbf{u}^{n+1} = 0$ by the continuity equation.
 
 \paragraph{Spatial Discretization}
 
@@ -107,12 +107,12 @@ We will present central difference (with uniform grid) approximations for the pr
 
 Start with (sorry added $\rho$ back in)
 \begin{equation}
-\frac{1}{\rho} \Delta p^{n+1} = \frac{\nabla \mathbf{u}^*}{\bigtriangleup t}
+\frac{1}{\rho} \Delta p^{n+1} = \frac{\nabla \cdot \mathbf{u}^*}{\bigtriangleup t}
 \end{equation}
 
 This will be discretized to
 \begin{align*}
-    \frac{p^{n+1}_{i+1,j} - 2p^{n+1}_{i,j} + p^{n+1}_{i-1,j}}{\bigtriangleup x^2} + \frac{p^{n+1}_{i,j+1} - 2p^{n+1}_{i,j} + p^{n+1}_{i,j-1}}{\bigtriangleup y^2} &= \frac{\rho}{\bigtriangleup t}(\frac{\mathbf{u}^*_{i+1,j} - \mathbf{u}^*_{i-1,j}}{\bigtriangleup x} + \frac{\mathbf{u}^*_{i,j+1} - \mathbf{u}^*_{i,j-1}}{\bigtriangleup y}) \\
+    \frac{p^{n+1}_{i+1,j} - 2p^{n+1}_{i,j} + p^{n+1}_{i-1,j}}{\bigtriangleup x^2} + \frac{p^{n+1}_{i,j+1} - 2p^{n+1}_{i,j} + p^{n+1}_{i,j-1}}{\bigtriangleup y^2} &= \frac{\rho}{\bigtriangleup t}(\frac{u^*_{i+1,j} - u^*_{i-1,j}}{\bigtriangleup x} + \frac{v^*_{i,j+1} - v^*_{i,j-1}}{\bigtriangleup y}) \\
     \frac{p^{n+1}_{i+1,j} - 2p^{n+1}_{i,j} + p^{n+1}_{i-1,j}}{\bigtriangleup x^2} + \frac{p^{n+1}_{i,j+1} - 2p^{n+1}_{i,j} + p^{n+1}_{i,j-1}}{\bigtriangleup y^2} &= C_{i,j}
 \end{align*}
 
@@ -120,26 +120,26 @@ where we use $C_{i,j}$ as a short hand for the RHS. We now rely on numerical met
 
 \begin{align}
     \bigtriangleup y^2 (p_{i+1,j}-2p_{i,j}+p_{i-1,j}) + \bigtriangleup x^2 (p_{i,j+1}-2p_{i,j}+p_{i,j-1}) = \bigtriangleup x^2 \bigtriangleup y^2 C_{i,j} \\
-    \bigtriangleup y^2 (p_{i+1,j} - p_{i-1,j}) + \bigtriangleup x^2 (p_{i,j+1} - p_{i,j-1}) - 4\bigtriangleup x^2 \bigtriangleup y^2 p_{i,j} = C_{i,j} \\
-    p_{i,j} = \frac{1}{4}(\frac{p_{i+1,j} + p_{i-1,j}}{\bigtriangleup x^2} + \frac{p_{i,j+1} + p_{i,j-1}}{\bigtriangleup y^2} - C)
+    \bigtriangleup y^2 (p_{i+1,j} + p_{i-1,j}) + \bigtriangleup x^2 (p_{i,j+1} + p_{i, j-1}) - \bigtriangleup x^2 \bigtriangleup y^2  C_{i,j} = (2\bigtriangleup x^2 + 2\bigtriangleup y^2)p_{i,j} \\
+    p_{i,j} = \frac{\bigtriangleup y^2 p_{i+1,j} + \bigtriangleup y^2 p_{i-1,j} + \bigtriangleup x^2  p_{i,j+1} + \bigtriangleup x^2 p_{i, j-1} - \bigtriangleup x^2 \bigtriangleup y^2  C_{i,j}}{2\bigtriangleup x^2 + 2\bigtriangleup y^2}
 \end{align}
 
 If we consider time discretization, then we get:
 
 \begin{equation}
-    p_{i,j}^{n+1} = \frac{1}{4}(\frac{p_{i+1,j}^n + p_{i-1,j}^n}{\bigtriangleup x^2} + \frac{p_{i,j+1}^n + p_{i,j-1}^n}{\bigtriangleup y^2} - C_{i,j})
+    p_{i,j}^{n+1} = \frac{\bigtriangleup y^2 p^n_{i+1,j} + \bigtriangleup y^2 p^n_{i-1,j} + \bigtriangleup x^2  p^n_{i,j+1} + \bigtriangleup x^2 p^n_{i, j-1} - \bigtriangleup x^2 \bigtriangleup y^2  C_{i,j}}{2\bigtriangleup x^2 + 2\bigtriangleup y^2}
 \end{equation}
 
 This is called Jacobi Iteration. We can do slightly better if we use new values as we update them i.e.
 
 \begin{equation}
-    p_{i,j}^{n+1} = \frac{1}{4}(\frac{p_{i+1,j}^n + p_{i-1,j}^{n+1}}{\bigtriangleup x^2} + \frac{p_{i,j+1}^n + p_{i,j-1}^{n+1}}{\bigtriangleup y^2} - C_{i,j})
+    p_{i,j}^{n+1} = \frac{\bigtriangleup y^2 p^n_{i+1,j} + \bigtriangleup y^2 p^{n+1}_{i-1,j} + \bigtriangleup x^2  p^n_{i,j+1} + \bigtriangleup x^2 p^{n+1}_{i, j-1} - \bigtriangleup x^2 \bigtriangleup y^2  C_{i,j}}{2\bigtriangleup x^2 + 2\bigtriangleup y^2}
 \end{equation}
 
 To implement this, we would need to loop. We can also use a simple acceleration technique called successive over-relaxation (SOR).
 
 \begin{equation}
-    p_{i,j}^{n+1} = \beta * \frac{1}{4}(\frac{p_{i+1,j}^n + p_{i-1,j}^{n+1}}{\bigtriangleup x^2} + \frac{p_{i,j+1}^n + p_{i,j-1}^{n+1}}{\bigtriangleup y^2} - C_{i,j}) + (1-\beta) * p_{i,j}^{n}
+    p_{i,j}^{n+1} = \beta * \{\frac{\bigtriangleup y^2 p^n_{i+1,j} + \bigtriangleup y^2 p^{n+1}_{i-1,j} + \bigtriangleup x^2  p^n_{i,j+1} + \bigtriangleup x^2 p^{n+1}_{i, j-1} - \bigtriangleup x^2 \bigtriangleup y^2  C_{i,j}}{2\bigtriangleup x^2 + 2\bigtriangleup y^2}\} + (1-\beta) * p^n_{i,j}
 \end{equation}
 
 Now that we have computed $p^{n+1}$, we can estimate its gradient. Here we need to impose a boundary conditions!

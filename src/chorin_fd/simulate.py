@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings('error')
+
 import numpy as np
 from scipy.sparse import diags
 from tqdm import tqdm
@@ -179,16 +182,16 @@ class NavierStokesSystem():
         tol, err, it = 5e-6, 1, 1
         pPrev = p.copy()
 
-        C = np.zeros_like(ui)
-        C[1:-1, 1:-1] = rho / dt * ((ui[2:, 1:-1] - ui[:-2, 1:-1]) / self.dx +
-                                    (ui[1:-1, 2:] - ui[1:-1, :-2]) / self.dy)
+        dx2dy2C = np.zeros_like(ui)
+        dx2dy2C[1:-1, 1:-1] = ( dx * rho * dy**2 / dt * (ui[2:, 1:-1] - ui[:-2, 1:-1]) +
+                                dy * rho * dx**2 / dt * (vi[1:-1, 2:] - vi[1:-1, :-2]) )
 
         while ((err > tol) and (it < self.nit)):
             for i in range(1, nx - 1):
                 for j in range(1, ny - 1):
-                    p[i, j] =  (beta * 1/4. * ((p[i+1, j] + p[i-1, j]) / dx**2 +
-                                               (p[i, j+1] + p[i, j-1]) / dy**2 -
-                                               C[i, j]) +
+                    p[i, j] =  (beta * (dy**2 * p[i+1, j] + dy**2 * p[i-1, j] + 
+                                        dx**2 * p[i, j+1] + dx**2 * p[i, j-1] -
+                                        dx2dy2C[i, j]) / (2 * dx**2 + 2 * dy**2) +
                                 (1 - beta) * p[i, j])
 
             err = np.max(np.abs(p - pPrev))
