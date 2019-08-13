@@ -233,7 +233,7 @@ Let $\mathbf{w} = (u^\ddagger, v^\ddagger)$. We can then explicitly write the fi
 
 where
 \begin{align*}
-    C_u &= \frac{\bigtriangleup t}{2}(3(u^n_{i,j}\frac{u^n_{i+1,j} - u^n_{i-1,j}}{\bigtriangleup x} + v^n_{i,j}\frac{u^n_{i,j+1} - u^n_{i,j-1}}{\bigtriangleup y}) - (u^{n-1}_{i,j}\frac{u^{n-1}_{i+1,j} - u^{n-1}_{i-1,j}}{\bigtriangleup x} + v^{n-1}_{i,j}\frac{u^{n-1}_{i,j+1} - u^{n-1}_{i,j-1}}{\bigtriangleup y})) \\
+    C_u &= \frac{\bigtriangleup t}{2}(3(u^n_{i,j}\frac{u^n_{i+1,j} - u^n_{i-1,j}}{2\bigtriangleup x} + v^n_{i,j}\frac{u^n_{i,j+1} - u^n_{i,j-1}}{2\bigtriangleup y}) - (u^{n-1}_{i,j}\frac{u^{n-1}_{i+1,j} - u^{n-1}_{i-1,j}}{2\bigtriangleup x} + v^{n-1}_{i,j}\frac{u^{n-1}_{i,j+1} - u^{n-1}_{i,j-1}}{2\bigtriangleup y})) \\
     & \qquad + 2(\frac{\bigtriangleup t}{2 Re}(\frac{u^n_{i+1,j} -2u^n_{i,j} + u^n_{i-1,j}}{\bigtriangleup x^2} + \frac{u^n_{i,j+1} -2u^n_{i,j} + u^n_{i,j-1}}{\bigtriangleup y^2}))
 \end{align*}
 
@@ -252,7 +252,7 @@ We can solve all of these together (for all $i,j$) as a linear system. Let's now
 
 where
 \begin{align*}
-    C_v &= \frac{\bigtriangleup t}{2}(3(u^n_{i,j}\frac{v^n_{i+1,j} - v^n_{i-1,j}}{\bigtriangleup x} + v^n_{i,j}\frac{v^n_{i,j+1} - v^n_{i,j-1}}{\bigtriangleup y}) - (u^{n-1}_{i,j}\frac{v^{n-1}_{i+1,j} - v^{n-1}_{i-1,j}}{\bigtriangleup x} + v^{n-1}_{i,j}\frac{v^{n-1}_{i,j+1} - v^{n-1}_{i,j-1}}{\bigtriangleup y})) \\
+    C_v &= \frac{\bigtriangleup t}{2}(3(u^n_{i,j}\frac{v^n_{i+1,j} - v^n_{i-1,j}}{2\bigtriangleup x} + v^n_{i,j}\frac{v^n_{i,j+1} - v^n_{i,j-1}}{2\bigtriangleup y}) - (u^{n-1}_{i,j}\frac{v^{n-1}_{i+1,j} - v^{n-1}_{i-1,j}}{2\bigtriangleup x} + v^{n-1}_{i,j}\frac{v^{n-1}_{i,j+1} - v^{n-1}_{i,j-1}}{2\bigtriangleup y})) \\
     & \qquad + 2(\frac{\bigtriangleup t}{2 Re}(\frac{v^n_{i+1,j} -2v^n_{i,j} + v^n_{i-1,j}}{\bigtriangleup x^2} + \frac{v^n_{i,j+1} -2v^n_{i,j} + v^n_{i,j-1}}{\bigtriangleup y^2}))
 \end{align*}
 
