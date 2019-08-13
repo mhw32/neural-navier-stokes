@@ -202,27 +202,27 @@ where $\frac{\delta}{\delta x}$ is a finite difference operator. Let $A = \frac{
 
 \begin{align*}
 \mathbf{u}^* - \mathbf{u}^n &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + (A + B)(\mathbf{u}^* + \mathbf{u}^n) \\
-(\mathbf{u}^* - \mathbf{u}^n) - (A + B)(\mathbf{u}^* + \mathbf{u}^n) &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + 2(A + B)(\mathbf{u}^* + \mathbf{u}^n) \\
-(1 - A - B)(\mathbf{u}^* + \mathbf{u}^n) &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + 2(A + B)(\mathbf{u}^* + \mathbf{u}^n)
+(\mathbf{u}^* - \mathbf{u}^n) - (A + B)(\mathbf{u}^* - \mathbf{u}^n) &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + 2(A + B)\mathbf{u}^n \\
+(1 - A - B)(\mathbf{u}^* - \mathbf{u}^n) &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + 2(A + B)\mathbf{u}^n
 \end{align*}
 
 We might try to solve this but it will involve solving a dense linear system, which is expensive. Thus, we make the following assumption:
 
 \begin{equation}
-(1 - A - B)(\mathbf{u}^* + \mathbf{u}^n) \approx (1 - A)(1 - B)(\mathbf{u}^* + \mathbf{u}^n)
+(1 - A - B)(\mathbf{u}^* - \mathbf{u}^n) \approx (1 - A)(1 - B)(\mathbf{u}^* - \mathbf{u}^n)
 \end{equation}
 
 This allows us to use something called \textit{alternating direction implicit method}. We solve the above in two steps!
 
 \begin{align}
-(1 - A)\mathbf{w} &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + 2(A + B)(\mathbf{u}^* + \mathbf{u}^n) \\
-(1 - B)(\mathbf{u}^* + \mathbf{u}^n) &= \mathbf{w}
+(1 - A)\mathbf{w} &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + 2(A + B)\mathbf{u}^n \\
+(1 - B)(\mathbf{u}^* - \mathbf{u}^n) &= \mathbf{w}
 \end{align}
 
 We will now explicitly write out the algorithm, starting with the first step.
 
 \begin{align*}
-    (1 - A)\mathbf{w} &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + 2(A + B)(\mathbf{u}^* + \mathbf{u}^n)
+    (1 - A)\mathbf{w} &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + 2(A + B)\mathbf{u}^n
 \end{align*}
 
 Let $\mathbf{w} = (u^\ddagger, v^\ddagger)$. We can then explicitly write the finite difference part. We first focus on the first dimension.

@@ -134,7 +134,6 @@ class NavierStokesSystem():
         uC  = 2 / nu * dx**2 * (uC1 + uC2)
 
         # solve linear system
-        breakpoint()
         ut[1:-1, 1:-1] = np.linalg.solve(A, uC)
 
         # -- step 1 of crank-nicholson: v-momentum --
@@ -142,7 +141,7 @@ class NavierStokesSystem():
         # adams-bashford estimate for advection terms
         vHn  = (un[1:-1, 1:-1] * (vn[2:, 1:-1] - vn[:-2, 1:-1]) / (2 * dx) +
                 vn[1:-1, 1:-1] * (vn[1:-1, 2:] - vn[1:-1, :-2]) / (2 * dy))
-        uHn1 = (un1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / (2 * dx) +
+        vHn1 = (un1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / (2 * dx) +
                 vn1[1:-1, 1:-1] * (vn1[1:-1, 2:] - vn1[1:-1, :-2]) / (2 * dy))
         # build C vector
         vC1 = dt / 2. * (3 * vHn - vHn1)
@@ -276,14 +275,14 @@ if __name__ == "__main__":
     from src.boundary import (DirichletBoundaryCondition,
                               NeumannBoundaryCondition)
 
-    nt  = 200            # number of timesteps
-    nit = 200            # number iterations for elliptic pressure eqn
-    nx  = 50             # size of spatial grid
+    nt  = 200                 # number of timesteps
+    nit = 200                 # number iterations for elliptic pressure eqn
+    nx  = 50                  # size of spatial grid
     ny  = 50             
     dt  = 0.001         
-    rho = 1              # fluid density (kg / m^3)
-    nu  = 0.1            # fluid kinematic viscocity
-    beta   = 1.25        # SOR hyperparameter
+    rho = 1                   # fluid density (kg / m^3)
+    nu  = 0.1                 # fluid kinematic viscocity
+    beta   = 1.25             # SOR hyperparameter
     method = 'semi_implicit'  # FD method for diffusion term
 
     dx = 2. / (nx - 1.)
