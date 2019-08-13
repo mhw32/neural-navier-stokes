@@ -94,6 +94,8 @@ class NavierStokesSystem():
         dt, dx, dy = self.dt, self.dx, self.dy
         nu = self.nu
 
+        breakpoint()
+
         # important to make copies
         ut, vt = u.copy(), v.copy()
         ui, vi = u.copy(), v.copy()  # intermediate fields
@@ -283,7 +285,7 @@ if __name__ == "__main__":
     rho = 1              # fluid density (kg / m^3)
     nu  = 0.1            # fluid kinematic viscocity
     beta   = 1.25        # SOR hyperparameter
-    method = 'explicit'  # FD method for diffusion term
+    method = 'semi_implicit'  # FD method for diffusion term
 
     dx = 2. / (nx - 1.)
     dy = 2. / (ny - 1.)

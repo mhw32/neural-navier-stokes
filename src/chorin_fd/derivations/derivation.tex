@@ -228,7 +228,7 @@ We will now explicitly write out the algorithm, starting with the first step.
 Let $\mathbf{w} = (u^\ddagger, v^\ddagger)$. We can then explicitly write the finite difference part. We first focus on the first dimension.
 
 \begin{equation}
-    u^\dagger_{i,j} - \frac{\bigtriangleup t}{2} \frac{u^\dagger_{i+1,j} - 2u^\dagger_{i,j} + u^\dagger_{i-1,j}}{\bigtriangleup x^2} = C_u
+    u^\dagger_{i,j} - \frac{\bigtriangleup t}{2 Re} \frac{u^\dagger_{i+1,j} - 2u^\dagger_{i,j} + u^\dagger_{i-1,j}}{\bigtriangleup x^2} = C_u
 \end{equation}
 
 where
@@ -240,14 +240,14 @@ where
 We can continue to massage this a bit.
 
 \begin{align*}
-    2\bigtriangleup x^2 u^\ddagger_{i,j} - \bigtriangleup t u^\ddagger_{i+1,j} + 2\bigtriangleup t u^\ddagger_{i,j} - \bigtriangleup t u^\ddagger_{i-1,j} &= 2\bigtriangleup x^2 C_u \\
-    - \bigtriangleup tu^\ddagger_{i+1,j} + (2\bigtriangleup x^2 + 2\bigtriangleup t)u^\ddagger_{i,j} - \bigtriangleup t u^\ddagger_{i-1,j} &= 2\bigtriangleup x^2 C_u
+    2 Re \bigtriangleup x^2 u^\ddagger_{i,j} - \bigtriangleup t u^\ddagger_{i+1,j} + 2\bigtriangleup t u^\ddagger_{i,j} - \bigtriangleup t u^\ddagger_{i-1,j} &= 2 Re \bigtriangleup x^2 C_u \\
+    - \bigtriangleup tu^\ddagger_{i+1,j} + (2 Re \bigtriangleup x^2 + 2\bigtriangleup t)u^\ddagger_{i,j} - \bigtriangleup t u^\ddagger_{i-1,j} &= 2 Re \bigtriangleup x^2 C_u
 \end{align*}
 
 We can solve all of these together (for all $i,j$) as a linear system. Let's now do the second dimension.
 
 \begin{equation}
-    v^\dagger_{i,j} - \frac{\bigtriangleup t}{2} \frac{v^\dagger_{i+1,j} - 2v^\dagger_{i,j} + v^\dagger_{i-1,j}}{\bigtriangleup x^2} = C_v
+    v^\dagger_{i,j} - \frac{\bigtriangleup t}{2 Re} \frac{v^\dagger_{i+1,j} - 2v^\dagger_{i,j} + v^\dagger_{i-1,j}}{\bigtriangleup x^2} = C_v
 \end{equation}
 
 where
@@ -258,7 +258,7 @@ where
 
 Then,
 \begin{equation}
-    - \bigtriangleup t v^\ddagger_{i+1,j} + (2\bigtriangleup x^2 + 2\bigtriangleup t)v^\ddagger_{i,j} - \bigtriangleup t v^\ddagger_{i-1,j} = 2\bigtriangleup x^2 C_v
+    - \bigtriangleup t v^\ddagger_{i+1,j} + (2Re \bigtriangleup x^2 + 2\bigtriangleup t)v^\ddagger_{i,j} - \bigtriangleup t v^\ddagger_{i-1,j} = 2 Re \bigtriangleup x^2 C_v
 \end{equation}
 
 Note that its tridiagonal which makes all this work worth it. Now we have $\mathbf{w}$. We move on to step 2.
@@ -266,16 +266,19 @@ Note that its tridiagonal which makes all this work worth it. Now we have $\math
 Recall $(1 - B)(\mathbf{u}^* - \mathbf{u}^n) = \mathbf{w}$. We can smooth this a bit more.
 
 \begin{equation}
-    (\mathbf{u}^* - \mathbf{u}^n) - \frac{\bigtriangleup t}{2}(\frac{\delta^2}{\delta y^2} \mathbf{u}^* - \frac{\delta^2}{\delta y^2} \mathbf{u}^n) = \mathbf{w}
+    (\mathbf{u}^* - \mathbf{u}^n) - \frac{\bigtriangleup t}{2 Re}(\frac{\delta^2}{\delta y^2} \mathbf{u}^* - \frac{\delta^2}{\delta y^2} \mathbf{u}^n) = \mathbf{w}
 \end{equation}
 
 Focus on the $i$-th and $j$-th element.
 
 \begin{align*}
-    (u^*_{i,j} - u^n_{i,j}) - \frac{\bigtriangleup t}{2}(\frac{u^*_{i,j+1} - 2u^*_{i,j} + u^*_{i,j-1}}{\bigtriangleup y^2} - \frac{u^n_{i,j+1} - 2u^n_{i,j} + u^n_{i,j-1}}{\bigtriangleup y^2}) = u^\ddagger_{i,j} \\
-    2\bigtriangleup y^2 u^*_{i,j} - 2\bigtriangleup y^2 u^n_{i,j} - \bigtriangleup t(u^*_{i,j+1} - 2u^*_{i,j} + u^*_{i,j-1}) + \bigtriangleup t(u^n_{i,j+1} - 2u^n_{i,j} + u^n_{i,j-1}) = 2\bigtriangleup y^2 u^\ddagger_{i,j} \\
-    2\bigtriangleup y^2 u^*_{i,j} - \bigtriangleup t u^*_{i,j+1} + 2\bigtriangleup t u^*_{i,j} - \bigtriangleup t u^*_{i,j-1} = 2\bigtriangleup y^2 u^\ddagger_{i,j} + 2\bigtriangleup y^2 u^n_{i,j} - \bigtriangleup t(u^n_{i,j+1} - 2u^n_{i,j} + u^n_{i,j-1}) = S \\
-    -\bigtriangleup t u^*_{i,j+1} + (2\bigtriangleup y^2 + 2\bigtriangleup t)u^*_{i,j} - \bigtriangleup t u^*_{i,j-1} = S
+    (u^*_{i,j} - u^n_{i,j}) - \frac{\bigtriangleup t}{2 Re}(\frac{u^*_{i,j+1} - 2u^*_{i,j} + u^*_{i,j-1}}{\bigtriangleup y^2} - \frac{u^n_{i,j+1} - 2u^n_{i,j} + u^n_{i,j-1}}{\bigtriangleup y^2}) = u^\ddagger_{i,j} \\
+    2 Re \bigtriangleup y^2 u^*_{i,j} - 2 Re \bigtriangleup y^2 u^n_{i,j} - \bigtriangleup t(u^*_{i,j+1} - 2 u^*_{i,j} + u^*_{i,j-1}) + \bigtriangleup t(u^n_{i,j+1} - 2u^n_{i,j} + u^n_{i,j-1}) = 2 Re \bigtriangleup y^2 u^\ddagger_{i,j} \\
+    \\
+    2 Re \bigtriangleup y^2 u^*_{i,j} - \bigtriangleup t u^*_{i,j+1} + 2\bigtriangleup t u^*_{i,j} - \bigtriangleup t u^*_{i,j-1} = \\
+    2Re \bigtriangleup y^2 u^\ddagger_{i,j} + 2Re \bigtriangleup y^2 u^n_{i,j} - \bigtriangleup t(u^n_{i,j+1} - 2u^n_{i,j} + u^n_{i,j-1}) = S \\
+    \\
+    -\bigtriangleup t u^*_{i,j+1} + (2Re \bigtriangleup y^2 + 2\bigtriangleup t)u^*_{i,j} - \bigtriangleup t u^*_{i,j-1} = S
 \end{align*}
 
 This is again another tridiagonal matrix solve. This will give us $\mathbf{u}^*$.
@@ -283,8 +286,8 @@ This is again another tridiagonal matrix solve. This will give us $\mathbf{u}^*$
 Similarly for the v-momentum, we get
 
 \begin{align}
-S = 2\bigtriangleup y^2 v^\ddagger_{i,j} + 2\bigtriangleup y^2 v^n_{i,j} - \bigtriangleup t(v^n_{i,j+1} - 2v^n_{i,j} + v^n_{i,j-1}) \\
--\bigtriangleup t v^*_{i,j+1} + (2\bigtriangleup y^2 + 2\bigtriangleup t)v^*_{i,j} - \bigtriangleup t v^*_{i,j-1} = S
+S = 2Re\bigtriangleup y^2 v^\ddagger_{i,j} + 2Re\bigtriangleup y^2 v^n_{i,j} - \bigtriangleup t(v^n_{i,j+1} - 2v^n_{i,j} + v^n_{i,j-1}) \\
+-\bigtriangleup t v^*_{i,j+1} + (2Re\bigtriangleup y^2 + 2\bigtriangleup t)v^*_{i,j} - \bigtriangleup t v^*_{i,j-1} = S
 \end{align}
 
 \end{document}
