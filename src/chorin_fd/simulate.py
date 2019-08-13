@@ -53,7 +53,7 @@ class NavierStokesSystem():
         # hard code to size of x over 2 (un-dimensionalize to [-1, 1])
         self.dx, self.dy = 2. / (self.nx - 1), 2. / (self.ny - 1)
         self.rho, self.nu, self.beta = rho, nu, beta
-        assert method in ['semi_implicit', 'explict']
+        assert method in ['semi_implicit', 'explicit']
         self.method = method
 
     def _explicit_predictor_step(self, u, v, u1, v1):
@@ -69,7 +69,7 @@ class NavierStokesSystem():
         ui[1:-1, 1:-1] = un[1:-1, 1:-1] - dt * (3/2. * (un[1:-1, 1:-1] * (un[2:, 1:-1] - un[:-2, 1:-1]) / dx +
                                                         vn[1:-1, 1:-1] * (un[2:, 1:-1] - un[:-2, 1:-1]) / dy)
                                                -1/2. * (un1[1:-1, 1:-1] * (un1[2:, 1:-1] - un1[:-2, 1:-1]) / dx +
-                                                        vn1[1:-1, 1:-1] * (un1[2:, 1:-1] - un1[:-2, 1:-1]) / dy))
+                                                        vn1[1:-1, 1:-1] * (un1[2:, 1:-1] - un1[:-2, 1:-1]) / dy)) \
                                         + dt * nu * (3/2. * ((un[2:, 1:-1] - 2 * un[1:-1, 1:-1] + un[:-2, 1:-1]) / dx**2 +
                                                              (un[1:-1, 2:] - 2 * un[1:-1, 1:-1] + un[1:-1, :-2]) / dy**2)
                                                     -1/2. * ((un1[2:, 1:-1] - 2 * un1[1:-1, 1:-1] + un1[:-2, 1:-1]) / dx**2 +
@@ -78,7 +78,7 @@ class NavierStokesSystem():
         vi[1:-1, 1:-1] = vn[1:-1, 1:-1] - dt * (3/2. * (un[1:-1, 1:-1] * (vn[2:, 1:-1] - vn[:-2, 1:-1]) / dx +
                                                         vn[1:-1, 1:-1] * (vn[2:, 1:-1] - vn[:-2, 1:-1]) / dy)
                                                -1/2. * (un1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / dx +
-                                                        vn1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / dy))
+                                                        vn1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / dy)) \
                                         + dt * nu * (3/2. * ((vn[2:, 1:-1] - 2 * vn[1:-1, 1:-1] + vn[:-2, 1:-1]) / dx**2 +
                                                              (vn[1:-1, 2:] - 2 * vn[1:-1, 1:-1] + vn[1:-1, :-2]) / dy**2)
                                                     -1/2. * ((vn1[2:, 1:-1] - 2 * vn1[1:-1, 1:-1] + vn1[:-2, 1:-1]) / dx**2 +
@@ -180,12 +180,12 @@ class NavierStokesSystem():
         pPrev = p.copy()
 
         C = np.zeros_like(ui)
-        C[1:-1, 1:-1] = rho / dt * ((ui[2:, :] - ui[:-2, :]) / self.dx +
-                                    (ui[:, 2:] - ui[:, :-2]) / self.dy)
+        C[1:-1, 1:-1] = rho / dt * ((ui[2:, 1:-1] - ui[:-2, 1:-1]) / self.dx +
+                                    (ui[1:-1, 2:] - ui[1:-1, :-2]) / self.dy)
 
         while ((err > tol) and (it < self.nit)):
-            for i in range(1, nx):
-                for j in range(1, ny):
+            for i in range(1, nx - 1):
+                for j in range(1, ny - 1):
                     p[i, j] =  (beta * 1/4. * ((p[i+1, j] + p[i-1, j]) / dx**2 +
                                                (p[i, j+1] + p[i, j-1]) / dy**2 -
                                                C[i, j]) +
@@ -199,13 +199,19 @@ class NavierStokesSystem():
 
     def _correction_step(self, ui, vi, p):
         dt, dx, dy = self.dt, self.dx, self.dy
-        un1 = ui - dt / dx * (p[2:, :] - p[:-2, :])
-        vn1 = vi - dt / dy * (p[:, 2:] - p[:, :-2])
+        un1, vn1 = ui.copy(), vi.copy()
+        un1[1:-1, 1:-1] = ui[1:-1, 1:-1] - dt / dx * (p[2:, 1:-1] - p[:-2, 1:-1])
+        vn1[1:-1, 1:-1] = vi[1:-1, 1:-1] - dt / dy * (p[1:-1, 2:] - p[1:-1, :-2])
 
         return un1, vn1
 
     def step(self, un, vn, un1, vn1, p):
-        ui, vi = self._predictor_step(un, vn, un1, vn1)
+        if self.method == 'explicit':
+            ui, vi = self._explicit_predictor_step(un, vn, un1, vn1)
+        elif self.method == 'semi_implicit':
+            ui, vi = self._semi_implicit_predictor_step(un, vn, un1, vn1)
+        else:
+            raise Exception('method not recognized: {}'.format(self.method))
 
         # set boundary conditions
         for bc in self.u_bc:
@@ -221,14 +227,29 @@ class NavierStokesSystem():
             p = bc.apply(p)
 
         un1, vn1 = self._correction_step(ui, vi, p)
-        return un1, vn1
+        return un1, vn1, p
+
+    def _init_variables(self):
+        u, v, p = self.u_ic, self.v_ic, self.p_ic
+        u, v, p = u.copy(), v.copy(), p.copy()
+
+        for bc in self.u_bc:
+            u = bc.apply(u)
+
+        for bc in self.v_bc:
+            v = bc.apply(v)
+
+        for bc in self.p_bc:
+            p = bc.apply(p)
+
+        return u, v, p
 
     def simulate(self):
         # collect propagations for dataset
         u_list, v_list, p_list = [], [], []
 
-        u, v, p = self.u_ic, self.v_ic, self.p_ic
-        u1, v1 = self.u_ic.copy(), self.v_ic.copy()
+        u, v, p = self._init_variables()
+        u1, v1 = u.copy(), v.copy()
 
         for n in tqdm(range(self.nt)):
             u, v, p = self.step(u, v, u1, v1, p)
@@ -248,11 +269,13 @@ if __name__ == "__main__":
                               NeumannBoundaryCondition)
 
     nt  = 200
+    nit = 50
     nx  = 50
     ny  = 50
     dt  = 0.001
     rho = 1
-    nu  = 1
+    nu  = 0.1
+    method = 'explicit'
 
     dx = 2. / (nx - 1.)
     dy = 2. / (ny - 1.)
@@ -264,7 +287,7 @@ if __name__ == "__main__":
     u_bc = [
         DirichletBoundaryCondition(0, 'left', dx, dy),
         DirichletBoundaryCondition(0, 'right', dx, dy),
-        DirichletBoundaryCondition(0, 'top', dx, dy),
+        DirichletBoundaryCondition(1, 'top', dx, dy),
         DirichletBoundaryCondition(0, 'bottom', dx, dy),
     ]
 
@@ -285,7 +308,7 @@ if __name__ == "__main__":
     system = NavierStokesSystem(
         u_ic, v_ic, p_ic, u_bc, v_bc, p_bc,
         nt=nt, nit=nit, nx=nx, ny=ny, dt=dt,
-        rho=rho, nu=nu,
+        rho=rho, nu=nu, method=method,
     )
 
     u_data, v_data, p_data = system.simulate()

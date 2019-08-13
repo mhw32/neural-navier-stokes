@@ -14,8 +14,8 @@ class BaseBoundaryCondition(object):
     def __init__(self, value, boundary, dx, dy):
         super().__init__()
         assert isinstance(boundary, str)
-        assert isinstance(dx, int)
-        assert isinstance(dy, int)
+        assert isinstance(dx, float)
+        assert isinstance(dy, float)
         assert boundary in ['left', 'right', 'bottom', 'top']
     
         self.value = value
