@@ -1,4 +1,5 @@
 import warnings
+# raise errors on warnings otherwise hard to catch bugs
 warnings.filterwarnings('error')
 
 import numpy as np
@@ -48,7 +49,7 @@ class NavierStokesSystem():
     """
 
     def __init__(self, u_ic, v_ic, p_ic, u_bc, v_bc, p_bc,
-                 nt=200, nit=50, nx=50, ny=50, dt=0.001,
+                 nt=200, nit=50, nx=50, ny=50, dt=0.001, 
                  rho=1, nu=1, beta=1.25, method='semi_implicit'):
         self.u_ic, self.v_ic, self.p_ic = u_ic, v_ic, p_ic
         self.u_bc, self.v_bc, self.p_bc = u_bc, v_bc, p_bc
@@ -69,19 +70,19 @@ class NavierStokesSystem():
         un1, vn1 = u1.copy(), v1.copy()  # u^{n-1}, v^{n-1}
 
         # Adam-Bashford for explicit momentum computation
-        ui[1:-1, 1:-1] = un[1:-1, 1:-1] - dt * (3/2. * (un[1:-1, 1:-1] * (un[2:, 1:-1] - un[:-2, 1:-1]) / dx +
-                                                        vn[1:-1, 1:-1] * (un[2:, 1:-1] - un[:-2, 1:-1]) / dy)
-                                               -1/2. * (un1[1:-1, 1:-1] * (un1[2:, 1:-1] - un1[:-2, 1:-1]) / dx +
-                                                        vn1[1:-1, 1:-1] * (un1[2:, 1:-1] - un1[:-2, 1:-1]) / dy)) \
+        ui[1:-1, 1:-1] = un[1:-1, 1:-1] - dt * (3/2. * (un[1:-1, 1:-1] * (un[2:, 1:-1] - un[:-2, 1:-1]) / (2 * dx) +
+                                                        vn[1:-1, 1:-1] * (un[2:, 1:-1] - un[:-2, 1:-1]) / (2 * dy))
+                                               -1/2. * (un1[1:-1, 1:-1] * (un1[2:, 1:-1] - un1[:-2, 1:-1]) / (2 * dx) +
+                                                        vn1[1:-1, 1:-1] * (un1[2:, 1:-1] - un1[:-2, 1:-1]) / (2 * dy))) \
                                         + dt * nu * (3/2. * ((un[2:, 1:-1] - 2 * un[1:-1, 1:-1] + un[:-2, 1:-1]) / dx**2 +
                                                              (un[1:-1, 2:] - 2 * un[1:-1, 1:-1] + un[1:-1, :-2]) / dy**2)
                                                     -1/2. * ((un1[2:, 1:-1] - 2 * un1[1:-1, 1:-1] + un1[:-2, 1:-1]) / dx**2 +
                                                              (un1[1:-1, 2:] - 2 * un1[1:-1, 1:-1] + un1[1:-1, :-2]) / dy**2))
 
-        vi[1:-1, 1:-1] = vn[1:-1, 1:-1] - dt * (3/2. * (un[1:-1, 1:-1] * (vn[2:, 1:-1] - vn[:-2, 1:-1]) / dx +
-                                                        vn[1:-1, 1:-1] * (vn[2:, 1:-1] - vn[:-2, 1:-1]) / dy)
-                                               -1/2. * (un1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / dx +
-                                                        vn1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / dy)) \
+        vi[1:-1, 1:-1] = vn[1:-1, 1:-1] - dt * (3/2. * (un[1:-1, 1:-1] * (vn[2:, 1:-1] - vn[:-2, 1:-1]) / (2 * dx) +
+                                                        vn[1:-1, 1:-1] * (vn[2:, 1:-1] - vn[:-2, 1:-1]) / (2 * dy))
+                                               -1/2. * (un1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / (2 * dx) +
+                                                        vn1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / (2 * dy))) \
                                         + dt * nu * (3/2. * ((vn[2:, 1:-1] - 2 * vn[1:-1, 1:-1] + vn[:-2, 1:-1]) / dx**2 +
                                                              (vn[1:-1, 2:] - 2 * vn[1:-1, 1:-1] + vn[1:-1, :-2]) / dy**2)
                                                     -1/2. * ((vn1[2:, 1:-1] - 2 * vn1[1:-1, 1:-1] + vn1[:-2, 1:-1]) / dx**2 +
@@ -122,10 +123,10 @@ class NavierStokesSystem():
         # -- step 1 of crank-nicholson: u-momentum --
 
         # adams-bashford estimate for advection terms
-        uHn  = (un[1:-1, 1:-1] * (un[2:, 1:-1] - un[:-2, 1:-1]) / dx +
-                vn[1:-1, 1:-1] * (un[2:, 1:-1] - un[:-2, 1:-1]) / dy)
-        uHn1 = (un1[1:-1, 1:-1] * (un1[2:, 1:-1] - un1[:-2, 1:-1]) / dx +
-                vn1[1:-1, 1:-1] * (un1[2:, 1:-1] - un1[:-2, 1:-1]) / dy)
+        uHn  = (un[1:-1, 1:-1] * (un[2:, 1:-1] - un[:-2, 1:-1]) / (2 * dx) +
+                vn[1:-1, 1:-1] * (un[2:, 1:-1] - un[:-2, 1:-1]) / (2 * dy))
+        uHn1 = (un1[1:-1, 1:-1] * (un1[2:, 1:-1] - un1[:-2, 1:-1]) / (2 * dx) +
+                vn1[1:-1, 1:-1] * (un1[2:, 1:-1] - un1[:-2, 1:-1]) / (2 * dy))
         # build C vector
         uC1 = dt / 2. * (3 * uHn - uHn1)
         uC2 = dt * nu * ((un[2:, 1:-1] - 2 * un[1:-1, 1:-1] + un[:-2, 1:-1]) / dx**2 +
@@ -138,10 +139,10 @@ class NavierStokesSystem():
         # -- step 1 of crank-nicholson: v-momentum --
 
         # adams-bashford estimate for advection terms
-        vHn  = (un[1:-1, 1:-1] * (vn[2:, 1:-1] - vn[:-2, 1:-1]) / dx +
-                vn[1:-1, 1:-1] * (vn[2:, 1:-1] - vn[:-2, 1:-1]) / dy)
-        uHn1 = (un1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / dx +
-                vn1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / dy)
+        vHn  = (un[1:-1, 1:-1] * (vn[2:, 1:-1] - vn[:-2, 1:-1]) / (2 * dx) +
+                vn[1:-1, 1:-1] * (vn[2:, 1:-1] - vn[:-2, 1:-1]) / (2 * dy))
+        uHn1 = (un1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / (2 * dx) +
+                vn1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / (2 * dy))
         # build C vector
         vC1 = dt / 2. * (3 * vHn - vHn1)
         vC2 = dt * nu * ((vn[2:, 1:-1] - 2 * vn[1:-1, 1:-1] + vn[:-2, 1:-1]) / dx**2 +
@@ -183,8 +184,8 @@ class NavierStokesSystem():
         pPrev = p.copy()
 
         dx2dy2C = np.zeros_like(ui)
-        dx2dy2C[1:-1, 1:-1] = ( dx * rho * dy**2 / dt * (ui[2:, 1:-1] - ui[:-2, 1:-1]) +
-                                dy * rho * dx**2 / dt * (vi[1:-1, 2:] - vi[1:-1, :-2]) )
+        dx2dy2C[1:-1, 1:-1] = ( dx * rho * dy**2 / dt * (ui[1:-1, 1:-1] - ui[:-2, 1:-1]) +
+                                dy * rho * dx**2 / dt * (vi[1:-1, 1:-1] - vi[1:-1, :-2]) )
 
         while ((err > tol) and (it < self.nit)):
             for i in range(1, nx - 1):
@@ -193,7 +194,7 @@ class NavierStokesSystem():
                                         dx**2 * p[i, j+1] + dx**2 * p[i, j-1] -
                                         dx2dy2C[i, j]) / (2 * dx**2 + 2 * dy**2) +
                                 (1 - beta) * p[i, j])
-
+            
             err = np.max(np.abs(p - pPrev))
             pPrev = p.copy()
             it = it + 1
@@ -203,8 +204,8 @@ class NavierStokesSystem():
     def _correction_step(self, ui, vi, p):
         dt, dx, dy = self.dt, self.dx, self.dy
         un1, vn1 = ui.copy(), vi.copy()
-        un1[1:-1, 1:-1] = ui[1:-1, 1:-1] - dt / dx * (p[2:, 1:-1] - p[:-2, 1:-1])
-        vn1[1:-1, 1:-1] = vi[1:-1, 1:-1] - dt / dy * (p[1:-1, 2:] - p[1:-1, :-2])
+        un1[1:-1, 1:-1] = ui[1:-1, 1:-1] - dt / (2 * dx) * (p[2:, 1:-1] - p[:-2, 1:-1])
+        vn1[1:-1, 1:-1] = vi[1:-1, 1:-1] - dt / (2 * dy) * (p[1:-1, 2:] - p[1:-1, :-2])
 
         return un1, vn1
 
@@ -228,7 +229,7 @@ class NavierStokesSystem():
         # apply neumann boundary conditions
         for bc in self.p_bc:
             p = bc.apply(p)
-
+        
         un1, vn1 = self._correction_step(ui, vi, p)
         return un1, vn1, p
 
@@ -255,7 +256,10 @@ class NavierStokesSystem():
         u1, v1 = u.copy(), v.copy()
 
         for n in tqdm(range(self.nt)):
-            u, v, p = self.step(u, v, u1, v1, p)
+            _u, _v, p = self.step(u, v, u1, v1, p)
+            u1, v1 = u.copy(), v.copy()
+            u, v = _u.copy(), _v.copy()
+
             u_list.append(u.copy())
             v_list.append(v.copy())
             p_list.append(p.copy())
@@ -271,14 +275,15 @@ if __name__ == "__main__":
     from src.boundary import (DirichletBoundaryCondition,
                               NeumannBoundaryCondition)
 
-    nt  = 200
-    nit = 50
-    nx  = 50
-    ny  = 50
-    dt  = 0.001
-    rho = 1
-    nu  = 0.1
-    method = 'explicit'
+    nt  = 200            # number of timesteps
+    nit = 200            # number iterations for elliptic pressure eqn
+    nx  = 50             # size of spatial grid
+    ny  = 50             
+    dt  = 0.001         
+    rho = 1              # fluid density (kg / m^3)
+    nu  = 0.1            # fluid kinematic viscocity
+    beta   = 1.25        # SOR hyperparameter
+    method = 'explicit'  # FD method for diffusion term
 
     dx = 2. / (nx - 1.)
     dy = 2. / (ny - 1.)
@@ -311,7 +316,8 @@ if __name__ == "__main__":
     system = NavierStokesSystem(
         u_ic, v_ic, p_ic, u_bc, v_bc, p_bc,
         nt=nt, nit=nit, nx=nx, ny=ny, dt=dt,
-        rho=rho, nu=nu, method=method,
+        rho=rho, nu=nu, beta=beta, method=method,
     )
 
     u_data, v_data, p_data = system.simulate()
+    np.savez('./data.npz', u=u_data, v=v_data, p=p_data)

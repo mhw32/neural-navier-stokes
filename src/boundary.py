@@ -50,33 +50,29 @@ class NeumannBoundaryCondition(BaseBoundaryCondition):
         Assume that we now du/dx at some coordinate (i,j). Then, 
         we can say as a simple forward difference estimate.
             
-            du/dx|(i,j) = (-3*A[i,j] + 4A[i+1,j] - A[i+2,j]) / 2*dx
-            du/dy|(i,j) = (-3*u[i,j] + 4u[i,j+1] - u[i,j+2]) / 2*dy
+            du/dx|(i,j) = u[i+1,j] - u[i,j] / dx
+            du/dy|(i,j) = u[i,j+1] - u[i,j] / dy 
         
         For end points on the other edge, we would use a backward 
         difference estimate.
             
-            du/dx|(i,j) = (3*u[i,j] - 4u[i-1,j] + u[i-2,j]) / 2*dx
-            du/dy|(i,j) = (3*u[i,j] - 4u[i,j-1] + u[i,j-2]) / 2*dy
+            du/dx|(i,j) = u[i,j] - u[i-1,j] / dx
+            du/dy|(i,j) = u[i,j] - u[i,j-1] / dy
         
         More tricks exist for central difference that include making
         ghost mesh points but too complicated.
         """
         if self.boundary == 'left':
             dAdx = self.value
-            A[0, :] =  (4./3. * A[1, :] - 1./3 * A[2, :] - 
-                        2./3. * self.dx * dAdx)
+            A[0, :] = A[1, :] - self.dx * dAdx
         elif self.boundary == 'right':
             dAdx = self.value
-            A[-1, :] = (4./3. * A[-2, :] - 1./3 * A[-3, :] + 
-                        2./3. * self.dx * dAdx)
+            A[-1, :] = A[-2, :] + self.dx * dAdx
         elif self.boundary == 'bottom':
             dAdy = self.value
-            A[:, 0] =  (4./3. * A[:, 1] - 1./3 * A[:, 2] - 
-                        2./3. * self.dy * dAdy)
+            A[:, 0] = A[:, 1] - self.dy * dAdy
         elif self.boundary == 'top':
             dAdy = self.value
-            A[:, -1] = (4./3. * A[:, -1] - 1./3 * A[:, -2] + 
-                        2./3. * self.dy * dAdy)
+            A[:, -1] = A[:, -2] + self.dy * dAdy
 
         return A

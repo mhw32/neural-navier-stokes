@@ -112,7 +112,7 @@ Start with (sorry added $\rho$ back in)
 
 This will be discretized to
 \begin{align*}
-    \frac{p^{n+1}_{i+1,j} - 2p^{n+1}_{i,j} + p^{n+1}_{i-1,j}}{\bigtriangleup x^2} + \frac{p^{n+1}_{i,j+1} - 2p^{n+1}_{i,j} + p^{n+1}_{i,j-1}}{\bigtriangleup y^2} &= \frac{\rho}{\bigtriangleup t}(\frac{u^*_{i+1,j} - u^*_{i-1,j}}{\bigtriangleup x} + \frac{v^*_{i,j+1} - v^*_{i,j-1}}{\bigtriangleup y}) \\
+    \frac{p^{n+1}_{i+1,j} - 2p^{n+1}_{i,j} + p^{n+1}_{i-1,j}}{\bigtriangleup x^2} + \frac{p^{n+1}_{i,j+1} - 2p^{n+1}_{i,j} + p^{n+1}_{i,j-1}}{\bigtriangleup y^2} &= \frac{\rho}{\bigtriangleup t}(\frac{u^*_{i,j} - u^*_{i-1,j}}{2\bigtriangleup x} + \frac{v^*_{i,j} - v^*_{i,j-1}}{2\bigtriangleup y}) \\
     \frac{p^{n+1}_{i+1,j} - 2p^{n+1}_{i,j} + p^{n+1}_{i-1,j}}{\bigtriangleup x^2} + \frac{p^{n+1}_{i,j+1} - 2p^{n+1}_{i,j} + p^{n+1}_{i,j-1}}{\bigtriangleup y^2} &= C_{i,j}
 \end{align*}
 
@@ -145,7 +145,7 @@ To implement this, we would need to loop. We can also use a simple acceleration 
 Now that we have computed $p^{n+1}$, we can estimate its gradient. Here we need to impose a boundary conditions!
 
 \begin{align*}
-    \nabla p^{n+1}_{i,j} &\approx (\frac{p^{n+1}_{i+1,j} - p^{n+1}_{i-1,j}}{\bigtriangleup x}, \frac{p^{n+1}_{i,j+1} - p^{n+1}_{i,j-1}}{\bigtriangleup y}) \\
+    \nabla p^{n+1}_{i,j} &\approx (\frac{p^{n+1}_{i+1,j} - p^{n+1}_{i-1,j}}{2\bigtriangleup x}, \frac{p^{n+1}_{i,j+1} - p^{n+1}_{i,j-1}}{2\bigtriangleup y}) \\
     \frac{\partial p}{\partial x} &= 0,
     \frac{\partial p}{\partial y} = 0
 \end{align*}
@@ -169,7 +169,7 @@ u^* &= u^n - \bigtriangleup t (\frac{3}{2}(u^n\frac{\partial u^n}{\partial x} + 
 We can discretize this further with centered difference by the following substitutions:
 
 \begin{align*}
-    \frac{\partial u^n}{\partial x} &= \frac{u^n_{i+1,j} - u^n_{i-1,j}}{\bigtriangleup x} \\
+    \frac{\partial u^n}{\partial x} &= \frac{u^n_{i+1,j} - u^n_{i-1,j}}{2\bigtriangleup x} \\
     \frac{\partial^2 u^n}{\partial x^2} &= \frac{u^n_{i+1,j} - 2u^n_{i,j} + u^n_{i-1,j}}{\bigtriangleup x^2}
 \end{align*}
 
@@ -178,8 +178,8 @@ Similar ones for $v^n$ and $u^{n-1}$.
 Then lastly, we can do the projection step:
 
 \begin{align*}
-    u^{n+1}_{i,j} &= u^*_{i,j} - \bigtriangleup t (\frac{p^{n+1}_{i+1,j} - p^{n+1}_{i-1,j}}{\bigtriangleup x}) \\
-    v^{n+1}_{i,j} &= v^*_{i,j} - \bigtriangleup t (\frac{p^{n+1}_{i,j+1} - p^{n+1}_{i,j-1}}{\bigtriangleup y}) \\
+    u^{n+1}_{i,j} &= u^*_{i,j} - \bigtriangleup t (\frac{p^{n+1}_{i+1,j} - p^{n+1}_{i-1,j}}{2\bigtriangleup x}) \\
+    v^{n+1}_{i,j} &= v^*_{i,j} - \bigtriangleup t (\frac{p^{n+1}_{i,j+1} - p^{n+1}_{i,j-1}}{2\bigtriangleup y}) \\
 \end{align*}
 
 \paragraph{Crank-Nicholson}
