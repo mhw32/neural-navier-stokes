@@ -150,9 +150,13 @@ Now that we have computed $p^{n+1}$, we can estimate its gradient. Here we need 
     \frac{\partial p}{\partial y} = 0
 \end{align*}
 
+We add a note here that in fact this is not how many papers compute pressure. Several use spectral methods (which we intentionally avoid here) and others use more sophisticated iterative methods. We will settle for something simple for now. Secondly, pressure here is not the actual pressure. Kim and Morin's paper show to derive/estimate the true pressure. But for our purposes, it doesn't really matter. We can consider this the real pressure for the time being. When we get to real experiments where the magnitudes of values matter, we need to add an additional step.
+
+Back to deriving!
+
 Then we can plug this into the Burgers. Recall (with explicit discretization)
 \begin{equation}
-    \mathbf{u}^* = \mathbf{u}^n - \bigtriangleup t (\frac{3}{2}(\mathbf{u}^n \cdot \nabla)\mathbf{u}^n - \frac{1}{2}(\mathbf{u}^{n-1} \cdot \nabla)\mathbf{u}^{n-1}) + \bigtriangleup t (\frac{3}{2}\Delta \mathbf{u}^n - \frac{1}{2} \Delta u^{n-1})
+    \mathbf{u}^* = \mathbf{u}^n - \bigtriangleup t (\frac{3}{2}(\mathbf{u}^n \cdot \nabla)\mathbf{u}^n - \frac{1}{2}(\mathbf{u}^{n-1} \cdot \nabla)\mathbf{u}^{n-1}) + \bigtriangleup t (\frac{3}{2}\Delta \mathbf{u}^n - \frac{1}{2} \Delta \mathbf{u}^{n-1})
 \end{equation}
 
 For exposition, we will write the discretization for the first dimension of $\mathbf{u}$: $u$.
@@ -178,6 +182,109 @@ Then lastly, we can do the projection step:
     v^{n+1}_{i,j} &= v^*_{i,j} - \bigtriangleup t (\frac{p^{n+1}_{i,j+1} - p^{n+1}_{i,j-1}}{\bigtriangleup y}) \\
 \end{align*}
 
-\paragraph{Crank-Nicholson} TODO.
+\paragraph{Crank-Nicholson}
+% http://www.claudiobellei.com/2016/11/10/crank-nicolson/
+People make a big deal about using Crank Nichoslon for the diffusion term, which results in some important error reduction. It is much more difficult to implement but we have walked through it here.
+
+Recall the momentum equation,
+
+\begin{equation}
+    \frac{\mathbf{u}^* - \mathbf{u}^n}{\bigtriangleup t} + (\mathbf{u}^{\frac{n+1}{2}} \cdot \nabla) \mathbf{u}^{\frac{n+1}{2}} = \Delta (\frac{\mathbf{u}^* + \mathbf{u}^n}{2})
+\end{equation}
+
+We are going to rewrite this in a different way. Add in the Adam-Bashford approximation for the advection term. Let $\mathbf{H}^n = (\mathbf{u}^{n} \cdot \nabla) \mathbf{u}^{n}$. Then,
+
+\begin{align*}
+    \frac{\mathbf{u}^* - \mathbf{u}^n}{\bigtriangleup t} &= \frac{1}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + \frac{1}{2Re}(\frac{\delta^2}{\delta x^2} + \frac{\delta^2}{\delta y^2})(\mathbf{u}^* + \mathbf{u}^n)
+\end{align*}
+
+where $\frac{\delta}{\delta x}$ is a finite difference operator. Let $A = \frac{\bigtriangleup t}{2 Re}(\frac{\delta^2}{\delta x^2})$ and $B = \frac{\bigtriangleup t}{2 Re}(\frac{\delta^2}{\delta y^2})$ to get the following,
+
+\begin{align*}
+\mathbf{u}^* - \mathbf{u}^n &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + (A + B)(\mathbf{u}^* + \mathbf{u}^n) \\
+(\mathbf{u}^* - \mathbf{u}^n) - (A + B)(\mathbf{u}^* + \mathbf{u}^n) &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + 2(A + B)(\mathbf{u}^* + \mathbf{u}^n) \\
+(1 - A - B)(\mathbf{u}^* + \mathbf{u}^n) &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + 2(A + B)(\mathbf{u}^* + \mathbf{u}^n)
+\end{align*}
+
+We might try to solve this but it will involve solving a dense linear system, which is expensive. Thus, we make the following assumption:
+
+\begin{equation}
+(1 - A - B)(\mathbf{u}^* + \mathbf{u}^n) \approx (1 - A)(1 - B)(\mathbf{u}^* + \mathbf{u}^n)
+\end{equation}
+
+This allows us to use something called \textit{alternating direction implicit method}. We solve the above in two steps!
+
+\begin{align}
+(1 - A)\mathbf{w} &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + 2(A + B)(\mathbf{u}^* + \mathbf{u}^n) \\
+(1 - B)(\mathbf{u}^* + \mathbf{u}^n) &= \mathbf{w}
+\end{align}
+
+We will now explicitly write out the algorithm, starting with the first step.
+
+\begin{align*}
+    (1 - A)\mathbf{w} &= \frac{\bigtriangleup t}{2}(3\mathbf{H}^n - \mathbf{H}^{n-1}) + 2(A + B)(\mathbf{u}^* + \mathbf{u}^n)
+\end{align*}
+
+Let $\mathbf{w} = (u^\ddagger, v^\ddagger)$. We can then explicitly write the finite difference part. We first focus on the first dimension.
+
+\begin{equation}
+    u^\dagger_{i,j} - \frac{\bigtriangleup t}{2} \frac{u^\dagger_{i+1,j} - 2u^\dagger_{i,j} + u^\dagger_{i-1,j}}{\bigtriangleup x^2} = C_u
+\end{equation}
+
+where
+\begin{align*}
+    C_u &= \frac{\bigtriangleup t}{2}(3(u^n_{i,j}\frac{u^n_{i+1,j} - u^n_{i-1,j}}{\bigtriangleup x} + v^n_{i,j}\frac{u^n_{i,j+1} - u^n_{i,j-1}}{\bigtriangleup y}) - (u^{n-1}_{i,j}\frac{u^{n-1}_{i+1,j} - u^{n-1}_{i-1,j}}{\bigtriangleup x} + v^{n-1}_{i,j}\frac{u^{n-1}_{i,j+1} - u^{n-1}_{i,j-1}}{\bigtriangleup y})) \\
+    & \qquad + 2(\frac{\bigtriangleup t}{2 Re}(\frac{u^n_{i+1,j} -2u^n_{i,j} + u^n_{i-1,j}}{\bigtriangleup x^2} + \frac{u^n_{i,j+1} -2u^n_{i,j} + u^n_{i,j-1}}{\bigtriangleup y^2}))
+\end{align*}
+
+We can continue to massage this a bit.
+
+\begin{align*}
+    2\bigtriangleup x^2 u^\ddagger_{i,j} - \bigtriangleup t u^\ddagger_{i+1,j} + 2\bigtriangleup t u^\ddagger_{i,j} - \bigtriangleup t u^\ddagger_{i-1,j} &= 2\bigtriangleup x^2 C_u \\
+    - \bigtriangleup tu^\ddagger_{i+1,j} + (2\bigtriangleup x^2 + 2\bigtriangleup t)u^\ddagger_{i,j} - \bigtriangleup t u^\ddagger_{i-1,j} &= 2\bigtriangleup x^2 C_u
+\end{align*}
+
+We can solve all of these together (for all $i,j$) as a linear system. Let's now do the second dimension.
+
+\begin{equation}
+    v^\dagger_{i,j} - \frac{\bigtriangleup t}{2} \frac{v^\dagger_{i+1,j} - 2v^\dagger_{i,j} + v^\dagger_{i-1,j}}{\bigtriangleup x^2} = C_v
+\end{equation}
+
+where
+\begin{align*}
+    C_v &= \frac{\bigtriangleup t}{2}(3(u^n_{i,j}\frac{v^n_{i+1,j} - v^n_{i-1,j}}{\bigtriangleup x} + v^n_{i,j}\frac{v^n_{i,j+1} - v^n_{i,j-1}}{\bigtriangleup y}) - (u^{n-1}_{i,j}\frac{v^{n-1}_{i+1,j} - v^{n-1}_{i-1,j}}{\bigtriangleup x} + v^{n-1}_{i,j}\frac{v^{n-1}_{i,j+1} - v^{n-1}_{i,j-1}}{\bigtriangleup y})) \\
+    & \qquad + 2(\frac{\bigtriangleup t}{2 Re}(\frac{v^n_{i+1,j} -2v^n_{i,j} + v^n_{i-1,j}}{\bigtriangleup x^2} + \frac{v^n_{i,j+1} -2v^n_{i,j} + v^n_{i,j-1}}{\bigtriangleup y^2}))
+\end{align*}
+
+Then,
+\begin{equation}
+    - \bigtriangleup t v^\ddagger_{i+1,j} + (2\bigtriangleup x^2 + 2\bigtriangleup t)v^\ddagger_{i,j} - \bigtriangleup t v^\ddagger_{i-1,j} = 2\bigtriangleup x^2 C_v
+\end{equation}
+
+Note that its tridiagonal which makes all this work worth it. Now we have $\mathbf{w}$. We move on to step 2.
+
+Recall $(1 - B)(\mathbf{u}^* - \mathbf{u}^n) = \mathbf{w}$. We can smooth this a bit more.
+
+\begin{equation}
+    (\mathbf{u}^* - \mathbf{u}^n) - \frac{\bigtriangleup t}{2}(\frac{\delta^2}{\delta y^2} \mathbf{u}^* - \frac{\delta^2}{\delta y^2} \mathbf{u}^n) = \mathbf{w}
+\end{equation}
+
+Focus on the $i$-th and $j$-th element.
+
+\begin{align*}
+    (u^*_{i,j} - u^n_{i,j}) - \frac{\bigtriangleup t}{2}(\frac{u^*_{i,j+1} - 2u^*_{i,j} + u^*_{i,j-1}}{\bigtriangleup y^2} - \frac{u^n_{i,j+1} - 2u^n_{i,j} + u^n_{i,j-1}}{\bigtriangleup y^2}) = u^\ddagger_{i,j} \\
+    2\bigtriangleup y^2 u^*_{i,j} - 2\bigtriangleup y^2 u^n_{i,j} - \bigtriangleup t(u^*_{i,j+1} - 2u^*_{i,j} + u^*_{i,j-1}) + \bigtriangleup t(u^n_{i,j+1} - 2u^n_{i,j} + u^n_{i,j-1}) = 2\bigtriangleup y^2 u^\ddagger_{i,j} \\
+    2\bigtriangleup y^2 u^*_{i,j} - \bigtriangleup t u^*_{i,j+1} + 2\bigtriangleup t u^*_{i,j} - \bigtriangleup t u^*_{i,j-1} = 2\bigtriangleup y^2 u^\ddagger_{i,j} + 2\bigtriangleup y^2 u^n_{i,j} - \bigtriangleup t(u^n_{i,j+1} - 2u^n_{i,j} + u^n_{i,j-1}) = S \\
+    -\bigtriangleup t u^*_{i,j+1} + (2\bigtriangleup y^2 + 2\bigtriangleup t)u^*_{i,j} - \bigtriangleup t u^*_{i,j-1} = S
+\end{align*}
+
+This is again another tridiagonal matrix solve. This will give us $\mathbf{u}^*$.
+
+Similarly for the v-momentum, we get
+
+\begin{align}
+S = 2\bigtriangleup y^2 v^\ddagger_{i,j} + 2\bigtriangleup y^2 v^n_{i,j} - \bigtriangleup t(v^n_{i,j+1} - 2v^n_{i,j} + v^n_{i,j-1}) \\
+-\bigtriangleup t v^*_{i,j+1} + (2\bigtriangleup y^2 + 2\bigtriangleup t)v^*_{i,j} - \bigtriangleup t v^*_{i,j-1} = S
+\end{align}
 
 \end{document}
