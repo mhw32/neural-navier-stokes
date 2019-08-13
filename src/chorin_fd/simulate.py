@@ -283,8 +283,8 @@ if __name__ == "__main__":
     rho = 1                   # fluid density (kg / m^3)
     nu  = 0.1                 # fluid kinematic viscocity
     beta   = 1.25             # SOR hyperparameter
-    method = 'explicit'       
-    # method = 'semi_implicit'  # FD method for diffusion term
+    # method = 'explicit'       
+    method = 'semi_implicit'  # FD method for diffusion term
 
     dx = 2. / (nx - 1.)
     dy = 2. / (ny - 1.)
@@ -308,7 +308,7 @@ if __name__ == "__main__":
     ]
 
     p_bc = [
-        NeumannBoundaryCondition(0, 'top', dx, dy),
+        DirichletBoundaryCondition(0, 'top', dx, dy),
         NeumannBoundaryCondition(0, 'bottom', dx, dy),
         NeumannBoundaryCondition(0, 'left', dx, dy),
         NeumannBoundaryCondition(0, 'right', dx, dy),
