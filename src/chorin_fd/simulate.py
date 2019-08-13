@@ -94,8 +94,6 @@ class NavierStokesSystem():
         dt, dx, dy = self.dt, self.dx, self.dy
         nu = self.nu
 
-        breakpoint()
-
         # important to make copies
         ut, vt = u.copy(), v.copy()
         ui, vi = u.copy(), v.copy()  # intermediate fields
@@ -106,18 +104,18 @@ class NavierStokesSystem():
 
         A = diags(
             np.array([
-                np.ones(self.nx-2) * -dt,
-                np.ones(self.nx-2) * (2 * dx**2 + 2 * dt),
-                np.ones(self.nx-2) * -dt,
+                np.ones(self.nx-3) * -dt,
+                np.ones(self.nx-2) * (2 / nu * dx**2 + 2 * dt),
+                np.ones(self.nx-3) * -dt,
             ]),
             [-1, 0, 1],
         ).toarray()
 
         B = diags(
             np.array([
-                np.ones(self.ny-2) * -dt,
-                np.ones(self.ny-2) * (2 * dy**2 + 2 * dt),
-                np.ones(self.ny-2) * -dt,
+                np.ones(self.ny-3) * -dt,
+                np.ones(self.ny-2) * (2 / nu * dy**2 + 2 * dt),
+                np.ones(self.ny-3) * -dt,
             ]),
             [-1, 0, 1],
         ).toarray()
@@ -126,43 +124,44 @@ class NavierStokesSystem():
 
         # adams-bashford estimate for advection terms
         uHn  = (un[1:-1, 1:-1] * (un[2:, 1:-1] - un[:-2, 1:-1]) / (2 * dx) +
-                vn[1:-1, 1:-1] * (un[2:, 1:-1] - un[:-2, 1:-1]) / (2 * dy))
+                vn[1:-1, 1:-1] * (un[1:-1, 2:] - un[1:-1, :-2]) / (2 * dy))
         uHn1 = (un1[1:-1, 1:-1] * (un1[2:, 1:-1] - un1[:-2, 1:-1]) / (2 * dx) +
-                vn1[1:-1, 1:-1] * (un1[2:, 1:-1] - un1[:-2, 1:-1]) / (2 * dy))
+                vn1[1:-1, 1:-1] * (un1[1:-1, 2:] - un1[1:-1, :-2]) / (2 * dy))
         # build C vector
         uC1 = dt / 2. * (3 * uHn - uHn1)
         uC2 = dt * nu * ((un[2:, 1:-1] - 2 * un[1:-1, 1:-1] + un[:-2, 1:-1]) / dx**2 +
                          (un[1:-1, 2:] - 2 * un[1:-1, 1:-1] + un[1:-1, :-2]) / dy**2)
-        uC  = 2 * dx**2 * (uC1 + uC2)
+        uC  = 2 / nu * dx**2 * (uC1 + uC2)
 
         # solve linear system
+        breakpoint()
         ut[1:-1, 1:-1] = np.linalg.solve(A, uC)
 
         # -- step 1 of crank-nicholson: v-momentum --
 
         # adams-bashford estimate for advection terms
         vHn  = (un[1:-1, 1:-1] * (vn[2:, 1:-1] - vn[:-2, 1:-1]) / (2 * dx) +
-                vn[1:-1, 1:-1] * (vn[2:, 1:-1] - vn[:-2, 1:-1]) / (2 * dy))
+                vn[1:-1, 1:-1] * (vn[1:-1, 2:] - vn[1:-1, :-2]) / (2 * dy))
         uHn1 = (un1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / (2 * dx) +
-                vn1[1:-1, 1:-1] * (vn1[2:, 1:-1] - vn1[:-2, 1:-1]) / (2 * dy))
+                vn1[1:-1, 1:-1] * (vn1[1:-1, 2:] - vn1[1:-1, :-2]) / (2 * dy))
         # build C vector
         vC1 = dt / 2. * (3 * vHn - vHn1)
         vC2 = dt * nu * ((vn[2:, 1:-1] - 2 * vn[1:-1, 1:-1] + vn[:-2, 1:-1]) / dx**2 +
                          (vn[1:-1, 2:] - 2 * vn[1:-1, 1:-1] + vn[1:-1, :-2]) / dy**2)
-        vC  = 2 * dx**2 * (vC1 + vC2)
+        vC  = 2 / nu * dx**2 * (vC1 + vC2)
 
         # solve linear system
         vt[1:-1, 1:-1] = np.linalg.solve(A, vC)
 
         # -- step 2 of crank-nicholson: u-momentum --
 
-        uS = (2 * dy**2 * (ut[1:-1, 1:-1] + un[1:-1, 1:-1]) -
+        uS = (2 / nu * dy**2 * (ut[1:-1, 1:-1] + un[1:-1, 1:-1]) -
                 dt * (un[1:-1, 2:] - 2 * un[1:-1, 1:-1] + un[1:-1, :-2]))
         ui[1:-1, 1:-1] = np.linalg.solve(B, uS)
 
         # -- step 2 of crank-nicholson: v-momentum --
 
-        vS = (2 * dy**2 * (vt[1:-1, 1:-1] + vn[1:-1, 1:-1]) -
+        vS = (2 / nu * dy**2 * (vt[1:-1, 1:-1] + vn[1:-1, 1:-1]) -
                 dt * (vn[1:-1, 2:] - 2 * vn[1:-1, 1:-1] + vn[1:-1, :-2]))
         vi[1:-1, 1:-1] = np.linalg.solve(B, vS)
 
