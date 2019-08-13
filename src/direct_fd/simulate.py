@@ -44,7 +44,7 @@ class NavierStokesSystem():
     """
 
     def __init__(self, u_ic, v_ic, p_ic, u_bc, v_bc, p_bc, 
-                 nt=200, nit=50, nx=50, ny=50, dt=0.001, rho=1, nu=1):
+                 nt=200, nit=50, nx=50, ny=50, dt=0.001, rho=1, nu=0.1):
         super().__init__()
         self.u_ic, self.v_ic, self.p_ic = u_ic, v_ic, p_ic
         self.u_bc, self.v_bc, self.p_bc = u_bc, v_bc, p_bc
@@ -154,7 +154,7 @@ if __name__ == "__main__":
     ny  = 50
     dt  = 0.001
     rho = 1
-    nu  = 1
+    nu  = 0.1
 
     dx = 2. / (nx - 1.)
     dy = 2. / (ny - 1.)
@@ -165,8 +165,8 @@ if __name__ == "__main__":
 
     u_bc = [
         DirichletBoundaryCondition(0, 'left', dx, dy),
-        DirichletBoundaryCondition(0, 'right', dx, dy),
-        DirichletBoundaryCondition(1, 'top', dx, dy),
+        DirichletBoundaryCondition(1, 'right', dx, dy),
+        DirichletBoundaryCondition(0, 'top', dx, dy),
         DirichletBoundaryCondition(0, 'bottom', dx, dy),
     ]
 
@@ -191,3 +191,5 @@ if __name__ == "__main__":
     )
 
     u_data, v_data, p_data = system.simulate()
+    np.savez('./data.npz', u=u_data, v=v_data, p=p_data)
+

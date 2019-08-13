@@ -283,7 +283,8 @@ if __name__ == "__main__":
     rho = 1                   # fluid density (kg / m^3)
     nu  = 0.1                 # fluid kinematic viscocity
     beta   = 1.25             # SOR hyperparameter
-    method = 'semi_implicit'  # FD method for diffusion term
+    method = 'explicit'       
+    # method = 'semi_implicit'  # FD method for diffusion term
 
     dx = 2. / (nx - 1.)
     dy = 2. / (ny - 1.)
@@ -294,8 +295,8 @@ if __name__ == "__main__":
 
     u_bc = [
         DirichletBoundaryCondition(0, 'left', dx, dy),
-        DirichletBoundaryCondition(0, 'right', dx, dy),
-        DirichletBoundaryCondition(1, 'top', dx, dy),
+        DirichletBoundaryCondition(1, 'right', dx, dy),
+        DirichletBoundaryCondition(0, 'top', dx, dy),
         DirichletBoundaryCondition(0, 'bottom', dx, dy),
     ]
 
@@ -320,4 +321,4 @@ if __name__ == "__main__":
     )
 
     u_data, v_data, p_data = system.simulate()
-    np.savez('./data.npz', u=u_data, v=v_data, p=p_data)
+    np.savez('./data_{}.npz'.format(method), u=u_data, v=v_data, p=p_data)
