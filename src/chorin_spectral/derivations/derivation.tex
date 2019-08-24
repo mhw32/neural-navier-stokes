@@ -224,11 +224,44 @@ Recall the remaining component of Chorin's:
 which can be rewritten as
 \begin{align*}
     \frac{\rho}{\bigtriangleup t}(\mathbf{u}^{n+1} - \mathbf{u}^*) + \nabla p^{n+1} &= 0 \\
-    \nabla \cdot \mathbf{u}^{n+1} = 0 \quad \text{in}\quad \Omega
+    \nabla \cdot \mathbf{u}^{n+1} = 0 \quad \text{in}\quad \Omega \\
+    \mathbf{u}_N^{n+1} \cdot \mathbf{n} &= 0
 \end{align*}
 
-We go over the two ways to do this...
+There are two ways to do this that involve different assumptions and polynomials of different degrees. We pick the one that assumes NO boundary conditions on pressure.
 
 \paragraph{$\mathbb{P}_N - \mathbb{P}_{N-2}$ projection method}
+
+Let $\mathbb{P}_N$ be the space of polynomials with degree $N_x$ in x and $N_y$ in y -- we used this to approximate velocity: $\mathbf{u}^{*}_N = (u_N^*, v_N^*)$ and $\mathbf{u}^{n+1}_N = (u_N^{n+1}, v_N^{n+1})$. We then approximate pressure with a polynomial of degree two less in x and y i.e. $p^{n+1} \approx p^{n+1}_{N-2} \in \mathbb{P}_{N-2}$. But! we still evaluate at the same Gauss-Lobatto points as for velocity. So we have to define a Lagrange polynomial of degree $N_x - 2$ with roots of a $N_x+1$ Chebyshev polynomial... more special formulas!
+
+There is a relation between the Lagrange polynomial used here, $\hat{h}_j$ with the one used for velocity, $h_j$:
+
+\begin{equation}
+    \hat{h}_j(x) = \frac{1 - x_j^2}{1-x^2}h_j(x)
+\end{equation}
+. This gives us definitions for the differential matrices:
+
+\begin{align*}
+    \hat{d}_{i,j}^{(1)} &= \frac{(-1)^{j+1}(1-x_j^2)}{(1-x_i^2)(x_i - x_j)}, i, j =  1...N-1, i \neq j \\
+    \hat{d}_{i,i}^{(1)} &= \frac{3x_i}{2(1-x_i^2)}, i=1...N-1
+\end{align*}
+
+We emphasize these are unique to the $N-2$ class of polynomials and should only be used for pressure. The system can then we written as:
+
+\begin{align*}
+    \frac{\rho}{\bigtriangleup t}\mathcal{U} + \hat{\mathcal{D}}_x \mathcal{P} &= \frac{\rho}{\bigtriangleup t}\mathcal{U}^* \\
+    \frac{\rho}{\bigtriangleup t}\mathcal{V} +  \mathcal{P}\hat{\mathcal{D}}_y^T &= \frac{\rho}{\bigtriangleup t}\mathcal{V}^* \\\
+    \mathcal{D}_x \mathcal{U} + \mathcal{V}\mathcal{D}_y^T &= \mathcal{S}
+\end{align*}
+
+where $\mathcal{U} = [u_N^{n+1(x_i,y_j)}]$, $\mathcal{V} = [v_N^{n+1}(x_i, y_j)]$, and $\mathcal{P} = [p_{N-2}^{n+1}(x_i, y_j)]$ for $i = 1...N_x-1$ and $j=1...N_y-1$. Note which differentiation matrices have hats. $\mathcal{S} = -(\bar{\mathcal{D}}_x \mathcal{U}_{\Gamma} + \mathcal{V}_\Gamma \bar{\mathcal{D}}_y^T)$ contain info about the boundary conditions of velocity and $\bar{\mathcal{D}}_x = [d_{i,j}^{(1)}]$ for $i = 1...N_x-1, j=0,N_x$ and $\bar{\mathcal{D}}_y = [d_{i,j}^{(1)}]$ for $i = 1...N_y-1, j=0,N_y$ and $\mathcal{U}_\Gamma = [u^{n+1}_\Gamma(x_i, y_j)]$ for $i=0,N_x$ and $j = 1...N_y-1$ and $\mathcal{V}_\Gamma = [v^{n+1}_\Gamma(x_i, y_j)]$ for $i=1...N_x-1$ , $j=0,N_y$.
+
+Then the solution (after eliminating $\mathcal{U}$ and $\mathcal{V}$):
+
+\begin{equation}
+    \mathcal{D}_x\hat{\mathcal{D}}_x\mathcal{Q} + \mathcal{Q}(\mathcal{D}_y\hat{\mathcal{D}}_y)^T = -\frac{\rho}{\bigtriangleup t}(\mathcal{S} - \mathcal{D}_x \mathcal{U}^* - \mathcal{V}^*\mathcal{D}_y^T)
+\end{equation}
+
+We can solve this by matrix-diagonalization.
 
 \end{document}
