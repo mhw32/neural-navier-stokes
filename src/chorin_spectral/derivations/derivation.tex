@@ -213,4 +213,22 @@ where $\hat{\mathcal{U}}^* = \mathcal{U}^*(\mathcal{Q}^T)^{-1}$ and $\hat{\mathc
 
 If $\lambda_{x,i} = \lambda_{y,j} = 0$, replace $\hat{u}^*_{i,j} = 0$. Now that we have computed $\hat{\mathcal{U}}^* = [\hat{u}^*_{i,j}]$, we then $\tilde{\mathcal{U}} = \hat{\mathcal{U}}^*\mathcal{Q}^T$ and calculate $\mathcal{U}^* = \mathcal{P}\hat{\mathcal{U}}^*$. Remember that $\mathcal{U}$ is size $N_x-2 \times N_y-2$. Now we need to compute boundary values. This is done by representing all derivatives in matrix form and solving the linear equation. If we do the same for the second dimension of velocity, we now have the solution for $\mathbf{u}^*$.
 
+\paragraph{Chorin: Step 2} We need to correct the intermediate velocity field. There are two ways to this specific to spectral methods: we can either parameterize pressure with a polynomial of the same degree as velocity (and assume a Neumann boundary condition) or a polynomial with two degrees lower.
+
+Recall the remaining component of Chorin's:
+
+\begin{equation}
+    \partial_t \mathbf{u} = -\frac{1}{\rho}\nabla p
+\end{equation}
+
+which can be rewritten as
+\begin{align*}
+    \frac{\rho}{\bigtriangleup t}(\mathbf{u}^{n+1} - \mathbf{u}^*) + \nabla p^{n+1} &= 0 \\
+    \nabla \cdot \mathbf{u}^{n+1} = 0 \quad \text{in}\quad \Omega
+\end{align*}
+
+We go over the two ways to do this...
+
+\paragraph{$\mathbb{P}_N - \mathbb{P}_{N-2}$ projection method}
+
 \end{document}
