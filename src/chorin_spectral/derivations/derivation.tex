@@ -25,4 +25,62 @@
 \title{Chorin's Projection Method with Spectral Collocation for 2D Incompressible Navier Stokes}
 \maketitle
 
+The setup and time discretization with Crank Nicholson remains the same as the finite difference version of this (see other directory in repo). Here, we focus on deriving a Chebyshev pseudo-spectral estimator.
+
+Recall the NSE (with no force function)
+\begin{align*}
+    \frac{\partial \mathbf{u}}{\partial t} + (\mathbf{u}\cdot \nabla)\mathbf{u} + \nabla p &= \Delta \mathbf{u} \\
+    \nabla \cdot \mathbf{u} = 0 \\
+    \mathbf{u} = 0 \quad\text{on}\quad \partial \Omega
+\end{align*}
+
+\paragraph{Chorin: Step 1} Also recall that the Chorin's projection method first ignores pressure to comute an intermediate velocity field
+\begin{align*}
+    \frac{\partial \mathbf{u}^*}{\partial t} + (\mathbf{u}\cdot \nabla)\mathbf{u} &= \Delta \mathbf{u}^* \\
+    \mathbf{u}^* &= 0 \quad\text{on}\quad \partial \Omega
+\end{align*}
+
+We discretize time first with Adams-Bashford and implicit Crank-Nicholson
+
+\begin{equation*}
+    \frac{\mathbf{u}^* - \mathbf{u}^n}{\bigtriangleup t} + (\mathbf{u}^{\frac{n+1}{2}} \cdot \nabla) \mathbf{u}^{\frac{n+1}{2}} = \Delta \mathbf{u}^{\frac{n+1}{2}}
+\end{equation*}
+
+So far things are identical to the finite difference version of Chorin's. But to solve this, we do not discretize spatial dimensions anymore: we use (pseudo)spectral methods:
+
+We want to approximate the solution $\mathbf{u}^*$ as truncated series of Chebyshev polynomials: $\{ T_k(x) \}_{k=1}^{\infty}$ where $T_k(x) = \cos(k \cos^{-1}x)$; each polynomial is restricted to $[-1, 1]$.
+
+\begin{align*}
+    u^*_{N}(x) &= \sum_{k=0}^{\infty} \hat{u}^*_k T_k(x) \approx \sum_{k=0}^{N} \hat{u}^*_k T_k(x)
+\end{align*}
+
+where $\mathbf{u}^* = (u^*, v^*)$. We just write the derivation for the first equation for simplicity. To get the Chebyshev coefficients, we have to compute the (normalized) inner product:
+
+\begin{align*}
+    \hat{u}_k &= \frac{2}{\pi c_k} \int_{-1}^1 u T_k w dx
+\end{align*}
+where $c_k = \left\{\begin{matrix}
+2 &  \text{if} \quad k = 0\\
+1 &  \text{if} \quad k \geq 1
+\end{matrix}\right\}$. This is hard to compute, so we need to estimate the integral. Normally, this would require a lot of points but we can get away with carefully selected ones and a Gaussian quadrature. The best points turn out to be the roots of another Chebyshev polynomial with degree one higher; these are called the Gauss-Lobatto points -- they end up with denser spread near the boundaries (-1 and 1).
+\begin{equation}
+    x_i = \cos \frac{\pi i}{N}, i = 0, ..., N
+\end{equation}
+resulting in,
+\begin{equation}
+    \hat{u}_k = \frac{2}{\bar{c}_k N} \sum_{i=0}^N \frac{1}{\bar{c}_i} u_i T_k(x_i), k = 0, ..., N
+\end{equation}
+where $\bar{c}_k = \left\{\begin{matrix}
+2 &  \text{if} \quad k = 0 \\
+1 &  \text{if} \quad 1 \leq k \leq N - 1 \\
+2 &  \text{if} \quad k = N \\
+\end{matrix}\right\}$. Note that to convert back and forth between spectral coefficients ($\hat{u}_k$) and the values at the collocation points ($u_N(x_i)$) is a matrix multiplication. To be explicit, let
+$\mathcal{T} = [cos k\pi i / N], k, i = 0, ..., N$ and $\mathcal{T}^{-1} = [2(\cos \pi i / N) / (\bar{c}_k \bar{c}_i N)]$. Then,
+
+\begin{align*}
+    \mathcal{U}^* &= \mathcal{T}\hat{\mathcal{U}^*} \\
+    \hat{\mathcal{U}}^* &= \mathcal{T}\mathcal{U}^*
+\end{align*}
+where $\mathcal{U}^* = [u^*(x_0), ..., u^*(x_N)]$ and $\hat{\mathcal{U}}^* = [\hat{u}_0, ..., \hat{u}_N]$.
+
 \end{document}
