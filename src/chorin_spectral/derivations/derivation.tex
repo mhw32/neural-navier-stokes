@@ -83,4 +83,54 @@ $\mathcal{T} = [cos k\pi i / N], k, i = 0, ..., N$ and $\mathcal{T}^{-1} = [2(\c
 \end{align*}
 where $\mathcal{U}^* = [u^*(x_0), ..., u^*(x_N)]$ and $\hat{\mathcal{U}}^* = [\hat{u}_0, ..., \hat{u}_N]$.
 
+An interesting fact that is useful is that the  approximation:
+
+\begin{equation}
+    u^*_{N}(x) = \sum_{k=0}^{N} \hat{u}^*_k T_k(x)
+\end{equation}
+
+can be viewed as a Lagrange interpolating polynomial with a set $\{x_i\}$. One can explicitly write this as
+
+\begin{equation}
+    u^*_{N}(x) = \sum_{j=0}^{N} h_j(x)u^*(x_j)
+\end{equation}
+where $h_j(x) = \frac{(-1)^{j+1}(1-x^2)T'_N(x)}{\bar{c}_j N^2 (x - x_j)}$ is some crazy polynomial. This is really useful because it lets us do differentiation in closed form in physical space (no need for fourier transforms). In particular, we can write the $p$-th derivative,
+\begin{equation}
+    u^{*, (p)}_{N}(x_i) = \sum_{k=0}^N \hat{u}_k T^{(p)}_k (x_i) = \sum_{j=0}^N h^{(p)}_j(x_i)u_N(x_j)
+\end{equation}
+Notice then that computing the derivative is just a matrix multiplication on the existing coordinate values! If we let $d_{i,j}^{(p)} = h_j^{(p)}(x_i)$, then we can get a series of formulas populating a ``derivative matrix", $\mathcal{D} = [d^{(1)}_{i,j}], i, j = 0 , ...,N$.
+
+\begin{align*}
+    d_{i,j}^{(1)} &= \frac{\bar{c}_i}{\bar{c}_j}\frac{(-1)^{i+j}}{(x_i - x_j)}, 0 \leq i,j \leq N , i \neq j\\
+    d_{i,i}^{(1)} &= -\frac{x_i}{2(1-x_i^2)}, 1\leq i \leq N - 1\\
+    d_{0,0}^{(1)} &= -d_{N, N}^{(1)} = \frac{2N^2 + 1}{6}
+\end{align*}
+
+So, in short, $\mathcal{U}^{*, (1)} = \mathcal{D}\mathcal{U}^{*}$,  $\mathcal{U}^{*, (2)} = \mathcal{D}^2\mathcal{U}^{*}$. As nice as this is,there are a few hacks we need to be careful of for numerical stability.
+
+First, calculating $(1-x_i^2)$ and $(x_i - x_j)$ may be hard if points are very close, so we use the following:
+
+\begin{align*}
+    x_i - x_j &= 2\sin \frac{(j+i)\pi}{2N}\sin \frac{(j-i)\pi}{2N} \\
+    1 - x_i^2 &= \sin^2 \frac{i \pi}{N}
+\end{align*}
+
+Second, since this differentiation matrix is approximated, it doesn't always represent the derivative of a constant (which it should). In other words, it should be that
+\begin{equation}
+    \sum_{j=0}^N d_{i,j}^{(1)} = 0, i = 0, ..., N
+\end{equation}
+. To fix this, we should calculate the off diagonal entries later to satisfy this constraint. So...
+\begin{equation}
+    d_{i,j}^{(1)} = -\sum_{j=0, j\neq i}^N d_{i,j}^{(1)}, i = 0, ..., N
+\end{equation}
+
+When we want to compute $\mathcal{D}$ and $\mathcal{D}^2$, we use the following procedure:
+\begin{itemize}
+    \item compute $\mathcal{D}$ with the diagonal term correction
+    \item square it to get a provisional $\tilde{\mathcal{D}}^2$.
+    \item correct $\tilde{\mathcal{D}}^2$ to nsum to 1. As in first set $d^{(2)}_{i,j} = \tilde{d}^{(2)}_{i,j}$ for $j \neq i$. Then set $d^{(2)}_{i,i} = -\sum_{j=0, j\neq i}^{N} \tilde{d}^{(2)}_{i,j}, i = 0,..., N$.
+\end{itemize}
+
+Ok, now that we know how to differentiate, we revisit the original equation. The intuition is that we can replace all unknown values in terms of the coordinate values. Then there's a system of equations that we need to matrix diagonalize.
+
 \end{document}
