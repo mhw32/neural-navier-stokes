@@ -43,7 +43,7 @@ Recall the NSE (with no force function)
 We discretize time first with Adams-Bashford and implicit Crank-Nicholson
 
 \begin{equation*}
-    \frac{\mathbf{u}^* - \mathbf{u}^n}{\bigtriangleup t} + (\mathbf{u}^{\frac{n+1}{2}} \cdot \nabla) \mathbf{u}^{\frac{n+1}{2}} = \Delta \mathbf{u}^{\frac{n+1}{2}}
+    \frac{\mathbf{u}^* - \mathbf{u}^n}{\bigtriangleup t} + (\mathbf{u}^{\frac{n+1}{2}} \cdot \nabla) \mathbf{u}^{\frac{n+1}{2}} = \Delta \mathbf{u}^*
 \end{equation*}
 
 So far things are identical to the finite difference version of Chorin's. But to solve this, we do not discretize spatial dimensions anymore: we use (pseudo)spectral methods:
@@ -131,6 +131,86 @@ When we want to compute $\mathcal{D}$ and $\mathcal{D}^2$, we use the following 
     \item correct $\tilde{\mathcal{D}}^2$ to nsum to 1. As in first set $d^{(2)}_{i,j} = \tilde{d}^{(2)}_{i,j}$ for $j \neq i$. Then set $d^{(2)}_{i,i} = -\sum_{j=0, j\neq i}^{N} \tilde{d}^{(2)}_{i,j}, i = 0,..., N$.
 \end{itemize}
 
-Ok, now that we know how to differentiate, we revisit the original equation. The intuition is that we can replace all unknown values in terms of the coordinate values. Then there's a system of equations that we need to matrix diagonalize.
+Ok, now that we know how to differentiate, the next challenge is generalizing to two dimensions. In 2D, you use two sets of Chebyshev polynomials (with degree $N_x$ in the x-direction and degree $N_y$ for the y-direction). Instead of a grid, you get a mesh:
+$\bar{\Omega}_N$ where
+\begin{align*}
+    x_i &= \cos \frac{\pi i}{N_x}, i = 0, ..., N_x \\
+    y_j &= \cos \frac{\pi j}{N_y}, i = 0, ..., N_y
+\end{align*}
+. Let $\Omega_N$ be the open mesh ($1...N_x-1$ and $1...N_y-1$). The $\bar{\Omega}^I_N$ be the mesh without the four corners. Now we write the pressure-free equation in terms of the collocation points.
+
+\begin{align*}
+    \frac{\mathbf{u}^{*} - \mathbf{u}^n}{\bigtriangleup t} + \frac{3}{2}(\mathbf{u}^n \cdot \nabla)\mathbf{u}^n - \frac{1}{2}(\mathbf{u}^{n-1} \cdot \nabla)\mathbf{u}^{n-1} - \Delta(\frac{\mathbf{u}^{*} + \mathbf{u}^n}{2}) &= 0 \\
+    \mathbf{u}^{*} &= 0
+\end{align*}
+
+Rearrange to
+\begin{align*}
+\frac{\mathbf{u}^*}{{\bigtriangleup t}} - \frac{\Delta \mathbf{u}^*}{2} = \frac{\mathbf{u}^n}{\bigtriangleup t} - \frac{3}{2}(\mathbf{u}^n \cdot \nabla)\mathbf{u}^n + \frac{1}{2}(\mathbf{u}^{n-1} \cdot \nabla)\mathbf{u}^{n-1} + \frac{\Delta \mathbf{u}^n}{2} &= 0 \\
+2\mathbf{u}^* - \bigtriangleup t \Delta \mathbf{u}^* = 2\mathbf{u}^n - 3\bigtriangleup t(\mathbf{u}^n \cdot \nabla)\mathbf{u}^n + \bigtriangleup t(\mathbf{u}^{n-1} \cdot \nabla)\mathbf{u}^{n-1} + \bigtriangleup t\Delta \mathbf{u}^n &= 0 \\
+2\mathbf{u}^* - \bigtriangleup t \Delta \mathbf{u}^* &= \mathbf{F}
+\end{align*}
+where $\mathbf{F} = [f, g]$ represents all the known variables.
+
+We can write out the dimensions,
+
+\begin{align*}
+2u^* - \bigtriangleup t \partial_{xx} u^* - \bigtriangleup t \partial_{yy} u^* &= f \\
+2v^* - \bigtriangleup t \partial_{xx} v^* - \bigtriangleup t \partial_{yy} v^* &= h \\
+\end{align*}
+
+We can actually consider general robin boundary conditions (not just dirichlet)... we just write out the first dimension for now:
+
+\begin{align*}
+    \alpha_- u^*(-1) + \beta_- u^{*,(1)}(-1) &= b_- \\
+    \alpha_+ u^*(1) + \beta_+ u^{*,(1)}(1) &= b_+
+\end{align*}
+
+Then i can write this in ``matrix form" with respect to the mesh, $\bar{\Omega}$,
+
+\begin{equation}
+    2\mathcal{U}^* - \bigtriangleup t\mathcal{D}_x \mathcal{U}^* - \bigtriangleup t \mathcal{U}^*\mathcal{D}_y^T = \mathcal{F}
+    \label{eqn:solve}
+\end{equation}
+
+where $\mathcal{U}^* = [u_N(x_i, y_j)]$ for $i=1,  ..., N_x - 1$ and $j = 1, ..., N_y-1$. $\mathcal{D}_x = [d_{i,j}]$ where
+\begin{align*}
+    d_{i,j} &= d^{(2)}_{i,j} + \frac{1}{e}(b_{0,j} d^{(2)}_{i,0} + b_{N,j} d^{(2)}_{i,N}) \\
+    e &=c_{0,+}c_{N,-} - c_{0,-}c_{N+} \\
+    c_{0,-} &= -\beta_+ d^{(1)}_{0,N} \\
+    c_{0,+} &= \alpha_- + \beta_- d^{(1)}_{N,N} \\
+    c_{N,+} &= -\beta_- d^{(1)}_{N,0} \\
+    c_{N,-} &= \alpha_+ + \beta_+ d^{(1)}_{0,0} \\
+    b_{0,j} &= -c_{0,+} \beta_+ d^{(1)}_{0,j} - c_{0,-}\beta_- d^{(1)}_{N,j}, j = 1...N-1\\
+    b_{N,j} &= -c_{N,-} \beta_- d^{(1)}_{N,j} - c_{N,+}\beta_+ d^{(1)}_{N,j}, j = 1...N-1
+\end{align*}
+
+Note that $\mathcal{D}_x$ builds in the boundary conditions. We can similarly design $\mathcal{D}_{y}$. Note that for $v^*$ we would need completely new differential matrices for its initial conditions.
+
+Now we need to solve Equation~\ref{eqn:solve}. We do this with matrix diagonalization. Pay upfront cost to diagonalize the differential matrices:
+
+\begin{align*}
+    \mathcal{D}_x &= \mathcal{P}\Lambda_x \mathcal{P}^{-1} \\
+    \mathcal{D}_y &= \mathcal{Q}\Lambda_y \mathcal{Q}^{-1}
+\end{align*}
+
+Then for each iteration, do the following. First left multiply everything by $\mathcal{P}^{-1}$.
+
+\begin{align*}
+    2\tilde{\mathcal{U}}^* - \bigtriangleup t \mathcal{P}^{-1}\mathcal{D}_x \mathcal{P} \tilde{\mathcal{U}}^* - \bigtriangleup t \tilde{\mathcal{U}}^* \mathcal{D}_y^T &= \tilde{\mathcal{F}} \\
+    2\tilde{\mathcal{U}}^* - \bigtriangleup t \Lambda_x \tilde{\mathcal{U}}^* - \bigtriangleup t \tilde{\mathcal{U}}^* \mathcal{D}_y^T &= \tilde{\mathcal{F}}
+\end{align*}
+where $\tilde{\mathcal{U}}^* = \mathcal{P}^{-1} \mathcal{U}^*$ and $\tilde{\mathcal{F}} = \mathcal{P}^{-1}\mathcal{F}$. Then, right multiply everything by $(\mathcal{Q}^T)^{-1}$.
+\begin{align*}
+    2\hat{\mathcal{U}}^* - \bigtriangleup t \Lambda_x \hat{\mathcal{U}}^* - \bigtriangleup t \hat{\mathcal{U}}^* \mathcal{Q}^T \mathcal{D}_y^T (\mathcal{Q}^T)^{-1} &= \hat{\mathcal{F}} \\
+    2\hat{\mathcal{U}}^* - \bigtriangleup t \Lambda_x \hat{\mathcal{U}}^* - \bigtriangleup t \hat{\mathcal{U}}^* \Lambda_y &= \hat{\mathcal{F}}
+\end{align*}
+where $\hat{\mathcal{U}}^* = \mathcal{U}^*(\mathcal{Q}^T)^{-1}$ and $\hat{\mathcal{F}} = \mathcal{F}(\mathcal{Q}^T)^{-1}$. We can then compute
+
+\begin{equation}
+    \hat{u}^*_{i,j} = \frac{\hat{f}_{i,j}}{2 - \bigtriangleup t\lambda_{x,i} - \bigtriangleup t\lambda_{y,j}}, i = 1...N_x-1,  j = 1...N_y-1
+\end{equation}
+
+If $\lambda_{x,i} = \lambda_{y,j} = 0$, replace $\hat{u}^*_{i,j} = 0$. Now that we have computed $\hat{\mathcal{U}}^* = [\hat{u}^*_{i,j}]$, we then $\tilde{\mathcal{U}} = \hat{\mathcal{U}}^*\mathcal{Q}^T$ and calculate $\mathcal{U}^* = \mathcal{P}\hat{\mathcal{U}}^*$. Remember that $\mathcal{U}$ is size $N_x-2 \times N_y-2$. Now we need to compute boundary values. This is done by representing all derivatives in matrix form and solving the linear equation. If we do the same for the second dimension of velocity, we now have the solution for $\mathbf{u}^*$.
 
 \end{document}
