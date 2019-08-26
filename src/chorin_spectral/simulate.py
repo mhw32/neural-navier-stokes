@@ -93,10 +93,12 @@ class NavierStokesSystem():
             v_g_minus_y, v_g_plus_y,
         ) = self._process_boundary_conditions(self.v_bc)
 
+
         def get_boundary_constants( D, N, alpha_minus, alpha_plus, beta_minus,
                                     beta_plus, g_minus, g_plus):
             """
-            Compute e, c0-, c0+, b0j, bNj
+            Helper function to compute usual quantities: e, c0-, c0+, b0j, bNj
+                these are necessary to compute derivative metrices.
             """
             c0_minus = -beta_plus * d[0, N]
             c0_plus  = alpha_minus + beta_minus * d[N, N]
@@ -147,7 +149,8 @@ class NavierStokesSystem():
                                     self.v_beta_minus_y, self.v_beta_plus_y,
                                     self.v_g_minus_y, self.v_g_plus_y )
 
-        # edit the derivative matrices to include boundary conditions
+        # edit the derivative matrices to include boundary conditions\
+        # these are all N-2 x N-2 matrices
         u_Dx = self.Dx_sqr[1:Nx, 1:Nx] + 1./u_e_x * (u_b0_x * self.Dx_sqrt[1:Nx, 0] +
                                                      u_bN_x * self.Dx_sqrt[1:Nx, Nx])
         u_Dy = self.Dy_sqr[1:Ny, 1:Ny] + 1./u_e_y * (u_b0_y * self.Dy_sqrt[1:Ny, 0] +
@@ -157,8 +160,51 @@ class NavierStokesSystem():
         v_Dy = self.Dy_sqr[1:Ny, 1:Ny] + 1./v_e_y * (v_b0_y * self.Dy_sqrt[1:Ny, 0] +
                                                      v_bN_y * self.Dy_sqrt[1:Ny, Ny])
 
+        # one time cost of computing eigenvalues and eigenvectors
+        # these are very important to solving the Helmholtz equation
+        #      which is what this step of Chorin's projection for NSE
+        #      basically boils down to.
+        # these again are all N-2 x N-2 matrices.
+        # TODO: eigenvalues may be complex -- read to see what to do then
+        self.u_Dx_lambda, self.u_Dx_P = np.linalg.eig(u_Dx)
+        self.u_Dy_lambda, self.u_Dy_P = np.linalg.eig(u_Dy)
+        self.v_Dx_lambda, self.v_Dx_P = np.linalg.eig(v_Dx)
+        self.v_Dy_lambda, self.v_Dy_P = np.linalg.eig(v_Dy)
+
+        # make a diagonal matrix out of the eigenvalues
+        self.u_Dx_lambda = np.diag(self.u_Dx_lambda)
+        self.u_Dy_lambda = np.diag(self.u_Dy_lambda)
+        self.v_Dx_lambda = np.diag(self.v_Dx_lambda)
+        self.v_Dy_lambda = np.diag(self.v_Dy_lambda)
+
     def _process_boundary_conditions(self, bc_list):
-        # TODO: convert weird format of bcs into this format!
+        for bc in bc_list:
+            if bc.type == 'dirichlet':
+                if bc.boundary == 'left':
+                    alpha_minus_x = 1
+                    g_minus_x = bc.value
+                elif bc.boundary == 'right':
+                    alpha_plus_x = 1
+                    g_plus_x = bc.value
+                elif bc.boundary == 'top':
+                    alpha_minus_y = 1
+                    g_minus_y = bc.value
+                elif bc.boundary == 'bottom':
+                    alpha_plus_y = 1
+                    g_plus_y = bc.value
+                else:
+                    raise Exception('Boundary side {} not supported'.format(bc.boundary))
+            elif bc.type == 'neumann':
+                # we don't support Neumann boundary conditions
+                # yet... but no barriers to doing so... just work.
+                raise NotImplementedError
+            else:
+                raise Exception('Boundary type {} not supported'.format(bc.type))
+
+        # bc we dont support Neumann BC yet
+        beta_minus_x, beta_plus_x = 0, 0
+        beta_minus_y, beta_plus_y = 0, 0
+
         return  alpha_minus_x, alpha_plus_x, beta_minus_x, beta_plus_x, g_minus_x, g_plus_x, \
                 alpha_minus_y, alpha_plus_y, beta_minus_y, beta_plus_y, g_minus_y, g_plus_y
 
@@ -379,7 +425,6 @@ if __name__ == "__main__":
 
     u_ic = np.zeros((nx, ny))
     v_ic = np.zeros((nx, ny))
-    p_ic = np.zeros((nx, ny))
 
     u_bc = [
         DirichletBoundaryCondition(0, 'left', dx, dy),
@@ -395,15 +440,8 @@ if __name__ == "__main__":
         DirichletBoundaryCondition(0, 'bottom', dx, dy),
     ]
 
-    p_bc = [
-        DirichletBoundaryCondition(0, 'top', dx, dy),
-        NeumannBoundaryCondition(0, 'bottom', dx, dy),
-        NeumannBoundaryCondition(0, 'left', dx, dy),
-        NeumannBoundaryCondition(0, 'right', dx, dy),
-    ]
-
     system = NavierStokesSystem(
-        u_ic, v_ic, p_ic, u_bc, v_bc, p_bc,
+        u_ic, v_ic, u_bc, v_bc,
         nt=nt, nit=nit, nx=nx, ny=ny, dt=dt,
         rho=rho, nu=nu, beta=beta,
     )
