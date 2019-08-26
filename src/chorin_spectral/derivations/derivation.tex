@@ -127,7 +127,7 @@ Second, since this differentiation matrix is approximated, it doesn't always rep
 When we want to compute $\mathcal{D}$ and $\mathcal{D}^2$, we use the following procedure:
 \begin{itemize}
     \item compute $\mathcal{D}$ with the diagonal term correction
-    \item square it to get a provisional $\tilde{\mathcal{D}}^2$.
+    \item take square product to get a provisional $\tilde{\mathcal{D}}^2$.
     \item correct $\tilde{\mathcal{D}}^2$ to nsum to 1. As in first set $d^{(2)}_{i,j} = \tilde{d}^{(2)}_{i,j}$ for $j \neq i$. Then set $d^{(2)}_{i,i} = -\sum_{j=0, j\neq i}^{N} \tilde{d}^{(2)}_{i,j}, i = 0,..., N$.
 \end{itemize}
 

@@ -17,13 +17,9 @@ class NavierStokesSystem():
            initial conditions for u-momentum
     v_ic : np.array
            initial conditions for v-momentum
-    p_ic : np.array
-           initial conditions for pressure
     u_bc : list
            list of BoundaryCondition objects
     v_bc : list
-           list of BoundaryCondition objects
-    p_bc : list
            list of BoundaryCondition objects
     nt : integer
          number of time steps to run
@@ -42,20 +38,129 @@ class NavierStokesSystem():
     beta : float
            constant in successive over-relaxation
     """
-    def __init__(self, u_ic, v_ic, p_ic, u_bc, v_bc, p_bc,
-                 nt=200, nit=50, nx=50, ny=50, dt=0.001, 
-                 rho=1, nu=1, beta=1.25):
-        self.u_ic, self.v_ic, self.p_ic = u_ic, v_ic, p_ic
-        self.u_bc, self.v_bc, self.p_bc = u_bc, v_bc, p_bc
+    def __init__(self, u_ic, v_ic, u_bc, v_bc, nt=200, nit=50,
+                 nx=50, ny=50, dt=0.001, rho=1, nu=1, beta=1.25):
+        self.u_ic, self.v_ic = u_ic, v_ic
+        self.u_bc, self.v_bc = u_bc, v_bc
         self.nt, self.nit, self.dt, self.nx, self.ny = nt, nit, dt, nx, ny
         # hard code to size of x over 2 (un-dimensionalize to [-1, 1])
         self.dx, self.dy = 2. / (self.nx - 1), 2. / (self.ny - 1)
         self.rho, self.nu, self.beta = rho, nu, beta
 
+        # initialize a bunch of matrices
+        self._pseudospectral_setup()
+
     def step(self, un, vn, un1, vn1, p):
         ui, vi = self._predictor_step(un, vn, un1, vn1)
         un1, vn1, p = self._correction_step(ui, vi, p)
         return un1, vn1, p
+
+    def _pseudospectral_setup(self):
+        Nx, Ny = self.nx, self.ny
+
+        # define a Gauss-Lobatto mesh by two vectors
+        self.x_i = self._get_gauss_lobatto_points(Nx)
+        self.y_i = self._get_gauss_lobatto_points(Ny)
+
+        # get translation matrices
+        self.Tx = self._get_T_matrix(Nx)
+        self.Ty = self._get_T_matrix(Ny)
+        self.Tx_inv = self._get_inv_T_matrix(Nx)
+        self.Ty_inv = self._get_inv_T_matrix(Ny)
+
+        # get derivative matrices
+        self.Dx = self._get_D_matrix(Nx)
+        self.Dy = self._get_D_matrix(Ny)
+        self.Dx_sqr = self._get_D_sqr_matrix(Nx)
+        self.Dy_sqr = self._get_D_sqr_matrix(Ny)
+
+        # process boundary conditions
+        (
+            u_alpha_minus_x, u_alpha_plus_x,
+            u_beta_minus_x, u_beta_plus_x,
+            u_g_minus_x, u_g_plus_x,
+            u_alpha_minus_y, u_alpha_plus_y,
+            u_beta_minus_y, u_beta_plus_y,
+            u_g_minus_y, u_g_plus_y,
+        ) = self._process_boundary_conditions(self.u_bc)
+
+        (
+            v_alpha_minus_x, v_alpha_plus_x,
+            v_beta_minus_x, v_beta_plus_x,
+            v_g_minus_x, v_g_plus_x,
+            v_alpha_minus_y, v_alpha_plus_y,
+            v_beta_minus_y, v_beta_plus_y,
+            v_g_minus_y, v_g_plus_y,
+        ) = self._process_boundary_conditions(self.v_bc)
+
+        def get_boundary_constants( D, N, alpha_minus, alpha_plus, beta_minus,
+                                    beta_plus, g_minus, g_plus):
+            """
+            Compute e, c0-, c0+, b0j, bNj
+            """
+            c0_minus = -beta_plus * d[0, N]
+            c0_plus  = alpha_minus + beta_minus * d[N, N]
+            cN_plus  = -beta_minus * d[N, 0]
+            cN_minus = alpha_plus + beta_plus * d[0, 0]
+            e = c0_plus * cN_minus - c0_minus * cN_plus
+
+            # b0 and bN are N-2 length vectors (j=1 ... N-1)
+            b0 = -c0_plus * beta_plus * d[0, 1:N] - c0_minus * beta_minus * d[N, 1:N]
+            bN = -cN_minus * beta_minus * d[N, 1:N] - cN_plus * beta_plus * d[0, 1:N]
+
+            return e, c0_minus, c0_plus, cN_minus, cN_plus, b0, bN
+
+        (
+            u_e_x,
+            u_c0_minus_x, u_c0_plus_x,
+            u_cN_minus_x, u_cN_plus,
+            u_b0_x, u_bN_x,
+        ) = get_boundary_constants( self.Dx, Nx,
+                                    self.u_alpha_minus_x, self.u_alpha_plus_x,
+                                    self.u_beta_minus_x, self.u_beta_plus_x,
+                                    self.u_g_minus_x, self.u_g_plus_x )
+        (
+            u_e_y,
+            u_c0_minus_y, u_c0_plus_y,
+            u_cN_minus_y, u_cN_plus,
+            u_b0_y, u_bN_y,
+        ) = get_boundary_constants( self.Dy, Ny,
+                                    self.u_alpha_minus_y, self.u_alpha_plus_y,
+                                    self.u_beta_minus_y, self.u_beta_plus_y,
+                                    self.u_g_minus_y, self.u_g_plus_y )
+        (
+            v_e_x,
+            v_c0_minus_x, v_c0_plus_x,
+            v_cN_minus_x, v_cN_plus,
+            v_b0_x, v_bN_x,
+        ) = get_boundary_constants( self.Dx, Nx,
+                                    self.v_alpha_minus_x, self.v_alpha_plus_x,
+                                    self.v_beta_minus_x, self.v_beta_plus_x,
+                                    self.v_g_minus_x, self.v_g_plus_x )
+        (
+            v_e_y,
+            v_c0_minus_y, v_c0_plus_y,
+            v_cN_minus_y, v_cN_plus,
+            v_b0_y, v_bN_y,
+        ) = get_boundary_constants( self.Dy, Ny,
+                                    self.v_alpha_minus_y, self.v_alpha_plus_y,
+                                    self.v_beta_minus_y, self.v_beta_plus_y,
+                                    self.v_g_minus_y, self.v_g_plus_y )
+
+        # edit the derivative matrices to include boundary conditions
+        u_Dx = self.Dx_sqr[1:Nx, 1:Nx] + 1./u_e_x * (u_b0_x * self.Dx_sqrt[1:Nx, 0] +
+                                                     u_bN_x * self.Dx_sqrt[1:Nx, Nx])
+        u_Dy = self.Dy_sqr[1:Ny, 1:Ny] + 1./u_e_y * (u_b0_y * self.Dy_sqrt[1:Ny, 0] +
+                                                     u_bN_y * self.Dy_sqrt[1:Ny, Ny])
+        v_Dx = self.Dx_sqr[1:Nx, 1:Nx] + 1./v_e_x * (v_b0_x * self.Dx_sqrt[1:Nx, 0] +
+                                                     v_bN_x * self.Dx_sqrt[1:Nx, Nx])
+        v_Dy = self.Dy_sqr[1:Ny, 1:Ny] + 1./v_e_y * (v_b0_y * self.Dy_sqrt[1:Ny, 0] +
+                                                     v_bN_y * self.Dy_sqrt[1:Ny, Ny])
+
+    def _process_boundary_conditions(self, bc_list):
+        # TODO: convert weird format of bcs into this format!
+        return  alpha_minus_x, alpha_plus_x, beta_minus_x, beta_plus_x, g_minus_x, g_plus_x, \
+                alpha_minus_y, alpha_plus_y, beta_minus_y, beta_plus_y, g_minus_y, g_plus_y
 
     def _predictor_step(self, un, vn, un1, vn1):
         """
@@ -67,16 +172,29 @@ class NavierStokesSystem():
             ui := u^*, vi := v^*
             Intermediary velocity fields
         """
-        pass
-    
+        # pg 78 Peyret: Spectral methods for Incompressible Viscious Flow
+
+        def get_boundary_values(un, g_minus_x, g_plus_x, g_minus_y, g_plus_y,
+                                e_x, c0_minus_x, c0_plus_x, cN_minus_x, cN_plus_x, b0_x, bN_x,
+                                e_y, c0_minus_y, c0_plus_y, cN_minus_y, cN_plus_y, b0_y, bN_y):
+            # returns VECTORS of size N-2 for each boundary row and column
+            un_x0 = 1./e_x * np.sum(b0_x[:, np.newaxis] * un[1:N, 1:N], axis=0) + \
+                    1./e_x * (c0_minus_x * g_minus_x + c0_plus_x * g_plus_x)
+            un_xN = 1./e_x * np.sum(bN_x[:, np.newaxis] * un[1:N, 1:N], axis=0)
+            un_y0 = 1./e_y * np.sum(b0_y[np.newaxis, :] * un[1:N, 1:N], axis=1) + \
+                    1./e_y * (c0_minus_y * g_minus_y + c0_plus_y * g_plus_y)
+            un_yN = 1./e_y * np.sum(bN_y[np.newaxis, :] * un[1:N, 1:N], axis=1)
+
+            return un_x0, un_xN, un_y0, un_yN
+
     def _correction_step(ui, vi, p):
         """
         Parameters:
             ui := u^*, vi := v^*
             Intermediary velocity fields
-            p 
+            p
             Pressure field for current time step
-        
+
         Returns:
             un1 := u_{n+1}, vn1 := v_{n+1}, p1 := p_{n+1}
             Corrected velocity fields and new pressure field
@@ -88,7 +206,7 @@ class NavierStokesSystem():
     def _get_c_k(self, k):
         assert k >= 0
         return 2 if k == 0 else 1
-    
+
     def _get_bar_c_k(self, k, N):
         assert k >= 0
         return 2 if (k == 0 or k == N) else 1
@@ -101,14 +219,14 @@ class NavierStokesSystem():
 
     def _get_T_matrix(self, N):
         """
-        Matrix to convert back and forth between spectral coefficients, 
+        Matrix to convert back and forth between spectral coefficients,
         \hat{u}_k, and the values at the collocation points, u_N(x_i).
         This is just a matrix multiplication.
 
         \mathcal{T} = [\cos k\pi i / N], k,i = 0, ..., N
         \mathcal{U} = \mathcal{T}\hat{\mathcal{U}}
 
-        where \mathcal{U} = [u(x_0), ..., u(x_N)], the values of the 
+        where \mathcal{U} = [u(x_0), ..., u(x_N)], the values of the
         function at the coordinate points.
         """
         T = [
@@ -124,13 +242,13 @@ class NavierStokesSystem():
         \mathcal{T}^{-1} = [2(\cos \pi i / N)/(\bar{c}_k \bar{c}_i N)]
         \hat{\mathcal{U}} = \mathcal{T}\mathcal{U}
 
-        where \hat{\mathcal{U}} = [\hat{u}_0, ..., \hat{u}_N], the 
+        where \hat{\mathcal{U}} = [\hat{u}_0, ..., \hat{u}_N], the
         coefficients of the truncated spectral approximation.
         """
         inv_T = np.stack([  self._get_gauss_lobatto_points(N, k=1)
                             for k in np.arange(0, N + 1)  ])
         inv_T = inv_T.T  # size N(i) x N(k)
-        
+
         # bar_c_i is size N(i) x N(k)
         bar_c_i = np.stack([np.repeat(self._get_bar_c_k(i, N), N + 1)
                             for i in np.arange(0, N + 1)])
@@ -160,7 +278,7 @@ class NavierStokesSystem():
         To ensure the matrix sums to a constant:
             d^{(1)}_{i,i} = -\sum_{j=0,j!=i}^N d^{(1)}_{i,j}, i=0...N
 
-        This will be used such that 
+        This will be used such that
             \mathcal{U}^{(1)} = \mathcal{D}\mathcal{U}
         """
         # kind of slow to loop but we only ever have to do this once
@@ -178,30 +296,30 @@ class NavierStokesSystem():
         for i in range(0, N + 1):
             # we can include when i == j in the sum bc its 0
             D[i, i] = -np.sum(D[i, :])
-        
+
         return D
 
     def _get_D_sqr_matrix(self, N):
         """
-        A second matrix to compute second derivatives of 
-        coordinate values. In practice, we can just square 
+        A second matrix to compute second derivatives of
+        coordinate values. In practice, we can just square
         the first derivative matrix and apply some fixes.
 
-        This will be used such that 
+        This will be used such that
             \mathcal{U}^{(2)} = \mathcal{D}^2\mathcal{U}
         """
         D = self._get_D_matrix(N)
-        D_sqr_tmp = D**2
+        D_sqr_tmp = D @ D.T  # FIXME: check this
         D_sqr = np.zeros_like(D_sqr_tmp)
 
         for i in range(0, N + 1):
             for j in range(0, N + 1):
                 D_sqr[i, j] = D_sqr_tmp[i, j]
-        
+
         for i in range(0, N + 1):
             # we can include when i == j in the sum bc its 0
             D_sqr[i, i] = -np.sum(D_sqr[i, :])
-        
+
         return D_sqr
 
     # --- end section on pseudospectral method helpers
@@ -250,8 +368,8 @@ if __name__ == "__main__":
     nt  = 200                 # number of timesteps
     nit = 200                 # number iterations for elliptic pressure eqn
     nx  = 50                  # size of spatial grid
-    ny  = 50             
-    dt  = 0.001         
+    ny  = 50
+    dt  = 0.001
     rho = 1                   # fluid density (kg / m^3)
     nu  = 0.1                 # fluid kinematic viscocity
     beta   = 1.25             # SOR hyperparameter
