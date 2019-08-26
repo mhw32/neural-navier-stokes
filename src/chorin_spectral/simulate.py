@@ -219,19 +219,47 @@ class NavierStokesSystem():
             Intermediary velocity fields
         """
         # pg 78 Peyret: Spectral methods for Incompressible Viscious Flow
+        Nx, Ny = self.nx, self.ny
 
         def get_boundary_values(un, g_minus_x, g_plus_x, g_minus_y, g_plus_y,
                                 e_x, c0_minus_x, c0_plus_x, cN_minus_x, cN_plus_x, b0_x, bN_x,
                                 e_y, c0_minus_y, c0_plus_y, cN_minus_y, cN_plus_y, b0_y, bN_y):
             # returns VECTORS of size N-2 for each boundary row and column
-            un_x0 = 1./e_x * np.sum(b0_x[:, np.newaxis] * un[1:N, 1:N], axis=0) + \
+            un_x0 = 1./e_x * np.sum(b0_x[:, np.newaxis] * un[1:Nx, 1:Ny], axis=0) + \
                     1./e_x * (c0_minus_x * g_minus_x + c0_plus_x * g_plus_x)
-            un_xN = 1./e_x * np.sum(bN_x[:, np.newaxis] * un[1:N, 1:N], axis=0)
-            un_y0 = 1./e_y * np.sum(b0_y[np.newaxis, :] * un[1:N, 1:N], axis=1) + \
+            un_xN = 1./e_x * np.sum(bN_x[:, np.newaxis] * un[1:Nx, 1:Ny], axis=0)
+            un_y0 = 1./e_y * np.sum(b0_y[np.newaxis, :] * un[1:Nx, 1:Ny], axis=1) + \
                     1./e_y * (c0_minus_y * g_minus_y + c0_plus_y * g_plus_y)
-            un_yN = 1./e_y * np.sum(bN_y[np.newaxis, :] * un[1:N, 1:N], axis=1)
+            un_yN = 1./e_y * np.sum(bN_y[np.newaxis, :] * un[1:Nx, 1:Ny], axis=1)
 
             return un_x0, un_xN, un_y0, un_yN
+
+        # compute the RHS of the linear system (F)
+        # 2u* - \bigtriangleup t \Delta u^* = F
+        #   use the derivative matrices whenever we need to compute derivatives
+
+        _un, _un1 = un[1:Nx, 1:Ny], un1[1:Nx, 1:Ny]
+        _vn, _vn1 = vn[1:Nx, 1:Ny], vn1[1:Nx, 1:Ny]
+
+        _un_dx, _un_dy = self.Dx @ _un, self.Dy @ _un
+        _un1_dx, _un1_dy = self.Dx @ _un1, self.Dy @ _un1
+
+        _vn_dx, _vn_dy = self.Dx @ _vn, self.Dy @ _vn
+        _vn1_dx, _vn1_dy = self.Dx @ _vn1, self.Dy @ _vn1
+
+        _un_ddx, _un_ddy = self.Dx_sqr @ _un, self.Dy_sqr @ _un
+        _un1_ddx, _un1_ddy = self.Dx_sqr @ _un1, self.Dy_sqr @ _un1
+
+        _vn_ddx, _vn_ddy = self.Dx_sqr @ _vn, self.Dy_sqr @ _vn
+        _vn1_ddx, _vn1_ddy = self.Dx_sqr @ _vn1, self.Dy_sqr @ _vn1
+
+        # u_F and v_F are both N-2 x N-2 matrices
+        u_F = 2 * _un - 3 * self.dt * (_un * _un_dx + _vn * _un_dy) + \
+                self.dt * (_un1 * _un1_dx + _vn1 * _un1_dy) + \
+                self.dt * (_un_ddx + _un_ddy)
+        v_F = 2 * _vn - 3 * self.dt * (_un * _vn_dx + _vn * _vn_dy) + \
+                self.dt * (_un1 * _vn1_dx + _vn1 * _vn1_dy) + \
+                self.dt * (_vn_ddx + _vn_ddy)
 
     def _correction_step(ui, vi, p):
         """
