@@ -113,37 +113,37 @@ class NavierStokesSystem():
             return e, c0_minus, c0_plus, cN_minus, cN_plus, b0, bN
 
         (
-            u_e_x,
-            u_c0_minus_x, u_c0_plus_x,
-            u_cN_minus_x, u_cN_plus,
-            u_b0_x, u_bN_x,
+            self.u_e_x,
+            self.u_c0_minus_x, self.u_c0_plus_x,
+            self.u_cN_minus_x, self.u_cN_plus,
+            self.u_b0_x, self.u_bN_x,
         ) = get_boundary_constants( self.Dx, Nx,
                                     self.u_alpha_minus_x, self.u_alpha_plus_x,
                                     self.u_beta_minus_x, self.u_beta_plus_x,
                                     self.u_g_minus_x, self.u_g_plus_x )
         (
-            u_e_y,
-            u_c0_minus_y, u_c0_plus_y,
-            u_cN_minus_y, u_cN_plus,
-            u_b0_y, u_bN_y,
+            self.u_e_y,
+            self.u_c0_minus_y, self.u_c0_plus_y,
+            self.u_cN_minus_y, self.u_cN_plus,
+            self.u_b0_y, self.u_bN_y,
         ) = get_boundary_constants( self.Dy, Ny,
                                     self.u_alpha_minus_y, self.u_alpha_plus_y,
                                     self.u_beta_minus_y, self.u_beta_plus_y,
                                     self.u_g_minus_y, self.u_g_plus_y )
         (
-            v_e_x,
-            v_c0_minus_x, v_c0_plus_x,
-            v_cN_minus_x, v_cN_plus,
-            v_b0_x, v_bN_x,
+            self.v_e_x,
+            self.v_c0_minus_x, self.v_c0_plus_x,
+            self.v_cN_minus_x, self.v_cN_plus,
+            self.v_b0_x, self.v_bN_x,
         ) = get_boundary_constants( self.Dx, Nx,
                                     self.v_alpha_minus_x, self.v_alpha_plus_x,
                                     self.v_beta_minus_x, self.v_beta_plus_x,
                                     self.v_g_minus_x, self.v_g_plus_x )
         (
-            v_e_y,
-            v_c0_minus_y, v_c0_plus_y,
-            v_cN_minus_y, v_cN_plus,
-            v_b0_y, v_bN_y,
+            self.v_e_y,
+            self.v_c0_minus_y, self.v_c0_plus_y,
+            self.v_cN_minus_y, self.v_cN_plus,
+            self.v_b0_y, self.v_bN_y,
         ) = get_boundary_constants( self.Dy, Ny,
                                     self.v_alpha_minus_y, self.v_alpha_plus_y,
                                     self.v_beta_minus_y, self.v_beta_plus_y,
@@ -167,9 +167,15 @@ class NavierStokesSystem():
         # these again are all N-2 x N-2 matrices.
         # TODO: eigenvalues may be complex -- read to see what to do then
         self.u_Dx_lambda, self.u_Dx_P = np.linalg.eig(u_Dx)
-        self.u_Dy_lambda, self.u_Dy_P = np.linalg.eig(u_Dy)
+        self.u_Dy_lambda, self.u_Dy_Q = np.linalg.eig(u_Dy)
         self.v_Dx_lambda, self.v_Dx_P = np.linalg.eig(v_Dx)
-        self.v_Dy_lambda, self.v_Dy_P = np.linalg.eig(v_Dy)
+        self.v_Dy_lambda, self.v_Dy_Q = np.linalg.eig(v_Dy)
+
+        # take inverses
+        self.u_Dx_P_inv = np.linalg.inv(self.u_Dx_P)
+        self.u_Dy_Q_inv = np.linalg.inv(self.u_Dy_Q)
+        self.v_Dx_P_inv = np.linalg.inv(self.v_Dx_P)
+        self.v_Dy_Q_inv = np.linalg.inv(self.v_Dy_Q)
 
         # make a diagonal matrix out of the eigenvalues
         self.u_Dx_lambda = np.diag(self.u_Dx_lambda)
@@ -261,6 +267,60 @@ class NavierStokesSystem():
                 self.dt * (_un1 * _vn1_dx + _vn1 * _vn1_dy) + \
                 self.dt * (_vn_ddx + _vn_ddy)
 
+        # solve linear system for u first
+        u_H_tilde = self.u_Dx_P_inv @ u_F
+        u_H_hat   = u_H_tilde @ self.u_Dy_Q_inv.T
+        u_hat     = u_H_hat / ( 2. - self.dt * self.u_Dx_lambda -
+                                self.dt * self.u_Dy_lambda )
+        u_tilde   = u_hat @ self.u_Dy_Q.T
+        u_soln    = self.u_Dx_P @ u_tilde
+
+        # repeat for v -- 4 matrix multplications
+        v_H_tilde = self.v_Dx_P_inv @ v_F
+        v_H_hat   = v_H_tilde @ self.v_Dy_Q_inv.T
+        v_hat     = v_H_hat / ( 2. - self.dt * self.v_Dx_lambda -
+                                self.dt * self.v_Dy_lambda )
+        v_tilde   = v_hat @ self.v_Dy_Q.T
+        v_soln    = self.v_Dx_P @ v_tilde
+
+        # impose boundary conditions
+        u_soln_x0, u_soln_xN, u_soln_y0, u_soln_yN = \
+            get_boundary_values(
+                u_soln,
+                self.u_g_minus_x, self.u_g_plus_x, self.u_g_minus_y, self.u_g_plus_y,
+                self.u_e_x, self.u_c0_minus_x, self.u_c0_plus_x,
+                self.u_cN_minus_x, self.u_cN_plus_x, self.u_b0_x, self.u_bN_x,
+                self.u_e_y, self.u_c0_minus_y, self.u_c0_plus_y,
+                self.u_cN_minus_y, self.u_cN_plus_y, self.u_b0_y, self.u_bN_y,
+            )
+        v_soln_x0, v_soln_xN, v_soln_y0, v_soln_yN = \
+            get_boundary_values(
+                v_soln,
+                self.v_g_minus_x, self.v_g_plus_x, self.v_g_minus_y, self.v_g_plus_y,
+                self.v_e_x, self.v_c0_minus_x, self.v_c0_plus_x,
+                self.v_cN_minus_x, self.v_cN_plus_x, self.v_b0_x, self.v_bN_x,
+                self.v_e_y, self.v_c0_minus_y, self.v_c0_plus_y,
+                self.v_cN_minus_y, self.v_cN_plus_y, self.v_b0_y, self.v_bN_y,
+            )
+
+        # put it all together
+        # TODO: the corners are ignored... fix?
+        u_intermediate = np.zeros((Nx + 1, Ny + 1))
+        u_intermediate[1:Nx, 1:Ny] = u_soln
+        u_intermediate[0, 1:Ny] = u_soln_x0
+        u_intermediate[Nx, 1:Ny] = u_soln_xN
+        u_intermediate[1:Nx, 0] = u_soln_y0
+        u_intermediate[1:Nx, Ny] = u_soln_yN
+
+        v_intermediate = np.zeros((Nx + 1, Ny + 1))
+        v_intermediate[1:Nx, 1:Ny] = v_soln
+        v_intermediate[0, 1:Ny] = v_soln_x0
+        v_intermediate[Nx, 1:Ny] = v_soln_xN
+        v_intermediate[1:Nx, 0] = v_soln_y0
+        v_intermediate[1:Nx, Ny] = v_soln_yN
+
+        return u_intermediate, v_intermediate
+
     def _correction_step(ui, vi, p):
         """
         Parameters:
@@ -273,7 +333,7 @@ class NavierStokesSystem():
             un1 := u_{n+1}, vn1 := v_{n+1}, p1 := p_{n+1}
             Corrected velocity fields and new pressure field
         """
-        pass
+        raise NotImplementedError
 
     # --- begin section on pseudospectral method helpers
 
