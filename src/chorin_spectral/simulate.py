@@ -58,6 +58,10 @@ class NavierStokesSystem():
     def _pseudospectral_setup(self):
         Nx, Ny = self.nx, self.ny
 
+        # -------------------------------------------
+        # Precomputation for velocity Helmholtz step
+        # -------------------------------------------
+
         # define a Gauss-Lobatto mesh by two vectors
         self.x_i = self._get_gauss_lobatto_points(Nx)
         self.y_i = self._get_gauss_lobatto_points(Ny)
@@ -76,21 +80,21 @@ class NavierStokesSystem():
 
         # process boundary conditions
         (
-            u_alpha_minus_x, u_alpha_plus_x,
-            u_beta_minus_x, u_beta_plus_x,
-            u_g_minus_x, u_g_plus_x,
-            u_alpha_minus_y, u_alpha_plus_y,
-            u_beta_minus_y, u_beta_plus_y,
-            u_g_minus_y, u_g_plus_y,
+            self.u_alpha_minus_x, self.u_alpha_plus_x,
+            self.u_beta_minus_x, self.u_beta_plus_x,
+            self.u_g_minus_x, self.u_g_plus_x,
+            self.u_alpha_minus_y, self.u_alpha_plus_y,
+            self.u_beta_minus_y, self.u_beta_plus_y,
+            self.u_g_minus_y, self.u_g_plus_y,
         ) = self._process_boundary_conditions(self.u_bc)
 
         (
-            v_alpha_minus_x, v_alpha_plus_x,
-            v_beta_minus_x, v_beta_plus_x,
-            v_g_minus_x, v_g_plus_x,
-            v_alpha_minus_y, v_alpha_plus_y,
-            v_beta_minus_y, v_beta_plus_y,
-            v_g_minus_y, v_g_plus_y,
+            self.v_alpha_minus_x, self.v_alpha_plus_x,
+            self.v_beta_minus_x, self.v_beta_plus_x,
+            self.v_g_minus_x, self.v_g_plus_x,
+            self.v_alpha_minus_y, self.v_alpha_plus_y,
+            self.v_beta_minus_y, self.v_beta_plus_y,
+            self.v_g_minus_y, self.v_g_plus_y,
         ) = self._process_boundary_conditions(self.v_bc)
 
 
@@ -118,7 +122,7 @@ class NavierStokesSystem():
             self.u_cN_minus_x, self.u_cN_plus,
             self.u_b0_x, self.u_bN_x,
         ) = get_boundary_constants( self.Dx, Nx,
-                                    self.u_alpha_minus_x, self.u_alpha_plus_x,
+                                    self.self.u_alpha_minus_x, self.u_alpha_plus_x,
                                     self.u_beta_minus_x, self.u_beta_plus_x,
                                     self.u_g_minus_x, self.u_g_plus_x )
         (
@@ -149,7 +153,7 @@ class NavierStokesSystem():
                                     self.v_beta_minus_y, self.v_beta_plus_y,
                                     self.v_g_minus_y, self.v_g_plus_y )
 
-        # edit the derivative matrices to include boundary conditions\
+        # edit the derivative matrices to include boundary conditions
         # these are all N-2 x N-2 matrices
         u_Dx = self.Dx_sqr[1:Nx, 1:Nx] + 1./u_e_x * (u_b0_x * self.Dx_sqrt[1:Nx, 0] +
                                                      u_bN_x * self.Dx_sqrt[1:Nx, Nx])
@@ -182,6 +186,24 @@ class NavierStokesSystem():
         self.u_Dy_lambda = np.diag(self.u_Dy_lambda)
         self.v_Dx_lambda = np.diag(self.v_Dx_lambda)
         self.v_Dy_lambda = np.diag(self.v_Dy_lambda)
+
+        # -------------------------------------------
+        # Precomputation for pressure projection step
+        # -------------------------------------------
+
+        # get derivative matrices for pressure
+        self.DPx = self._get_D_matrix_degrees_minus_2(Nx)
+        self.DPy = self._get_D_matrix_degrees_minus_2(Ny)
+
+        self.DxDPx = self.Dx @ self.DPx
+        self.DyDPy = self.Dy @ self.DPy
+
+        self.DxDPx_lambda, self.DxDPx_P = np.linalg.eig(self.DxDPx)
+        self.DyDPy_lambda, self.DyDPy_Q = np.linalg.eig(self.DyDPy)
+        self.DxDPx_P_inv = np.linalg.inv(self.DxDPx_P)
+        self.DyDPy_Q_inv = np.linalg.inv(self.DyDPy_Q)
+        self.DxDPx_lambda = np.diag(self.DxDPx_lambda)
+        self.DyDPy_lambda = np.diag(self.DyDPy_lambda)
 
     def _process_boundary_conditions(self, bc_list):
         for bc in bc_list:
@@ -247,17 +269,17 @@ class NavierStokesSystem():
         _un, _un1 = un[1:Nx, 1:Ny], un1[1:Nx, 1:Ny]
         _vn, _vn1 = vn[1:Nx, 1:Ny], vn1[1:Nx, 1:Ny]
 
-        _un_dx, _un_dy = self.Dx @ _un, self.Dy @ _un
-        _un1_dx, _un1_dy = self.Dx @ _un1, self.Dy @ _un1
+        _un_dx, _un_dy = self.Dx @ _un, _un @ self.Dy.T
+        _un1_dx, _un1_dy = self.Dx @ _un1, _un1 @ self.Dy.T
 
-        _vn_dx, _vn_dy = self.Dx @ _vn, self.Dy @ _vn
-        _vn1_dx, _vn1_dy = self.Dx @ _vn1, self.Dy @ _vn1
+        _vn_dx, _vn_dy = self.Dx @ _vn, _vn @ self.Dy.T
+        _vn1_dx, _vn1_dy = self.Dx @ _vn1, _vn1 @ self.Dy.T
 
-        _un_ddx, _un_ddy = self.Dx_sqr @ _un, self.Dy_sqr @ _un
-        _un1_ddx, _un1_ddy = self.Dx_sqr @ _un1, self.Dy_sqr @ _un1
+        _un_ddx, _un_ddy = self.Dx_sqr @ _un, _un @ self.Dy_sqr.T
+        _un1_ddx, _un1_ddy = self.Dx_sqr @ _un1, _un1 @ self.Dy_sqr.T
 
-        _vn_ddx, _vn_ddy = self.Dx_sqr @ _vn, self.Dy_sqr @ _vn
-        _vn1_ddx, _vn1_ddy = self.Dx_sqr @ _vn1, self.Dy_sqr @ _vn1
+        _vn_ddx, _vn_ddy = self.Dx_sqr @ _vn, _vn @ self.Dy_sqr.T
+        _vn1_ddx, _vn1_ddy = self.Dx_sqr @ _vn1, _vn1 @ self.Dy_sqr.T
 
         # u_F and v_F are both N-2 x N-2 matrices
         u_F = 2 * _un - 3 * self.dt * (_un * _un_dx + _vn * _un_dy) + \
@@ -333,7 +355,36 @@ class NavierStokesSystem():
             un1 := u_{n+1}, vn1 := v_{n+1}, p1 := p_{n+1}
             Corrected velocity fields and new pressure field
         """
-        raise NotImplementedError
+        Nx, Ny = self.Nx, self.Ny
+        # step 1: get boundary values and build u_tau and v_tau
+        u_tau = np.stack([np.ones(Ny - 1) * self.u_g_minus_x,
+                          np.ones(Ny - 1) * self.u_g_plus_x])
+        v_tau = np.stack([np.ones(Nx - 1) * self.v_g_minus_y,
+                          np.ones(Nx - 1) * self.v_g_plus_y]).T
+        # these two are probably the same 
+        Dx_bar = np.stack([self.Dx[1:Nx, 0], self.Dx[1:Nx, Nx]])
+        Dy_bar = np.stack([self.Dy[1:Ny, 0], self.Dy[1:Ny, Ny]])
+
+        S = -(Dx_bar @ u_tau + v_tau @ Dy_bar.T)
+        
+        # now we need to solve the following Uzawa type matrix
+        # Dx\hat{Dx} Q + Q(Dy\hat{D}y)^T = -\sigma(S - Dx\tilde{U} - \tilde{V}Dy^T)
+
+        # first lets compute the right hand side!
+        H = self.rho / self.dt * (S - self.Dx @ ui - vi @ self.Dy.T)
+
+        # do the matrix multiplication trick
+        H_tilde = self.DxDPx_P_inv @ H
+        H_hat   = H_tilde @ self.DyDPy_Q_inv.T
+        Q_hat   = H_hat / (self.DxDPx_lambda + self.DyDPy_lambda)
+        Q_tilde = Q_hat @ self.DyDPy_Q.T
+        Q       = self.DxDPx_P @ Q_tilde
+
+        # transform this back into U and V space
+        u_np1 = ui - self.DxDPx @ Q * self.dt / self.rho
+        v_np1 = vi - Q @ self.DyDPy.T * self.dt / self.rho
+
+        return u_np1, v_np1
 
     # --- begin section on pseudospectral method helpers
 
@@ -455,6 +506,39 @@ class NavierStokesSystem():
             D_sqr[i, i] = -np.sum(D_sqr[i, :])
 
         return D_sqr
+
+    def _get_D_matrix_degrees_minus_2(N):
+        """
+        This is used for the P_N - P_{N-2} projection trick: 
+            Velocity is approximated using Chebyshev polynomials 
+            of degree N but Pressure is approximated using degree
+            N-2; however, both approximations use the same 
+            Gauss-Lobatto points -- this requires us to make a 
+            new differentiation matrix.
+
+        Again, for numerical stability:
+            let x_i - x_j = 2\sin(\frac{(j+i)\pi}{2N})\sin(\frac{(j-i)\pi}{2N})
+            and 1 - x_i^2 = \sin^2(i\pi/N)
+        
+        We also compute the diagonals last to ensure proper summation.
+        """
+        D = np.zeros((N + 1, N + 1))
+        
+        for i in range(0, N + 1):
+            for j in range(0, N + 1):
+                if i != j:
+                    x_i_minus_x_j = 2 * np.sin((j + i) * np.pi / (2 * N)) * \
+                                    np.sin((j - i) * np.pi / (2 * N))
+                    one_minus_x_i_sqr = np.sin(i * np.npi / N)**2
+                    one_minus_x_j_sqr = np.sin(j * np.npi / N)**2
+
+                    D[i, j] = ((-1)**(j+1) * one_minus_x_j_sqr) / (one_minus_x_i_sqr * x_i_minus_x_j)
+
+        for i in range(0, N + 1):
+            # we can include when i == j in the sum bc its 0
+            D[i, i] = -np.sum(D[i, :])
+
+        return D
 
     # --- end section on pseudospectral method helpers
 
