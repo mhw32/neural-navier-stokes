@@ -1,7 +1,7 @@
 class BaseBoundaryCondition(object):
     """
     General class for a boundary condition.
-    
+
     Args:
     -----
     value := float
@@ -17,7 +17,7 @@ class BaseBoundaryCondition(object):
         assert isinstance(dx, float)
         assert isinstance(dy, float)
         assert boundary in ['left', 'right', 'bottom', 'top']
-    
+
         self.value = value
         self.boundary = boundary
         self.dx, self.dy = dx, dy
@@ -27,9 +27,13 @@ class BaseBoundaryCondition(object):
 
 
 class DirichletBoundaryCondition(BaseBoundaryCondition):
+    def __init__(self, value, boundary, dx, dy):
+        super().__init__(value, boundary, dx, dy)
+        self.type = 'dirichlet'
+
     def apply(self, A):
         """
-        Dirichlet BCs are easy, all we have to do is set 
+        Dirichlet BCs are easy, all we have to do is set
         the point to a particular value.
         """
         if self.boundary == 'left':
@@ -40,25 +44,29 @@ class DirichletBoundaryCondition(BaseBoundaryCondition):
             A[:, 0] = self.value
         elif self.boundary == 'top':
             A[:, -1] = self.value
-        
+
         return A
 
 
 class NeumannBoundaryCondition(BaseBoundaryCondition):
+    def __init__(self, value, boundary, dx, dy):
+        super().__init__(value, boundary, dx, dy)
+        self.type = 'neumann'
+
     def apply(self, A):
         """
-        Assume that we now du/dx at some coordinate (i,j). Then, 
+        Assume that we now du/dx at some coordinate (i,j). Then,
         we can say as a simple forward difference estimate.
-            
+
             du/dx|(i,j) = u[i+1,j] - u[i,j] / dx
-            du/dy|(i,j) = u[i,j+1] - u[i,j] / dy 
-        
-        For end points on the other edge, we would use a backward 
+            du/dy|(i,j) = u[i,j+1] - u[i,j] / dy
+
+        For end points on the other edge, we would use a backward
         difference estimate.
-            
+
             du/dx|(i,j) = u[i,j] - u[i-1,j] / dx
             du/dy|(i,j) = u[i,j] - u[i,j-1] / dy
-        
+
         More tricks exist for central difference that include making
         ghost mesh points but too complicated.
         """

@@ -25,4 +25,243 @@
 \title{Chorin's Projection Method with Spectral Collocation for 2D Incompressible Navier Stokes}
 \maketitle
 
+The setup and time discretization with Crank Nicholson remains the same as the finite difference version of this (see other directory in repo). Here, we focus on deriving a Chebyshev pseudo-spectral estimator.
+
+Recall the NSE (with no force function)
+\begin{align*}
+    \frac{\partial \mathbf{u}}{\partial t} + (\mathbf{u}\cdot \nabla)\mathbf{u} + \nabla p &= \Delta \mathbf{u} \\
+    \nabla \cdot \mathbf{u} = 0 \\
+    \mathbf{u} = 0 \quad\text{on}\quad \partial \Omega
+\end{align*}
+
+\paragraph{Chorin: Step 1} Also recall that the Chorin's projection method first ignores pressure to comute an intermediate velocity field
+\begin{align*}
+    \frac{\partial \mathbf{u}^*}{\partial t} + (\mathbf{u}\cdot \nabla)\mathbf{u} &= \Delta \mathbf{u}^* \\
+    \mathbf{u}^* &= 0 \quad\text{on}\quad \partial \Omega
+\end{align*}
+
+We discretize time first with Adams-Bashford and implicit Crank-Nicholson
+
+\begin{equation*}
+    \frac{\mathbf{u}^* - \mathbf{u}^n}{\bigtriangleup t} + (\mathbf{u}^{\frac{n+1}{2}} \cdot \nabla) \mathbf{u}^{\frac{n+1}{2}} = \Delta \mathbf{u}^*
+\end{equation*}
+
+So far things are identical to the finite difference version of Chorin's. But to solve this, we do not discretize spatial dimensions anymore: we use (pseudo)spectral methods:
+
+We want to approximate the solution $\mathbf{u}^*$ as truncated series of Chebyshev polynomials: $\{ T_k(x) \}_{k=1}^{\infty}$ where $T_k(x) = \cos(k \cos^{-1}x)$; each polynomial is restricted to $[-1, 1]$.
+
+\begin{align*}
+    u^*_{N}(x) &= \sum_{k=0}^{\infty} \hat{u}^*_k T_k(x) \approx \sum_{k=0}^{N} \hat{u}^*_k T_k(x)
+\end{align*}
+
+where $\mathbf{u}^* = (u^*, v^*)$. We just write the derivation for the first equation for simplicity. To get the Chebyshev coefficients, we have to compute the (normalized) inner product:
+
+\begin{align*}
+    \hat{u}_k &= \frac{2}{\pi c_k} \int_{-1}^1 u T_k w dx
+\end{align*}
+where $c_k = \left\{\begin{matrix}
+2 &  \text{if} \quad k = 0\\
+1 &  \text{if} \quad k \geq 1
+\end{matrix}\right\}$. This is hard to compute, so we need to estimate the integral. Normally, this would require a lot of points but we can get away with carefully selected ones and a Gaussian quadrature. The best points turn out to be the roots of another Chebyshev polynomial with degree one higher; these are called the Gauss-Lobatto points -- they end up with denser spread near the boundaries (-1 and 1).
+\begin{equation}
+    x_i = \cos \frac{\pi i}{N}, i = 0, ..., N
+\end{equation}
+resulting in,
+\begin{equation}
+    \hat{u}_k = \frac{2}{\bar{c}_k N} \sum_{i=0}^N \frac{1}{\bar{c}_i} u_i T_k(x_i), k = 0, ..., N
+\end{equation}
+where $\bar{c}_k = \left\{\begin{matrix}
+2 &  \text{if} \quad k = 0 \\
+1 &  \text{if} \quad 1 \leq k \leq N - 1 \\
+2 &  \text{if} \quad k = N \\
+\end{matrix}\right\}$. Note that to convert back and forth between spectral coefficients ($\hat{u}_k$) and the values at the collocation points ($u_N(x_i)$) is a matrix multiplication. To be explicit, let
+$\mathcal{T} = [cos k\pi i / N], k, i = 0, ..., N$ and $\mathcal{T}^{-1} = [2(\cos \pi i / N) / (\bar{c}_k \bar{c}_i N)]$. Then,
+
+\begin{align*}
+    \mathcal{U}^* &= \mathcal{T}\hat{\mathcal{U}^*} \\
+    \hat{\mathcal{U}}^* &= \mathcal{T}\mathcal{U}^*
+\end{align*}
+where $\mathcal{U}^* = [u^*(x_0), ..., u^*(x_N)]$ and $\hat{\mathcal{U}}^* = [\hat{u}_0, ..., \hat{u}_N]$.
+
+An interesting fact that is useful is that the  approximation:
+
+\begin{equation}
+    u^*_{N}(x) = \sum_{k=0}^{N} \hat{u}^*_k T_k(x)
+\end{equation}
+
+can be viewed as a Lagrange interpolating polynomial with a set $\{x_i\}$. One can explicitly write this as
+
+\begin{equation}
+    u^*_{N}(x) = \sum_{j=0}^{N} h_j(x)u^*(x_j)
+\end{equation}
+where $h_j(x) = \frac{(-1)^{j+1}(1-x^2)T'_N(x)}{\bar{c}_j N^2 (x - x_j)}$ is some crazy polynomial. This is really useful because it lets us do differentiation in closed form in physical space (no need for fourier transforms). In particular, we can write the $p$-th derivative,
+\begin{equation}
+    u^{*, (p)}_{N}(x_i) = \sum_{k=0}^N \hat{u}_k T^{(p)}_k (x_i) = \sum_{j=0}^N h^{(p)}_j(x_i)u_N(x_j)
+\end{equation}
+Notice then that computing the derivative is just a matrix multiplication on the existing coordinate values! If we let $d_{i,j}^{(p)} = h_j^{(p)}(x_i)$, then we can get a series of formulas populating a ``derivative matrix", $\mathcal{D} = [d^{(1)}_{i,j}], i, j = 0 , ...,N$.
+
+\begin{align*}
+    d_{i,j}^{(1)} &= \frac{\bar{c}_i}{\bar{c}_j}\frac{(-1)^{i+j}}{(x_i - x_j)}, 0 \leq i,j \leq N , i \neq j\\
+    d_{i,i}^{(1)} &= -\frac{x_i}{2(1-x_i^2)}, 1\leq i \leq N - 1\\
+    d_{0,0}^{(1)} &= -d_{N, N}^{(1)} = \frac{2N^2 + 1}{6}
+\end{align*}
+
+So, in short, $\mathcal{U}^{*, (1)} = \mathcal{D}\mathcal{U}^{*}$,  $\mathcal{U}^{*, (2)} = \mathcal{D}^2\mathcal{U}^{*}$. As nice as this is,there are a few hacks we need to be careful of for numerical stability.
+
+First, calculating $(1-x_i^2)$ and $(x_i - x_j)$ may be hard if points are very close, so we use the following:
+
+\begin{align*}
+    x_i - x_j &= 2\sin \frac{(j+i)\pi}{2N}\sin \frac{(j-i)\pi}{2N} \\
+    1 - x_i^2 &= \sin^2 \frac{i \pi}{N}
+\end{align*}
+
+Second, since this differentiation matrix is approximated, it doesn't always represent the derivative of a constant (which it should). In other words, it should be that
+\begin{equation}
+    \sum_{j=0}^N d_{i,i}^{(1)} = 0, i = 0, ..., N
+\end{equation}
+. To fix this, we should calculate the off diagonal entries later to satisfy this constraint. So...
+\begin{equation}
+    d_{i,j}^{(1)} = -\sum_{j=0, j\neq i}^N d_{i,j}^{(1)}, i = 0, ..., N
+\end{equation}
+
+When we want to compute $\mathcal{D}$ and $\mathcal{D}^2$, we use the following procedure:
+\begin{itemize}
+    \item compute $\mathcal{D}$ with the diagonal term correction
+    \item take square product to get a provisional $\tilde{\mathcal{D}}^2$.
+    \item correct $\tilde{\mathcal{D}}^2$ to nsum to 1. As in first set $d^{(2)}_{i,j} = \tilde{d}^{(2)}_{i,j}$ for $j \neq i$. Then set $d^{(2)}_{i,i} = -\sum_{j=0, j\neq i}^{N} \tilde{d}^{(2)}_{i,j}, i = 0,..., N$.
+\end{itemize}
+
+Ok, now that we know how to differentiate, the next challenge is generalizing to two dimensions. In 2D, you use two sets of Chebyshev polynomials (with degree $N_x$ in the x-direction and degree $N_y$ for the y-direction). Instead of a grid, you get a mesh:
+$\bar{\Omega}_N$ where
+\begin{align*}
+    x_i &= \cos \frac{\pi i}{N_x}, i = 0, ..., N_x \\
+    y_j &= \cos \frac{\pi j}{N_y}, i = 0, ..., N_y
+\end{align*}
+. Let $\Omega_N$ be the open mesh ($1...N_x-1$ and $1...N_y-1$). The $\bar{\Omega}^I_N$ be the mesh without the four corners. Now we write the pressure-free equation in terms of the collocation points.
+
+\begin{align*}
+    \frac{\mathbf{u}^{*} - \mathbf{u}^n}{\bigtriangleup t} + \frac{3}{2}(\mathbf{u}^n \cdot \nabla)\mathbf{u}^n - \frac{1}{2}(\mathbf{u}^{n-1} \cdot \nabla)\mathbf{u}^{n-1} - \Delta(\frac{\mathbf{u}^{*} + \mathbf{u}^n}{2}) &= 0 \\
+    \mathbf{u}^{*} &= 0
+\end{align*}
+
+Rearrange to
+\begin{align*}
+\frac{\mathbf{u}^*}{{\bigtriangleup t}} - \frac{\Delta \mathbf{u}^*}{2} = \frac{\mathbf{u}^n}{\bigtriangleup t} - \frac{3}{2}(\mathbf{u}^n \cdot \nabla)\mathbf{u}^n + \frac{1}{2}(\mathbf{u}^{n-1} \cdot \nabla)\mathbf{u}^{n-1} + \frac{\Delta \mathbf{u}^n}{2} \\
+2\mathbf{u}^* - \bigtriangleup t \Delta \mathbf{u}^* = 2\mathbf{u}^n - 3\bigtriangleup t(\mathbf{u}^n \cdot \nabla)\mathbf{u}^n + \bigtriangleup t(\mathbf{u}^{n-1} \cdot \nabla)\mathbf{u}^{n-1} + \bigtriangleup t\Delta \mathbf{u}^n \\
+2\mathbf{u}^* - \bigtriangleup t \Delta \mathbf{u}^* = \mathbf{F}
+\end{align*}
+where $\mathbf{F} = [f, g]$ represents all the known variables.
+
+We can write out the dimensions,
+
+\begin{align*}
+2u^* - \bigtriangleup t \partial_{xx} u^* - \bigtriangleup t \partial_{yy} u^* &= f \\
+2v^* - \bigtriangleup t \partial_{xx} v^* - \bigtriangleup t \partial_{yy} v^* &= h \\
+\end{align*}
+
+We can actually consider general robin boundary conditions (not just dirichlet)... we just write out the first dimension for now:
+
+\begin{align*}
+    \alpha_- u^*(-1) + \beta_- u^{*,(1)}(-1) &= b_- \\
+    \alpha_+ u^*(1) + \beta_+ u^{*,(1)}(1) &= b_+
+\end{align*}
+
+Then i can write this in ``matrix form" with respect to the mesh, $\bar{\Omega}$,
+
+\begin{equation}
+    2\mathcal{U}^* - \bigtriangleup t\mathcal{D}_x \mathcal{U}^* - \bigtriangleup t \mathcal{U}^*\mathcal{D}_y^T = \mathcal{F}
+    \label{eqn:solve}
+\end{equation}
+
+where $\mathcal{U}^* = [u_N(x_i, y_j)]$ for $i=1,  ..., N_x - 1$ and $j = 1, ..., N_y-1$. $\mathcal{D}_x = [d_{i,j}]$ where
+\begin{align*}
+    d_{i,j} &= d^{(2)}_{i,j} + \frac{1}{e}(b_{0,j} d^{(2)}_{i,0} + b_{N,j} d^{(2)}_{i,N}) \\
+    e &=c_{0,+}c_{N,-} - c_{0,-}c_{N+} \\
+    c_{0,-} &= -\beta_+ d^{(1)}_{0,N} \\
+    c_{0,+} &= \alpha_- + \beta_- d^{(1)}_{N,N} \\
+    c_{N,+} &= -\beta_- d^{(1)}_{N,0} \\
+    c_{N,-} &= \alpha_+ + \beta_+ d^{(1)}_{0,0} \\
+    b_{0,j} &= -c_{0,+} \beta_+ d^{(1)}_{0,j} - c_{0,-}\beta_- d^{(1)}_{N,j}, j = 1...N-1\\
+    b_{N,j} &= -c_{N,-} \beta_- d^{(1)}_{N,j} - c_{N,+}\beta_+ d^{(1)}_{N,j}, j = 1...N-1
+\end{align*}
+
+Note that $\mathcal{D}_x$ builds in the boundary conditions. We can similarly design $\mathcal{D}_{y}$. Note that for $v^*$ we would need completely new differential matrices for its initial conditions.
+
+Now we need to solve Equation~\ref{eqn:solve}. We do this with matrix diagonalization. Pay upfront cost to diagonalize the differential matrices:
+
+\begin{align*}
+    \mathcal{D}_x &= \mathcal{P}\Lambda_x \mathcal{P}^{-1} \\
+    \mathcal{D}_y &= \mathcal{Q}\Lambda_y \mathcal{Q}^{-1}
+\end{align*}
+
+Then for each iteration, do the following. First left multiply everything by $\mathcal{P}^{-1}$.
+
+\begin{align*}
+    2\tilde{\mathcal{U}}^* - \bigtriangleup t \mathcal{P}^{-1}\mathcal{D}_x \mathcal{P} \tilde{\mathcal{U}}^* - \bigtriangleup t \tilde{\mathcal{U}}^* \mathcal{D}_y^T &= \tilde{\mathcal{F}} \\
+    2\tilde{\mathcal{U}}^* - \bigtriangleup t \Lambda_x \tilde{\mathcal{U}}^* - \bigtriangleup t \tilde{\mathcal{U}}^* \mathcal{D}_y^T &= \tilde{\mathcal{F}}
+\end{align*}
+where $\tilde{\mathcal{U}}^* = \mathcal{P}^{-1} \mathcal{U}^*$ and $\tilde{\mathcal{F}} = \mathcal{P}^{-1}\mathcal{F}$. Then, right multiply everything by $(\mathcal{Q}^T)^{-1}$.
+\begin{align*}
+    2\hat{\mathcal{U}}^* - \bigtriangleup t \Lambda_x \hat{\mathcal{U}}^* - \bigtriangleup t \hat{\mathcal{U}}^* \mathcal{Q}^T \mathcal{D}_y^T (\mathcal{Q}^T)^{-1} &= \hat{\mathcal{F}} \\
+    2\hat{\mathcal{U}}^* - \bigtriangleup t \Lambda_x \hat{\mathcal{U}}^* - \bigtriangleup t \hat{\mathcal{U}}^* \Lambda_y &= \hat{\mathcal{F}}
+\end{align*}
+where $\hat{\mathcal{U}}^* = \mathcal{U}^*(\mathcal{Q}^T)^{-1}$ and $\hat{\mathcal{F}} = \mathcal{F}(\mathcal{Q}^T)^{-1}$. We can then compute
+
+\begin{equation}
+    \hat{u}^*_{i,j} = \frac{\hat{f}_{i,j}}{2 - \bigtriangleup t\lambda_{x,i} - \bigtriangleup t\lambda_{y,j}}, i = 1...N_x-1,  j = 1...N_y-1
+\end{equation}
+
+If $\lambda_{x,i} = \lambda_{y,j} = 0$, replace $\hat{u}^*_{i,j} = 0$. Now that we have computed $\hat{\mathcal{U}}^* = [\hat{u}^*_{i,j}]$, we then $\tilde{\mathcal{U}} = \hat{\mathcal{U}}^*\mathcal{Q}^T$ and calculate $\mathcal{U}^* = \mathcal{P}\hat{\mathcal{U}}^*$. Remember that $\mathcal{U}$ is size $N_x-2 \times N_y-2$. Now we need to compute boundary values. This is done by representing all derivatives in matrix form and solving the linear equation. If we do the same for the second dimension of velocity, we now have the solution for $\mathbf{u}^*$.
+
+\paragraph{Chorin: Step 2} We need to correct the intermediate velocity field. There are two ways to this specific to spectral methods: we can either parameterize pressure with a polynomial of the same degree as velocity (and assume a Neumann boundary condition) or a polynomial with two degrees lower.
+
+Recall the remaining component of Chorin's:
+
+\begin{equation}
+    \partial_t \mathbf{u} = -\frac{1}{\rho}\nabla p
+\end{equation}
+
+which can be rewritten as
+\begin{align*}
+    \frac{\rho}{\bigtriangleup t}(\mathbf{u}^{n+1} - \mathbf{u}^*) + \nabla p^{n+1} &= 0 \\
+    \nabla \cdot \mathbf{u}^{n+1} = 0 \quad \text{in}\quad \Omega \\
+    \mathbf{u}_N^{n+1} \cdot \mathbf{n} &= 0
+\end{align*}
+
+There are two ways to do this that involve different assumptions and polynomials of different degrees. We pick the one that assumes NO boundary conditions on pressure.
+
+\paragraph{$\mathbb{P}_N - \mathbb{P}_{N-2}$ projection method}
+
+Let $\mathbb{P}_N$ be the space of polynomials with degree $N_x$ in x and $N_y$ in y -- we used this to approximate velocity: $\mathbf{u}^{*}_N = (u_N^*, v_N^*)$ and $\mathbf{u}^{n+1}_N = (u_N^{n+1}, v_N^{n+1})$. We then approximate pressure with a polynomial of degree two less in x and y i.e. $p^{n+1} \approx p^{n+1}_{N-2} \in \mathbb{P}_{N-2}$. But! we still evaluate at the same Gauss-Lobatto points as for velocity. So we have to define a Lagrange polynomial of degree $N_x - 2$ with roots of a $N_x+1$ Chebyshev polynomial... more special formulas!
+
+There is a relation between the Lagrange polynomial used here, $\hat{h}_j$ with the one used for velocity, $h_j$:
+
+\begin{equation}
+    \hat{h}_j(x) = \frac{1 - x_j^2}{1-x^2}h_j(x)
+\end{equation}
+. This gives us definitions for the differential matrices:
+
+\begin{align*}
+    \hat{d}_{i,j}^{(1)} &= \frac{(-1)^{j+1}(1-x_j^2)}{(1-x_i^2)(x_i - x_j)}, i, j =  1...N-1, i \neq j \\
+    \hat{d}_{i,i}^{(1)} &= \frac{3x_i}{2(1-x_i^2)}, i=1...N-1
+\end{align*}
+
+We emphasize these are unique to the $N-2$ class of polynomials and should only be used for pressure. The system can then we written as:
+
+\begin{align*}
+    \frac{\rho}{\bigtriangleup t}\mathcal{U} + \hat{\mathcal{D}}_x \mathcal{P} &= \frac{\rho}{\bigtriangleup t}\mathcal{U}^* \\
+    \frac{\rho}{\bigtriangleup t}\mathcal{V} +  \mathcal{P}\hat{\mathcal{D}}_y^T &= \frac{\rho}{\bigtriangleup t}\mathcal{V}^* \\\
+    \mathcal{D}_x \mathcal{U} + \mathcal{V}\mathcal{D}_y^T &= \mathcal{S}
+\end{align*}
+
+where $\mathcal{U} = [u_N^{n+1(x_i,y_j)}]$, $\mathcal{V} = [v_N^{n+1}(x_i, y_j)]$, and $\mathcal{P} = [p_{N-2}^{n+1}(x_i, y_j)]$ for $i = 1...N_x-1$ and $j=1...N_y-1$. Note which differentiation matrices have hats. $\mathcal{S} = -(\bar{\mathcal{D}}_x \mathcal{U}_{\Gamma} + \mathcal{V}_\Gamma \bar{\mathcal{D}}_y^T)$ contain info about the boundary conditions of velocity and $\bar{\mathcal{D}}_x = [d_{i,j}^{(1)}]$ for $i = 1...N_x-1, j=0,N_x$ and $\bar{\mathcal{D}}_y = [d_{i,j}^{(1)}]$ for $i = 1...N_y-1, j=0,N_y$ and $\mathcal{U}_\Gamma = [u^{n+1}_\Gamma(x_i, y_j)]$ for $i=0,N_x$ and $j = 1...N_y-1$ and $\mathcal{V}_\Gamma = [v^{n+1}_\Gamma(x_i, y_j)]$ for $i=1...N_x-1$ , $j=0,N_y$.
+
+Then the solution (after eliminating $\mathcal{U}$ and $\mathcal{V}$):
+
+\begin{equation}
+    \mathcal{D}_x\hat{\mathcal{D}}_x\mathcal{Q} + \mathcal{Q}(\mathcal{D}_y\hat{\mathcal{D}}_y)^T = -\frac{\rho}{\bigtriangleup t}(\mathcal{S} - \mathcal{D}_x \mathcal{U}^* - \mathcal{V}^*\mathcal{D}_y^T)
+\end{equation}
+
+We can solve this by matrix-diagonalization.
+
 \end{document}
