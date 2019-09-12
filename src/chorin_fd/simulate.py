@@ -277,8 +277,8 @@ if __name__ == "__main__":
 
     nt  = 200                 # number of timesteps
     nit = 200                 # number iterations for elliptic pressure eqn
-    nx  = 50                  # size of spatial grid
-    ny  = 50             
+    nx  = 51                  # size of spatial grid
+    ny  = 51             
     dt  = 0.001         
     rho = 1                   # fluid density (kg / m^3)
     nu  = 0.1                 # fluid kinematic viscocity

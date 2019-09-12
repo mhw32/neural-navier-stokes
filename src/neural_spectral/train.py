@@ -10,6 +10,7 @@ import torch.optim as optim
 import torch.nn.utils.rnn as rnn_utils
 
 from torchdiffeq import odeint_adjoint as odeint
+from src.constants import CHORIN_FD_DATA_FILE, DIRECT_FD_DATA_FILE
 
 
 class SpectralCoeffODEFunc(nn.Module):
@@ -31,9 +32,9 @@ class SpectralCoeffODEFunc(nn.Module):
 
         self.net = nn.Sequential(
             nn.Linear(self.latent_dim, self.hidden_dim),
-            self.ELU(inplace=True),
+            nn.ELU(inplace=True),
             nn.Linear(self.hidden_dim, self.hidden_dim),
-            self.ELU(inplace=True),
+            nn.ELU(inplace=True),
             nn.Linear(self.hidden_dim, self.latent_dim))
 
     def forward(self, t, x):
@@ -72,7 +73,8 @@ class InferenceNetwork(nn.Module):
         packed_len = (  sorted_len.detach().tolist() if batch_size > 1
                         else obs_len.detach().tolist()  )
 
-        packed = rnn_utils.pack_padded_sequence(obs_seq, packed_len)
+        packed = rnn_utils.pack_padded_sequence(obs_seq, packed_len, 
+                                                batch_first=True)
 
         _, hidden = self.gru(packed, None)
         hidden = hidden[-1, ...]
@@ -108,12 +110,12 @@ class RunningAverageMeter(object):
 
 def get_gauss_lobatto_points(N, k=1):
     # N => number of points
-    i = np.arange(N + 1)
-    x_i = np.cos(k * np.pi * i / float(N))
+    i = np.arange(N)
+    x_i = np.cos(k * np.pi * i / float(N - 1))
     return x_i
 
 
-def get_T_matrix(N):
+def get_T_matrix(N, K):
     """
     Matrix of Chebyshev coefficients at collocation points.
 
@@ -128,40 +130,10 @@ def get_T_matrix(N):
     function at the coordinate points.
     """
     T = np.stack( [ get_gauss_lobatto_points(N, k=k)
-                    for k in np.arange(0, N + 1) ] )
+                    for k in np.arange(0, K) ] ).T
     # N(k) x N(i) since this will be multiplied by 
     # the matrix of spectral coefficients (k)
-    return torch.from_numpy(T)
-
-
-def get_inv_T_matrix(N):
-    """
-    Inverse matrix to translate collocation to 
-    Chebyshev coefficients.
-
-    \mathcal{T}^{-1} = [2(\cos \pi i / N)/(\bar{c}_k \bar{c}_i N)]
-    \hat{\mathcal{U}} = \mathcal{T}\mathcal{U}
-
-    where \hat{\mathcal{U}} = [\hat{u}_0, ..., \hat{u}_N], the
-    coefficients of the truncated spectral approximation.
-    """
-    def get_constants(k, N):
-        assert k >= 0
-        return 2 if (k == 0 or k == N) else 1
-
-    inv_T = np.stack([  get_gauss_lobatto_points(N, k=k)
-                        for k in np.arange(0, N + 1)  ])
-    inv_T = inv_T.T  # size N(i) x N(k)
-
-    # bar_c_i is size N(i) x N(k)
-    bar_c_i = np.stack([np.repeat(get_constants(i, N), N + 1)
-                        for i in np.arange(0, N + 1)])
-    bar_c_k = bar_c_i.T
-
-    inv_T = 2 * inv_T / (bar_c_k * bar_c_i * N)
-    # N(i) x N(k) since this will be multiplied 
-    # by the matrix of coordinate values
-    return torch.from_numpy(inv_T)
+    return torch.from_numpy(T).float()
 
 
 def log_normal_pdf(x, mean, logvar):
@@ -182,13 +154,15 @@ def normal_kl(mu1, lv1, mu2, lv2):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('npz_path', type=str, help='where dataset is stored')
-    parser.add_argument('out_dir', type=str, default='./checkpoints', 
-                        help='where to save checkpoints')
-    parser.add_argument('--batch-time', type=int, default=20)
-    parser.add_argument('--batch-size', type=int, default=20)
-    parser.add_argument('--niters', type=int, default=100)
-    parser.add_argument('--gpu-device', type=int, default=0)
+    parser.add_argument('--npz-path', type=str, default=CHORIN_FD_DATA_FILE, 
+                        help='where dataset is stored [default: CHORIN_FD_DATA_FILE]')
+    parser.add_argument('--out-dir', type=str, default='./checkpoints', 
+                        help='where to save checkpoints [default: ./checkpoints]')
+    parser.add_argument('--n-coeff', type=int, default=20, help='default: 20')
+    parser.add_argument('--batch-time', type=int, default=20, help='default: 20')
+    parser.add_argument('--batch-size', type=int, default=10, help='default: 10')
+    parser.add_argument('--n-iters', type=int, default=100, help='default: 100')
+    parser.add_argument('--gpu-device', type=int, default=0, help='default: 0')
     args = parser.parse_args()
 
     device = (torch.device('cuda:' + str(args.gpu)
@@ -196,32 +170,33 @@ if __name__ == "__main__":
 
     data = np.load(args.npz_path)
     u, v, p = data['u'], data['v'], data['p']
-    u = torch.from_numpy(u)
-    v = torch.from_numpy(v)
-    p = torch.from_numpy(p)
-    x = torch.stack([u, v, p])
-    x = x.to(device)
-    nt, nx, ny = x.size(1), x.size(2), x.size(3)
+    u = torch.from_numpy(u).float()
+    v = torch.from_numpy(v).float()
+    p = torch.from_numpy(p).float()
+    obs = torch.stack([u, v, p]).permute(1, 2, 3, 0)
+    obs = obs.to(device)
+    nt, nx, ny = obs.size(0), obs.size(1), obs.size(2)
     t = torch.arange(nt)
     t = t.to(device)
+    noise_std = 0.1
 
     # Chebyshev collocation and series
-    Tx = get_T_matrix(nx).to(device)
-    Ty = get_T_matrix(ny).to(device)
+    Tx = get_T_matrix(nx, args.n_coeff).to(device)
+    Ty = get_T_matrix(ny, args.n_coeff).to(device)
 
     def build_u(_lambda):
-        return (Tx @ _lambda) @ Ty.T
+        return (Tx @ _lambda) @ Ty.t()
 
     def build_v(_omega):
-        return (Tx @ _omega) @ Ty.T
+        return (Tx @ _omega) @ Ty.t()
     
     def build_p(_gamma):
-        return (Tx @ _gamma) @ Ty.T
+        return (Tx @ _gamma) @ Ty.t()
 
-    latent_dim = nx * ny * 3
-
+    latent_dim = 3 * args.n_coeff**2
+    obs_dim = 3 * nx * ny
     inf_net = InferenceNetwork(latent_dim, obs_dim, hidden_dim=256)
-    ode_net = SpectralCoeffODEFunc(nx, ny)
+    ode_net = SpectralCoeffODEFunc(latent_dim)
     inf_net, ode_net = inf_net.to(device), ode_net.to(device)
     parameters = [inf_net.parameters(), ode_net.parameters()]
     optimizer = optim.Adam(chain(*parameters), lr=1e-3)
@@ -232,35 +207,40 @@ if __name__ == "__main__":
         s = np.random.choice(np.arange(nt - args.batch_time, dtype=np.int64),
                              args.batch_size, replace=False)
         s = torch.from_numpy(s)
+        batch_x0 = obs[s]
         batch_t = t[:args.batch_time]
-        batch_x = torch.stack([batch_x0[s+i] for i in range(args.batch_time)], dim=0)
+        batch_x = torch.stack([obs[s+i] for i in range(args.batch_time)], dim=0)
+        batch_x = batch_x.permute(1, 0, 2, 3, 4)
         return batch_t, batch_x
 
     try:
-        tqdm_batch = tqdm(total=args.niters, desc="[Iteration]")
-        for itr in range(1, args.niters + 1):
+        tqdm_batch = tqdm(total=args.n_iters, desc="[Iteration]")
+        for itr in range(1, args.n_iters + 1):
             optimizer.zero_grad()
             batch_t, batch_obs = get_batch()
             batch_size = batch_obs.size(0)
-            batch_len = torch.ones(batch_size) * args.batch_time
+            batch_len = torch.ones(batch_size).int() * args.batch_time
             batch_len = batch_len.to(device)
             
+            batch_obs = batch_obs.view(batch_size, args.batch_time, nx*ny*3)
             qz0_mean, qz0_logvar = inf_net(batch_obs, batch_len)
             epsilon = torch.randn(qz0_mean.size()).to(device)
             pred_z0 = epsilon * torch.exp(0.5 * qz0_logvar) + qz0_mean
 
             # forward in time and solve ode for reconstructions
-            pred_z = odeint(ode_net, pred_z0, batch_t)
+            pred_z = odeint(ode_net, pred_z0, batch_t.float())
             pred_z = pred_z.permute(1, 0, 2)  # batch_size x t x dim
-            pred_z = pred_z.view(batch_size, -1, nx, ny, 3)
-            batch_lambda = pred_z[:, :, :, :, 0]
-            batch_omega  = pred_z[:, :, :, :, 1]
-            batch_gamma  = pred_z[:, :, :, :, p]
+            pred_z = pred_z.view(batch_size, -1, args.n_coeff, args.n_coeff, 3)
+            pred_lambda = pred_z[:, :, :, :, 0]
+            pred_omega  = pred_z[:, :, :, :, 1]
+            pred_gamma  = pred_z[:, :, :, :, 2]
             pred_u = build_u(pred_lambda)
-            pred_v = build_v(pred_lambda)
-            pred_p = build_p(pred_lambda)
-            pred_obs = torch.cat([pred_u, pred_v, pred_p])
-
+            pred_v = build_v(pred_omega)
+            pred_p = build_p(pred_gamma)
+            pred_obs = torch.cat([pred_u.unsqueeze(4), 
+                                  pred_v.unsqueeze(4), 
+                                  pred_p.unsqueeze(4)], dim=4)
+            pred_obs = pred_obs.view(batch_size, args.batch_time, -1)
             noise_std_ = torch.zeros(pred_obs.size()).to(device) + noise_std
             noise_logvar = 2. * torch.log(noise_std_).to(device)
 
@@ -277,10 +257,17 @@ if __name__ == "__main__":
             tqdm_batch.update()
         tqdm_batch.close()
     except KeyboardInterrupt:
-        checkpoint_path = os.path.join(args.out_dir, 'checkpoint.pth.tar')
         torch.save({
             'ode_net_state_dict': ode_net.state_dict(),
             'inf_net_state_dict': inf_net.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'config': args,
-        }, checkpoint_path)
+        }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
+
+    torch.save({
+	'ode_net_state_dict': ode_net.state_dict(),
+	'inf_net_state_dict': inf_net.state_dict(),
+	'optimizer_state_dict': optimizer.state_dict(),
+	'config': args,
+    }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
+
