@@ -430,7 +430,7 @@ class NavierStokesSystem():
         where \hat{\mathcal{U}} = [\hat{u}_0, ..., \hat{u}_N], the
         coefficients of the truncated spectral approximation.
         """
-        inv_T = np.stack([  self._get_gauss_lobatto_points(N, k=1)
+        inv_T = np.stack([  self._get_gauss_lobatto_points(N, k=k)
                             for k in np.arange(0, N + 1)  ])
         inv_T = inv_T.T  # size N(i) x N(k)
 
