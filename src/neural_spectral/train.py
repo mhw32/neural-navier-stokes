@@ -176,7 +176,7 @@ if __name__ == "__main__":
     obs = torch.stack([u, v, p]).permute(1, 2, 3, 0)
     obs = obs.to(device)
     nt, nx, ny = obs.size(0), obs.size(1), obs.size(2)
-    t = torch.arange(nt)
+    t = torch.arange(nt) + 1
     t = t.to(device)
     noise_std = 0.1
 
@@ -228,7 +228,7 @@ if __name__ == "__main__":
             pred_z0 = epsilon * torch.exp(0.5 * qz0_logvar) + qz0_mean
 
             # forward in time and solve ode for reconstructions
-            pred_z = odeint(ode_net, pred_z0, batch_t.float())
+            pred_z = odeint(ode_net, pred_z0, batch_t.float(), method='adams')
             pred_z = pred_z.permute(1, 0, 2)  # batch_size x t x dim
             pred_z = pred_z.view(batch_size, -1, args.n_coeff, args.n_coeff, 3)
             pred_lambda = pred_z[:, :, :, :, 0]
