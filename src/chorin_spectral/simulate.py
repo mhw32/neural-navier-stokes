@@ -104,15 +104,15 @@ class NavierStokesSystem():
             Helper function to compute usual quantities: e, c0-, c0+, b0j, bNj
                 these are necessary to compute derivative metrices.
             """
-            c0_minus = -beta_plus * d[0, N]
-            c0_plus  = alpha_minus + beta_minus * d[N, N]
-            cN_plus  = -beta_minus * d[N, 0]
-            cN_minus = alpha_plus + beta_plus * d[0, 0]
+            c0_minus = -beta_plus * D[0, N]
+            c0_plus  = alpha_minus + beta_minus * D[N, N]
+            cN_plus  = -beta_minus * D[N, 0]
+            cN_minus = alpha_plus + beta_plus * D[0, 0]
             e = c0_plus * cN_minus - c0_minus * cN_plus
 
             # b0 and bN are N-2 length vectors (j=1 ... N-1)
-            b0 = -c0_plus * beta_plus * d[0, 1:N] - c0_minus * beta_minus * d[N, 1:N]
-            bN = -cN_minus * beta_minus * d[N, 1:N] - cN_plus * beta_plus * d[0, 1:N]
+            b0 = -c0_plus * beta_plus * D[0, 1:N] - c0_minus * beta_minus * D[N, 1:N]
+            bN = -cN_minus * beta_minus * D[N, 1:N] - cN_plus * beta_plus * D[0, 1:N]
 
             return e, c0_minus, c0_plus, cN_minus, cN_plus, b0, bN
 
@@ -122,7 +122,7 @@ class NavierStokesSystem():
             self.u_cN_minus_x, self.u_cN_plus,
             self.u_b0_x, self.u_bN_x,
         ) = get_boundary_constants( self.Dx, Nx,
-                                    self.self.u_alpha_minus_x, self.u_alpha_plus_x,
+                                    self.u_alpha_minus_x, self.u_alpha_plus_x,
                                     self.u_beta_minus_x, self.u_beta_plus_x,
                                     self.u_g_minus_x, self.u_g_plus_x )
         (
@@ -155,14 +155,14 @@ class NavierStokesSystem():
 
         # edit the derivative matrices to include boundary conditions
         # these are all N-2 x N-2 matrices
-        u_Dx = self.Dx_sqr[1:Nx, 1:Nx] + 1./u_e_x * (u_b0_x * self.Dx_sqrt[1:Nx, 0] +
-                                                     u_bN_x * self.Dx_sqrt[1:Nx, Nx])
-        u_Dy = self.Dy_sqr[1:Ny, 1:Ny] + 1./u_e_y * (u_b0_y * self.Dy_sqrt[1:Ny, 0] +
-                                                     u_bN_y * self.Dy_sqrt[1:Ny, Ny])
-        v_Dx = self.Dx_sqr[1:Nx, 1:Nx] + 1./v_e_x * (v_b0_x * self.Dx_sqrt[1:Nx, 0] +
-                                                     v_bN_x * self.Dx_sqrt[1:Nx, Nx])
-        v_Dy = self.Dy_sqr[1:Ny, 1:Ny] + 1./v_e_y * (v_b0_y * self.Dy_sqrt[1:Ny, 0] +
-                                                     v_bN_y * self.Dy_sqrt[1:Ny, Ny])
+        u_Dx = self.Dx_sqr[1:Nx, 1:Nx] + 1./self.u_e_x * (self.u_b0_x * self.Dx_sqr[1:Nx, 0] +
+                                                          self.u_bN_x * self.Dx_sqr[1:Nx, Nx])
+        u_Dy = self.Dy_sqr[1:Ny, 1:Ny] + 1./self.u_e_y * (self.u_b0_y * self.Dy_sqr[1:Ny, 0] +
+                                                          self.u_bN_y * self.Dy_sqr[1:Ny, Ny])
+        v_Dx = self.Dx_sqr[1:Nx, 1:Nx] + 1./self.v_e_x * (self.v_b0_x * self.Dx_sqr[1:Nx, 0] +
+                                                          self.v_bN_x * self.Dx_sqr[1:Nx, Nx])
+        v_Dy = self.Dy_sqr[1:Ny, 1:Ny] + 1./self.v_e_y * (self.v_b0_y * self.Dy_sqr[1:Ny, 0] +
+                                                          self.v_bN_y * self.Dy_sqr[1:Ny, Ny])
 
         # one time cost of computing eigenvalues and eigenvectors
         # these are very important to solving the Helmholtz equation
@@ -507,7 +507,7 @@ class NavierStokesSystem():
 
         return D_sqr
 
-    def _get_D_matrix_degrees_minus_2(N):
+    def _get_D_matrix_degrees_minus_2(self, N):
         """
         This is used for the P_N - P_{N-2} projection trick: 
             Velocity is approximated using Chebyshev polynomials 
@@ -529,8 +529,8 @@ class NavierStokesSystem():
                 if i != j:
                     x_i_minus_x_j = 2 * np.sin((j + i) * np.pi / (2 * N)) * \
                                     np.sin((j - i) * np.pi / (2 * N))
-                    one_minus_x_i_sqr = np.sin(i * np.npi / N)**2
-                    one_minus_x_j_sqr = np.sin(j * np.npi / N)**2
+                    one_minus_x_i_sqr = np.sin(i * np.pi / N)**2
+                    one_minus_x_j_sqr = np.sin(j * np.pi / N)**2
 
                     D[i, j] = ((-1)**(j+1) * one_minus_x_j_sqr) / (one_minus_x_i_sqr * x_i_minus_x_j)
 
