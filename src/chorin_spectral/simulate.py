@@ -42,9 +42,10 @@ class NavierStokesSystem():
                  nx=50, ny=50, dt=0.001, rho=1, nu=1, beta=1.25):
         self.u_ic, self.v_ic, self.p_ic = u_ic, v_ic, p_ic
         self.u_bc, self.v_bc = u_bc, v_bc  # no BC needed for pressure
+        # important to subtract 1 for numerical match-up
         self.nt, self.nit, self.dt, self.nx, self.ny = nt, nit, dt, nx, ny
         # hard code to size of x over 2 (un-dimensionalize to [-1, 1])
-        self.dx, self.dy = 2. / (self.nx - 1), 2. / (self.ny - 1)
+        self.dx, self.dy = 2. / self.nx, 2. / self.ny
         self.rho, self.nu, self.beta = rho, nu, beta
 
         # initialize a bunch of matrices
@@ -104,15 +105,15 @@ class NavierStokesSystem():
             Helper function to compute usual quantities: e, c0-, c0+, b0j, bNj
                 these are necessary to compute derivative metrices.
             """
-            c0_minus = -beta_plus * D[0, N]
-            c0_plus  = alpha_minus + beta_minus * D[N, N]
-            cN_plus  = -beta_minus * D[N, 0]
+            c0_minus = -beta_plus * D[0, -1]
+            c0_plus  = alpha_minus + beta_minus * D[-1, -1]
+            cN_plus  = -beta_minus * D[-1, 0]
             cN_minus = alpha_plus + beta_plus * D[0, 0]
             e = c0_plus * cN_minus - c0_minus * cN_plus
 
             # b0 and bN are N-2 length vectors (j=1 ... N-1)
-            b0 = -c0_plus * beta_plus * D[0, 1:N] - c0_minus * beta_minus * D[N, 1:N]
-            bN = -cN_minus * beta_minus * D[N, 1:N] - cN_plus * beta_plus * D[0, 1:N]
+            b0 = -c0_plus * beta_plus * D[0, 1:-1] - c0_minus * beta_minus * D[-1, 1:-1]
+            bN = -cN_minus * beta_minus * D[-1, 1:-1] - cN_plus * beta_plus * D[0, 1:-1]
 
             return e, c0_minus, c0_plus, cN_minus, cN_plus, b0, bN
 
@@ -155,14 +156,14 @@ class NavierStokesSystem():
 
         # edit the derivative matrices to include boundary conditions
         # these are all N-2 x N-2 matrices
-        u_Dx = self.Dx_sqr[1:Nx, 1:Nx] + 1./self.u_e_x * (self.u_b0_x * self.Dx_sqr[1:Nx, 0] +
-                                                          self.u_bN_x * self.Dx_sqr[1:Nx, Nx])
-        u_Dy = self.Dy_sqr[1:Ny, 1:Ny] + 1./self.u_e_y * (self.u_b0_y * self.Dy_sqr[1:Ny, 0] +
-                                                          self.u_bN_y * self.Dy_sqr[1:Ny, Ny])
-        v_Dx = self.Dx_sqr[1:Nx, 1:Nx] + 1./self.v_e_x * (self.v_b0_x * self.Dx_sqr[1:Nx, 0] +
-                                                          self.v_bN_x * self.Dx_sqr[1:Nx, Nx])
-        v_Dy = self.Dy_sqr[1:Ny, 1:Ny] + 1./self.v_e_y * (self.v_b0_y * self.Dy_sqr[1:Ny, 0] +
-                                                          self.v_bN_y * self.Dy_sqr[1:Ny, Ny])
+        u_Dx = self.Dx_sqr[1:-1, 1:-1] + 1./self.u_e_x * (self.u_b0_x * self.Dx_sqr[1:-1, 0] +
+                                                          self.u_bN_x * self.Dx_sqr[1:-1, -1])
+        u_Dy = self.Dy_sqr[1:-1, 1:-1] + 1./self.u_e_y * (self.u_b0_y * self.Dy_sqr[1:-1, 0] +
+                                                          self.u_bN_y * self.Dy_sqr[1:-1, -1])
+        v_Dx = self.Dx_sqr[1:-1, 1:-1] + 1./self.v_e_x * (self.v_b0_x * self.Dx_sqr[1:-1, 0] +
+                                                          self.v_bN_x * self.Dx_sqr[1:-1, -1])
+        v_Dy = self.Dy_sqr[1:-1, 1:-1] + 1./self.v_e_y * (self.v_b0_y * self.Dy_sqr[1:-1, 0] +
+                                                          self.v_bN_y * self.Dy_sqr[1:-1, -1])
 
         # one time cost of computing eigenvalues and eigenvectors
         # these are very important to solving the Helmholtz equation
@@ -257,9 +258,8 @@ class NavierStokesSystem():
         # compute the RHS of the linear system (F)
         # 2u* - \bigtriangleup t \Delta u^* = F
         #   use the derivative matrices whenever we need to compute derivatives
-
-        _un, _un1 = un[1:Nx, 1:Ny], un1[1:Nx, 1:Ny]
-        _vn, _vn1 = vn[1:Nx, 1:Ny], vn1[1:Nx, 1:Ny]
+        _un, _un1 = un[1:-1, 1:-1], un1[1:-1, 1:-1]
+        _vn, _vn1 = vn[1:-1, 1:-1], vn1[1:-1, 1:-1]
 
         _un_dx, _un_dy = self.Dx[1:-1, 1:-1] @ _un, _un @ self.Dy[1:-1, 1:-1].T
         _un1_dx, _un1_dy = self.Dx[1:-1, 1:-1] @ _un1, _un1 @ self.Dy[1:-1, 1:-1].T
@@ -284,16 +284,16 @@ class NavierStokesSystem():
         # solve linear system for u first
         u_H_tilde = self.u_Dx_P_inv @ u_F
         u_H_hat   = u_H_tilde @ self.u_Dy_Q_inv.T
-        u_hat     = u_H_hat / ( 2. - self.dt * dup_vector_by_row(self.u_Dx_lambda, Nx - 1) -
-                                self.dt * dup_vector_by_col(self.u_Dy_lambda, Ny - 1) )
+        u_hat     = u_H_hat / ( 2. - self.dt * dup_vector_by_row(self.u_Dx_lambda, Nx - 2) -
+                                self.dt * dup_vector_by_col(self.u_Dy_lambda, Ny - 2) )
         u_tilde   = u_hat @ self.u_Dy_Q.T
         u_soln    = self.u_Dx_P @ u_tilde
 
         # repeat for v -- 4 matrix multplications
         v_H_tilde = self.v_Dx_P_inv @ v_F
         v_H_hat   = v_H_tilde @ self.v_Dy_Q_inv.T
-        v_hat     = v_H_hat / ( 2. - self.dt * dup_vector_by_row(self.v_Dx_lambda, Nx - 1) -
-                                self.dt * dup_vector_by_col(self.v_Dy_lambda, Ny - 1) )
+        v_hat     = v_H_hat / ( 2. - self.dt * dup_vector_by_row(self.v_Dx_lambda, Nx - 2) -
+                                self.dt * dup_vector_by_col(self.v_Dy_lambda, Ny - 2) )
         v_tilde   = v_hat @ self.v_Dy_Q.T
         v_soln    = self.v_Dx_P @ v_tilde
 
@@ -319,19 +319,20 @@ class NavierStokesSystem():
 
         # put it all together
         # TODO: the corners are ignored... fix?
-        u_intermediate = np.zeros((Nx + 1, Ny + 1))
-        u_intermediate[1:Nx, 1:Ny] = u_soln
-        u_intermediate[0, 1:Ny] = u_soln_x0
-        u_intermediate[Nx, 1:Ny] = u_soln_xN
-        u_intermediate[1:Nx, 0] = u_soln_y0
-        u_intermediate[1:Nx, Ny] = u_soln_yN
+        u_intermediate = np.zeros((Nx, Ny))
+        u_intermediate[1:-1, 1:-1] = u_soln
+        u_intermediate[0, 1:-1] = u_soln_x0
+        u_intermediate[-1, 1:-1] = u_soln_xN
+        u_intermediate[1:-1, 0] = u_soln_y0
+        u_intermediate[1:-1, -1] = u_soln_yN
 
-        v_intermediate = np.zeros((Nx + 1, Ny + 1))
-        v_intermediate[1:Nx, 1:Ny] = v_soln
-        v_intermediate[0, 1:Ny] = v_soln_x0
-        v_intermediate[Nx, 1:Ny] = v_soln_xN
-        v_intermediate[1:Nx, 0] = v_soln_y0
-        v_intermediate[1:Nx, Ny] = v_soln_yN
+        v_intermediate = np.zeros((Nx, Ny))
+        v_intermediate[1:-1, 1:-1] = v_soln
+        v_intermediate[0, 1:-1] = v_soln_x0
+        v_intermediate[-1, 1:-1] = v_soln_xN
+        v_intermediate[1:-1, 0] = v_soln_y0
+        v_intermediate[1:-1, -1] = v_soln_yN
+        
 
         return u_intermediate, v_intermediate
 
@@ -349,13 +350,13 @@ class NavierStokesSystem():
         """
         Nx, Ny = self.nx, self.ny
         # step 1: get boundary values and build u_tau and v_tau
-        u_tau = np.stack([np.ones(Ny - 1) * self.u_g_minus_x,
-                          np.ones(Ny - 1) * self.u_g_plus_x])
-        v_tau = np.stack([np.ones(Nx - 1) * self.v_g_minus_y,
-                          np.ones(Nx - 1) * self.v_g_plus_y]).T
+        u_tau = np.stack([np.ones(Ny - 2) * self.u_g_minus_x,
+                          np.ones(Ny - 2) * self.u_g_plus_x])
+        v_tau = np.stack([np.ones(Nx - 2) * self.v_g_minus_y,
+                          np.ones(Nx - 2) * self.v_g_plus_y]).T
         # these two are probably the same 
-        Dx_bar = np.stack([self.Dx[1:Nx, 0], self.Dx[1:Nx, Nx]]).T
-        Dy_bar = np.stack([self.Dy[1:Ny, 0], self.Dy[1:Ny, Ny]]).T
+        Dx_bar = np.stack([self.Dx[1:-1, 0], self.Dx[1:-1, -1]]).T
+        Dy_bar = np.stack([self.Dy[1:-1, 0], self.Dy[1:-1, -1]]).T
 
         S = -(Dx_bar @ u_tau + v_tau @ Dy_bar.T)
         
@@ -368,17 +369,18 @@ class NavierStokesSystem():
         # do the matrix multiplication trick
         H_tilde = self.DxDPx_P_inv @ H
         H_hat   = H_tilde @ self.DyDPy_Q_inv.T
-        Q_hat   = H_hat / ( dup_vector_by_row(self.DxDPx_lambda, Nx - 1) + 
-                            dup_vector_by_col(self.DyDPy_lambda, Ny - 1) )
+        Q_hat   = H_hat / ( dup_vector_by_row(self.DxDPx_lambda, Nx - 2) + 
+                            dup_vector_by_col(self.DyDPy_lambda, Ny - 2) )
         Q_tilde = Q_hat @ self.DyDPy_Q.T
         Q       = self.DxDPx_P @ Q_tilde
 
         # transform this back into U and V space
-        u_np1, v_np1 = ui.copy(), vi.copy()
+        u_np1, v_np1, p_np1 = ui.copy(), vi.copy(), p.copy()
         u_np1[1:-1,1:-1] = u_np1[1:-1,1:-1] - self.DxDPx @ Q * self.dt / self.rho
         v_np1[1:-1,1:-1] = v_np1[1:-1,1:-1] - Q @ self.DyDPy.T * self.dt / self.rho
+        p_np1[1:-1,1:-1] = Q
 
-        return u_np1, v_np1
+        return u_np1, v_np1, p_np1
 
     # --- begin section on pseudospectral method helpers
 
@@ -392,8 +394,8 @@ class NavierStokesSystem():
 
     def _get_gauss_lobatto_points(self, N, k=1):
         # N => number of points
-        i = np.arange(N + 1)
-        x_i = np.cos(k * np.pi * i / float(N))
+        i = np.arange(N)
+        x_i = np.cos(k * np.pi * i / float(N - 1))
         return x_i
 
     def _get_T_matrix(self, N):
@@ -410,7 +412,7 @@ class NavierStokesSystem():
         """
         T = [
             self._get_gauss_lobatto_points(N, k=k)
-            for k in np.arange(0, N + 1)
+            for k in np.arange(0, N)
         ]
         # N(k) x N(i) since this will be multiplied by the matrix
         # of spectral coefficients (k)
@@ -425,12 +427,12 @@ class NavierStokesSystem():
         coefficients of the truncated spectral approximation.
         """
         inv_T = np.stack([  self._get_gauss_lobatto_points(N, k=k)
-                            for k in np.arange(0, N + 1)  ])
+                            for k in np.arange(0, N)  ])
         inv_T = inv_T.T  # size N(i) x N(k)
 
         # bar_c_i is size N(i) x N(k)
-        bar_c_i = np.stack([np.repeat(self._get_bar_c_k(i, N), N + 1)
-                            for i in np.arange(0, N + 1)])
+        bar_c_i = np.stack([np.repeat(self._get_bar_c_k(i, N), N)
+                            for i in np.arange(0, N)])
         bar_c_k = bar_c_i.T
 
         inv_T = 2 * inv_T / (bar_c_k * bar_c_i * N)
@@ -461,9 +463,9 @@ class NavierStokesSystem():
             \mathcal{U}^{(1)} = \mathcal{D}\mathcal{U}
         """
         # kind of slow to loop but we only ever have to do this once
-        D = np.zeros((N + 1, N + 1))
-        for i in range(0, N + 1):
-            for j in range(0, N + 1):
+        D = np.zeros((N, N))
+        for i in range(0, N):
+            for j in range(0, N):
                 if i != j:
                     bar_c_i = self._get_bar_c_k(i, N)
                     bar_c_j = self._get_bar_c_k(j, N)
@@ -472,7 +474,7 @@ class NavierStokesSystem():
                     D[i, j] = bar_c_i / bar_c_j * (-1)**(i + j) / diff
 
         # now we fill out the diagonals
-        for i in range(0, N + 1):
+        for i in range(0, N):
             # we can include when i == j in the sum bc its 0
             D[i, i] = -np.sum(D[i, :])
 
@@ -491,11 +493,11 @@ class NavierStokesSystem():
         D_sqr_tmp = D @ D.T  # FIXME: check this
         D_sqr = np.zeros_like(D_sqr_tmp)
 
-        for i in range(0, N + 1):
-            for j in range(0, N + 1):
+        for i in range(0, N):
+            for j in range(0, N):
                 D_sqr[i, j] = D_sqr_tmp[i, j]
 
-        for i in range(0, N + 1):
+        for i in range(0, N):
             # we can include when i == j in the sum bc its 0
             D_sqr[i, i] = -np.sum(D_sqr[i, :])
 
@@ -515,11 +517,11 @@ class NavierStokesSystem():
         
         We also compute the diagonals last to ensure proper summation.
         """
-        D = np.zeros((N + 1, N + 1))
+        D = np.zeros((N, N))
         x = self._get_gauss_lobatto_points(N, k=1)
         
-        for i in range(1, N):
-            for j in range(1, N):
+        for i in range(1, N - 1):
+            for j in range(1, N - 1):
                 if i != j:
                     D[i, j] = ((-1)**(j+1) * (1. - x[j]**2) / ((1. - x[i]**2) * (x[i] - x[j])))
                 else:
@@ -577,8 +579,8 @@ if __name__ == "__main__":
 
     nt  = 200                 # number of timesteps
     nit = 200                 # number iterations for elliptic pressure eqn
-    nx  = 50                  # size of spatial grid
-    ny  = 50
+    nx  = 51                  # size of spatial grid
+    ny  = 51
     dt  = 0.001
     rho = 1                   # fluid density (kg / m^3)
     nu  = 0.1                 # fluid kinematic viscocity
