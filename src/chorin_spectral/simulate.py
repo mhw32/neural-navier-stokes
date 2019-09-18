@@ -38,10 +38,10 @@ class NavierStokesSystem():
     beta : float
            constant in successive over-relaxation
     """
-    def __init__(self, u_ic, v_ic, u_bc, v_bc, nt=200, nit=50,
+    def __init__(self, u_ic, v_ic, p_ic, u_bc, v_bc, nt=200, nit=50,
                  nx=50, ny=50, dt=0.001, rho=1, nu=1, beta=1.25):
-        self.u_ic, self.v_ic = u_ic, v_ic
-        self.u_bc, self.v_bc = u_bc, v_bc
+        self.u_ic, self.v_ic, self.p_ic = u_ic, v_ic, p_ic
+        self.u_bc, self.v_bc = u_bc, v_bc  # no BC needed for pressure
         self.nt, self.nit, self.dt, self.nx, self.ny = nt, nit, dt, nx, ny
         # hard code to size of x over 2 (un-dimensionalize to [-1, 1])
         self.dx, self.dy = 2. / (self.nx - 1), 2. / (self.ny - 1)
@@ -265,6 +265,7 @@ class NavierStokesSystem():
         # compute the RHS of the linear system (F)
         # 2u* - \bigtriangleup t \Delta u^* = F
         #   use the derivative matrices whenever we need to compute derivatives
+        import pdb; pdb.set_trace()
 
         _un, _un1 = un[1:Nx, 1:Ny], un1[1:Nx, 1:Ny]
         _vn, _vn1 = vn[1:Nx, 1:Ny], vn1[1:Nx, 1:Ny]
@@ -546,9 +547,6 @@ class NavierStokesSystem():
         for bc in self.v_bc:
             v = bc.apply(v)
 
-        for bc in self.p_bc:
-            p = bc.apply(p)
-
         return u, v, p
 
     def simulate(self):
@@ -591,6 +589,7 @@ if __name__ == "__main__":
 
     u_ic = np.zeros((nx, ny))
     v_ic = np.zeros((nx, ny))
+    p_ic = np.zeros((nx, ny))
 
     u_bc = [
         DirichletBoundaryCondition(0, 'left', dx, dy),
@@ -607,7 +606,7 @@ if __name__ == "__main__":
     ]
 
     system = NavierStokesSystem(
-        u_ic, v_ic, u_bc, v_bc,
+        u_ic, v_ic, p_ic, u_bc, v_bc,
         nt=nt, nit=nit, nx=nx, ny=ny, dt=dt,
         rho=rho, nu=nu, beta=beta,
     )
