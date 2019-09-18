@@ -181,12 +181,6 @@ class NavierStokesSystem():
         self.v_Dx_P_inv = np.linalg.inv(self.v_Dx_P)
         self.v_Dy_Q_inv = np.linalg.inv(self.v_Dy_Q)
 
-        # make a diagonal matrix out of the eigenvalues
-        self.u_Dx_lambda = np.diag(self.u_Dx_lambda)
-        self.u_Dy_lambda = np.diag(self.u_Dy_lambda)
-        self.v_Dx_lambda = np.diag(self.v_Dx_lambda)
-        self.v_Dy_lambda = np.diag(self.v_Dy_lambda)
-
         # -------------------------------------------
         # Precomputation for pressure projection step
         # -------------------------------------------
@@ -202,8 +196,6 @@ class NavierStokesSystem():
         self.DyDPy_lambda, self.DyDPy_Q = np.linalg.eig(self.DyDPy)
         self.DxDPx_P_inv = np.linalg.inv(self.DxDPx_P)
         self.DyDPy_Q_inv = np.linalg.inv(self.DyDPy_Q)
-        self.DxDPx_lambda = np.diag(self.DxDPx_lambda)
-        self.DyDPy_lambda = np.diag(self.DyDPy_lambda)
 
     def _process_boundary_conditions(self, bc_list):
         for bc in bc_list:
@@ -292,16 +284,16 @@ class NavierStokesSystem():
         # solve linear system for u first
         u_H_tilde = self.u_Dx_P_inv @ u_F
         u_H_hat   = u_H_tilde @ self.u_Dy_Q_inv.T
-        u_hat     = u_H_hat / ( 2. - self.dt * self.u_Dx_lambda -
-                                self.dt * self.u_Dy_lambda )
+        u_hat     = u_H_hat / ( 2. - self.dt * dup_vector_by_row(self.u_Dx_lambda, Nx - 1) -
+                                self.dt * dup_vector_by_col(self.u_Dy_lambda, Ny - 1) )
         u_tilde   = u_hat @ self.u_Dy_Q.T
         u_soln    = self.u_Dx_P @ u_tilde
 
         # repeat for v -- 4 matrix multplications
         v_H_tilde = self.v_Dx_P_inv @ v_F
         v_H_hat   = v_H_tilde @ self.v_Dy_Q_inv.T
-        v_hat     = v_H_hat / ( 2. - self.dt * self.v_Dx_lambda -
-                                self.dt * self.v_Dy_lambda )
+        v_hat     = v_H_hat / ( 2. - self.dt * dup_vector_by_row(self.v_Dx_lambda, Nx - 1) -
+                                self.dt * dup_vector_by_col(self.v_Dy_lambda, Ny - 1) )
         v_tilde   = v_hat @ self.v_Dy_Q.T
         v_soln    = self.v_Dx_P @ v_tilde
 
@@ -343,7 +335,7 @@ class NavierStokesSystem():
 
         return u_intermediate, v_intermediate
 
-    def _correction_step(ui, vi, p):
+    def _correction_step(self, ui, vi, p):
         """
         Parameters:
             ui := u^*, vi := v^*
@@ -355,15 +347,15 @@ class NavierStokesSystem():
             un1 := u_{n+1}, vn1 := v_{n+1}, p1 := p_{n+1}
             Corrected velocity fields and new pressure field
         """
-        Nx, Ny = self.Nx, self.Ny
+        Nx, Ny = self.nx, self.ny
         # step 1: get boundary values and build u_tau and v_tau
         u_tau = np.stack([np.ones(Ny - 1) * self.u_g_minus_x,
                           np.ones(Ny - 1) * self.u_g_plus_x])
         v_tau = np.stack([np.ones(Nx - 1) * self.v_g_minus_y,
                           np.ones(Nx - 1) * self.v_g_plus_y]).T
         # these two are probably the same 
-        Dx_bar = np.stack([self.Dx[1:Nx, 0], self.Dx[1:Nx, Nx]])
-        Dy_bar = np.stack([self.Dy[1:Ny, 0], self.Dy[1:Ny, Ny]])
+        Dx_bar = np.stack([self.Dx[1:Nx, 0], self.Dx[1:Nx, Nx]]).T
+        Dy_bar = np.stack([self.Dy[1:Ny, 0], self.Dy[1:Ny, Ny]]).T
 
         S = -(Dx_bar @ u_tau + v_tau @ Dy_bar.T)
         
@@ -371,18 +363,20 @@ class NavierStokesSystem():
         # Dx\hat{Dx} Q + Q(Dy\hat{D}y)^T = -\sigma(S - Dx\tilde{U} - \tilde{V}Dy^T)
 
         # first lets compute the right hand side!
-        H = self.rho / self.dt * (S - self.Dx @ ui - vi @ self.Dy.T)
+        H = -self.rho / self.dt * (S - self.Dx[1:-1, 1:-1] @ ui[1:-1, 1:-1] - vi[1:-1, 1:-1] @ self.Dy[1:-1, 1:-1].T)
 
         # do the matrix multiplication trick
         H_tilde = self.DxDPx_P_inv @ H
         H_hat   = H_tilde @ self.DyDPy_Q_inv.T
-        Q_hat   = H_hat / (self.DxDPx_lambda + self.DyDPy_lambda)
+        Q_hat   = H_hat / ( dup_vector_by_row(self.DxDPx_lambda, Nx - 1) + 
+                            dup_vector_by_col(self.DyDPy_lambda, Ny - 1) )
         Q_tilde = Q_hat @ self.DyDPy_Q.T
         Q       = self.DxDPx_P @ Q_tilde
 
         # transform this back into U and V space
-        u_np1 = ui - self.DxDPx @ Q * self.dt / self.rho
-        v_np1 = vi - Q @ self.DyDPy.T * self.dt / self.rho
+        u_np1, v_np1 = ui.copy(), vi.copy()
+        u_np1[1:-1,1:-1] = u_np1[1:-1,1:-1] - self.DxDPx @ Q * self.dt / self.rho
+        v_np1[1:-1,1:-1] = v_np1[1:-1,1:-1] - Q @ self.DyDPy.T * self.dt / self.rho
 
         return u_np1, v_np1
 
@@ -568,6 +562,13 @@ class NavierStokesSystem():
         p_list = np.stack(p_list)
 
         return u_list, v_list, p_list
+
+
+def dup_vector_by_row(v, n):
+    return v[:, np.newaxis].repeat(n, axis=1)
+
+def dup_vector_by_col(v, n):
+    return dup_vector_by_row(v, n).T
 
 
 if __name__ == "__main__":
