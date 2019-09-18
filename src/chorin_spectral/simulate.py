@@ -119,7 +119,7 @@ class NavierStokesSystem():
         (
             self.u_e_x,
             self.u_c0_minus_x, self.u_c0_plus_x,
-            self.u_cN_minus_x, self.u_cN_plus,
+            self.u_cN_minus_x, self.u_cN_plus_x,
             self.u_b0_x, self.u_bN_x,
         ) = get_boundary_constants( self.Dx, Nx,
                                     self.u_alpha_minus_x, self.u_alpha_plus_x,
@@ -128,7 +128,7 @@ class NavierStokesSystem():
         (
             self.u_e_y,
             self.u_c0_minus_y, self.u_c0_plus_y,
-            self.u_cN_minus_y, self.u_cN_plus,
+            self.u_cN_minus_y, self.u_cN_plus_y,
             self.u_b0_y, self.u_bN_y,
         ) = get_boundary_constants( self.Dy, Ny,
                                     self.u_alpha_minus_y, self.u_alpha_plus_y,
@@ -137,7 +137,7 @@ class NavierStokesSystem():
         (
             self.v_e_x,
             self.v_c0_minus_x, self.v_c0_plus_x,
-            self.v_cN_minus_x, self.v_cN_plus,
+            self.v_cN_minus_x, self.v_cN_plus_x,
             self.v_b0_x, self.v_bN_x,
         ) = get_boundary_constants( self.Dx, Nx,
                                     self.v_alpha_minus_x, self.v_alpha_plus_x,
@@ -146,7 +146,7 @@ class NavierStokesSystem():
         (
             self.v_e_y,
             self.v_c0_minus_y, self.v_c0_plus_y,
-            self.v_cN_minus_y, self.v_cN_plus,
+            self.v_cN_minus_y, self.v_cN_plus_y,
             self.v_b0_y, self.v_bN_y,
         ) = get_boundary_constants( self.Dy, Ny,
                                     self.v_alpha_minus_y, self.v_alpha_plus_y,
@@ -253,34 +253,33 @@ class NavierStokesSystem():
                                 e_x, c0_minus_x, c0_plus_x, cN_minus_x, cN_plus_x, b0_x, bN_x,
                                 e_y, c0_minus_y, c0_plus_y, cN_minus_y, cN_plus_y, b0_y, bN_y):
             # returns VECTORS of size N-2 for each boundary row and column
-            un_x0 = 1./e_x * np.sum(b0_x[:, np.newaxis] * un[1:Nx, 1:Ny], axis=0) + \
+            un_x0 = 1./e_x * np.sum(b0_x[:, np.newaxis] * un, axis=0) + \
                     1./e_x * (c0_minus_x * g_minus_x + c0_plus_x * g_plus_x)
-            un_xN = 1./e_x * np.sum(bN_x[:, np.newaxis] * un[1:Nx, 1:Ny], axis=0)
-            un_y0 = 1./e_y * np.sum(b0_y[np.newaxis, :] * un[1:Nx, 1:Ny], axis=1) + \
+            un_xN = 1./e_x * np.sum(bN_x[:, np.newaxis] * un, axis=0)
+            un_y0 = 1./e_y * np.sum(b0_y[np.newaxis, :] * un, axis=1) + \
                     1./e_y * (c0_minus_y * g_minus_y + c0_plus_y * g_plus_y)
-            un_yN = 1./e_y * np.sum(bN_y[np.newaxis, :] * un[1:Nx, 1:Ny], axis=1)
+            un_yN = 1./e_y * np.sum(bN_y[np.newaxis, :] * un, axis=1)
 
             return un_x0, un_xN, un_y0, un_yN
 
         # compute the RHS of the linear system (F)
         # 2u* - \bigtriangleup t \Delta u^* = F
         #   use the derivative matrices whenever we need to compute derivatives
-        import pdb; pdb.set_trace()
 
         _un, _un1 = un[1:Nx, 1:Ny], un1[1:Nx, 1:Ny]
         _vn, _vn1 = vn[1:Nx, 1:Ny], vn1[1:Nx, 1:Ny]
 
-        _un_dx, _un_dy = self.Dx @ _un, _un @ self.Dy.T
-        _un1_dx, _un1_dy = self.Dx @ _un1, _un1 @ self.Dy.T
+        _un_dx, _un_dy = self.Dx[1:-1, 1:-1] @ _un, _un @ self.Dy[1:-1, 1:-1].T
+        _un1_dx, _un1_dy = self.Dx[1:-1, 1:-1] @ _un1, _un1 @ self.Dy[1:-1, 1:-1].T
 
-        _vn_dx, _vn_dy = self.Dx @ _vn, _vn @ self.Dy.T
-        _vn1_dx, _vn1_dy = self.Dx @ _vn1, _vn1 @ self.Dy.T
+        _vn_dx, _vn_dy = self.Dx[1:-1, 1:-1] @ _vn, _vn @ self.Dy[1:-1, 1:-1].T
+        _vn1_dx, _vn1_dy = self.Dx[1:-1, 1:-1] @ _vn1, _vn1 @ self.Dy[1:-1, 1:-1].T
 
-        _un_ddx, _un_ddy = self.Dx_sqr @ _un, _un @ self.Dy_sqr.T
-        _un1_ddx, _un1_ddy = self.Dx_sqr @ _un1, _un1 @ self.Dy_sqr.T
+        _un_ddx, _un_ddy = self.Dx_sqr[1:-1, 1:-1] @ _un, _un @ self.Dy_sqr[1:-1, 1:-1].T
+        _un1_ddx, _un1_ddy = self.Dx_sqr[1:-1, 1:-1] @ _un1, _un1 @ self.Dy_sqr[1:-1, 1:-1].T
 
-        _vn_ddx, _vn_ddy = self.Dx_sqr @ _vn, _vn @ self.Dy_sqr.T
-        _vn1_ddx, _vn1_ddy = self.Dx_sqr @ _vn1, _vn1 @ self.Dy_sqr.T
+        _vn_ddx, _vn_ddy = self.Dx_sqr[1:-1, 1:-1] @ _vn, _vn @ self.Dy_sqr[1:-1, 1:-1].T
+        _vn1_ddx, _vn1_ddy = self.Dx_sqr[1:-1, 1:-1] @ _vn1, _vn1 @ self.Dy_sqr[1:-1, 1:-1].T
 
         # u_F and v_F are both N-2 x N-2 matrices
         u_F = 2 * _un - 3 * self.dt * (_un * _un_dx + _vn * _un_dy) + \
