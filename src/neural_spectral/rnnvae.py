@@ -19,16 +19,29 @@ class RNNVAE(nn.Module):
         self.encoder = SequenceEncoder(latent_dim, obs_dim, hidden_dim=hidden_dim)
         self.decoder = SequenceDecoder(latent_dim, obs_dim, hidden_dim=hidden_dim)
 
-    def forward(self, obs_seq_in, obs_seq_out, obs_len):
-        latent_mu, latent_logvar = self.encoder(obs_seq_in, obs_len)
+    def forward(self, obs_seq_in, obs_seq_out):
+        latent_mu, latent_logvar = self.encoder(obs_seq_in)
         latent = self.reparameterize(latent_mu, latent_logvar)
-        obs_seq_pred = self.decoder(latent, obs_seq, obs_len)
+        obs_seq_pred = self.decoder(latent, obs_seq)
         return obs_seq_pred, latent, latent_mu, latent_logvar
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5*logvar)
         eps = torch.randn_like(std)
         return eps.mul(std).add_(mu)
+
+    def extrapolate(self, obs_seq, T_extrapolate):
+        latent_mu, latent_logvar = self.encoder(obs_seq)
+        h0 = self.decoder.latent2hidden(latent_mu)
+        h0 = h0.unsqueeze(0).contiguous()
+        obs = obs_seq[-1]
+        out_extrapolate = []
+        for t in range(T_extrapolate):
+            obs, h0 = self.decoder.gru(obs, h0)
+            out_extrapolate.append(obs.cpu().detach())
+        out_extrapolate = torch.stack(out_extrapolate)
+        out_extrapolate = torch.cat([obs_seq, out_extrapolate], dim=0)
+        return out_extrapolate
 
 
 class SequenceEncoder(nn.Module):
@@ -40,28 +53,10 @@ class SequenceEncoder(nn.Module):
         self.gru = nn.GRU(self.obs_dim, self.hidden_dim, batch_first=True)
         self.linear = nn.Linear(self.hidden_dim , self.latent_dim * 2)
 
-    def forward(self, obs_seq, obs_len):
-        batch_size = obs_seq.size(0)
-
-        if batch_size > 1:
-            sorted_len, sorted_idx = torch.sort(obs_len, descending=True)
-            obs_seq = obs_seq[sorted_idx]
-
-        packed = rnn_utils.pack_padded_sequence(
-            obs_seq,
-            sorted_len.data.tolist() if batch_size > 1 else length.data.tolist(),
-            batch_first=True)
-
-        _, hidden = self.gru(packed, None)
-        hidden = hidden[-1, ...]
-
-        if batch_size > 1:
-            _, reversed_idx = torch.sort(sorted_idx)
-            hidden = hidden[reversed_idx]
-
-        latent = self.linear(hidden)
+    def forward(self, obs_seq):
+        _, hidden = self.gru(obs_seq, None)
+        latent = self.linear(hidden[-1])
         mu, logvar = torch.chunk(latent, 2, dim=1)
-
         return mu, logvar
 
 
@@ -74,35 +69,12 @@ class SequenceDecoder(nn.Module):
 
         self.gru = nn.GRU(self.obs_dim, self.hidden_dim, batch_first=True)
         self.latent2hidden = nn.Linear(self.latent_dim, self.hidden_dim)
-        self.hidden2obs = nn.Linear(self.hidden_dim, self.obs_dim)
 
-    def forward(self, latent, obs_seq, obs_len):
-        batch_size = latent.size(0)
-
-        if batch_size > 1:
-            sorted_len, sorted_idx = torch.sort(obs_len, descending=True)
-            latent = latent[sorted_idx]
-            obs_seq = obs_seq[sorted_idx]
-        else:
-            sorted_len = obs_len
-
-        packed_in = rnn_utils.pack_padded_sequence(
-            obs_seq, sorted_len, batch_first=True)
-
+    def forward(self, latent, obs_seq):
+        T = obs_seq.size(1)
         hidden = self.latent2hidden(latent)
         hidden = hidden.unsqueeze(0).contiguous()
-
-        packed_out, _ = self.gru(packed_in, hidden)
-        out_seq = rnn_utils.pad_packed_sequence(packed_out)
-
-        if batch_size > 1:
-            _, reversed_idx = torch.sort(sorted_idx)
-            out_seq = out_seq[reversed_idx]
-
-        out_seq_2d = out_seq.view(batch_size * obs_len, self.hidden_dim)
-        out_seq_2d = self.hidden2obs(out_seq_2d)
-        out_seq = out_seq_2d.view(batch_size, obs_len, self.obs_dim)
-
+        out_seq, _ = self.gru(obs_seq, hidden)
         return out_seq
 
 
@@ -153,10 +125,6 @@ if __name__ == "__main__":
         batch_x = batch_x.permute(1, 0, 2, 3, 4)
         return batch_t, batch_x
 
-    def mean_squared_error(pred, true):
-        mse = torch.mean(torch.pow(pred - true, 2), dim=1)
-        return torch.mean(mse) 
-
     try:
         tqdm_batch = tqdm(total=args.n_iters, desc="[Iteration]")
         for itr in range(1, args.n_iters + 1):
@@ -198,3 +166,10 @@ if __name__ == "__main__":
         'optimizer_state_dict': optimizer.state_dict(),
         'config': args,
     }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
+
+    obs_seq_init = obs[0:args.batch_time]  # give it the first batch_time seq
+    obs_extrapolate = rnn_vae.extrapolate(obs_seq_init, nt - args.batch_time)
+    obs_extrapolate = obs_extrapolate.numpy()
+
+    np.save(os.path.join(args.out_dir, 'extrapolation.npy'), 
+            obs_extrapolate)

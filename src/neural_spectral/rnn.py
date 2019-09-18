@@ -16,21 +16,22 @@ from src.neural_spectral.train import RunningAverageMeter, log_normal_pdf
 class RNN(nn.Module):
     def __init__(self, input_dim, hidden_dim=256):
         super().__init__()
-        self.rnn = nn.GRU(input_dim, hidden_dim, batch_first=True)
+        self.gru = nn.GRU(input_dim, hidden_dim, batch_first=True)
     
-    def forward(self, obs_seq, obs_len):
-        batch_size = obs_seq.size(0)
+    def forward(self, obs_seq):
+        out_seq, gru_hid = self.gru(obs_seq, None)
+        return out_seq, gru_hid
 
-        if batch_size > 1:
-            sorted_len, sorted_idx = torch.sort(obs_len, descending=True)
-            obs_seq = obs_seq[sorted_idx]
-
-        packed_len = (  sorted_len.detach().tolist() if batch_size > 1
-                        else obs_len.detach().tolist()  )
-        packed = rnn_utils.pack_padded_sequence(obs_seq, packed_len, 
-                                                batch_first=True)
-        out_seq, _ = self.gru(packed, None)
-        return out_seq
+    def extrapolate(self, obs_seq, T_extrapolate):
+        out_seq, h0 = self.forward(obs_seq)
+        obs = obs_seq[-1]
+        out_extrapolate = []
+        for t in range(T_extrapolate):
+            obs, h0 = self.gru(obs, h0)
+            out_extrapolate.append(obs.cpu().detach())
+        out_extrapolate = torch.stack(out_extrapolate)
+        out_extrapolate = torch.cat([obs_seq, out_extrapolate], dim=0)
+        return out_extrapolate
 
 
 if __name__ == "__main__":
@@ -92,7 +93,7 @@ if __name__ == "__main__":
             batch_len = batch_len.to(device)
             batch_len = batch_len - 1  # since we split into -in and -out
 
-            batch_pred = rnn_net(batch_in, batch_len)
+            batch_pred, _ = rnn_net(batch_in, batch_len)
             noise_std_ = torch.zeros(batch_pred.size()).to(device) + noise_std
             noise_logvar = 2. * torch.log(noise_std_).to(device)
             logpx = log_normal_pdf(batch_obs, pred_obs, noise_logvar).sum(-1).sum(-1)
@@ -116,3 +117,10 @@ if __name__ == "__main__":
         'optimizer_state_dict': optimizer.state_dict(),
         'config': args,
     }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
+
+    obs_seq_init = obs[0:args.batch_time]  # give it the first batch_time seq
+    obs_extrapolate = rnn_net.extrapolate(obs_seq_init, nt - args.batch_time)
+    obs_extrapolate = obs_extrapolate.numpy()
+
+    np.save(os.path.join(args.out_dir, 'extrapolation.npy'), 
+            obs_extrapolate)
