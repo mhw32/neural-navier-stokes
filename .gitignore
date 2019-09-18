@@ -122,3 +122,4 @@ notebooks/
 **.aux
 **.npz
 src/data/
+**/checkpoints/

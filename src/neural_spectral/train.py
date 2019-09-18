@@ -9,7 +9,8 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.utils.rnn as rnn_utils
 
-from torchdiffeq import odeint_adjoint as odeint
+from torchdiffeq import odeint
+# from torchdiffeq import odeint_adjoint as odeint
 from src.constants import CHORIN_FD_DATA_FILE, DIRECT_FD_DATA_FILE
 
 
@@ -157,12 +158,15 @@ if __name__ == "__main__":
                         help='where to save checkpoints [default: ./checkpoints]')
     parser.add_argument('--n-coeff', type=int, default=10, help='default: 10')
     parser.add_argument('--batch-time', type=int, default=20, help='default: 20')
-    parser.add_argument('--batch-size', type=int, default=10, help='default: 10')
-    parser.add_argument('--n-iters', type=int, default=100, help='default: 100')
+    parser.add_argument('--batch-size', type=int, default=64, help='default: 10')
+    parser.add_argument('--n-iters', type=int, default=10000, help='default: 10000')
     parser.add_argument('--gpu-device', type=int, default=0, help='default: 0')
     args = parser.parse_args()
 
-    device = (torch.device('cuda:' + str(args.gpu)
+    if not os.path.isdir(args.out_dir):
+        os.makedirs(args.out_dir)
+
+    device = (torch.device('cuda:' + str(args.gpu_device)
               if torch.cuda.is_available() else 'cpu'))
 
     data = np.load(args.npz_path)
@@ -225,7 +229,7 @@ if __name__ == "__main__":
             pred_z0 = epsilon * torch.exp(0.5 * qz0_logvar) + qz0_mean
 
             # forward in time and solve ode for reconstructions
-            pred_z = odeint(ode_net, pred_z0, batch_t.float(), method='adams')
+            pred_z = odeint(ode_net, pred_z0, batch_t.float())
             pred_z = pred_z.permute(1, 0, 2)  # batch_size x t x dim
             pred_z = pred_z.view(batch_size, -1, args.n_coeff, args.n_coeff, 3)
             pred_lambda = pred_z[:, :, :, :, 0]
