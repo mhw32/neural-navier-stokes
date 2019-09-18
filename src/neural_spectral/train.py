@@ -10,6 +10,7 @@ import torch.optim as optim
 import torch.nn.utils.rnn as rnn_utils
 
 from torchdiffeq import odeint
+# for some reason odeint_adjoint is way too slow
 # from torchdiffeq import odeint_adjoint as odeint
 from src.constants import CHORIN_FD_DATA_FILE, DIRECT_FD_DATA_FILE
 
@@ -158,7 +159,7 @@ if __name__ == "__main__":
                         help='where to save checkpoints [default: ./checkpoints]')
     parser.add_argument('--n-coeff', type=int, default=10, help='default: 10')
     parser.add_argument('--batch-time', type=int, default=20, help='default: 20')
-    parser.add_argument('--batch-size', type=int, default=64, help='default: 10')
+    parser.add_argument('--batch-size', type=int, default=64, help='default: 64')
     parser.add_argument('--n-iters', type=int, default=10000, help='default: 10000')
     parser.add_argument('--gpu-device', type=int, default=0, help='default: 0')
     args = parser.parse_args()
