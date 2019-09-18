@@ -195,8 +195,8 @@ class NavierStokesSystem():
         self.DPx = self._get_D_matrix_degrees_minus_2(Nx)
         self.DPy = self._get_D_matrix_degrees_minus_2(Ny)
 
-        self.DxDPx = self.Dx @ self.DPx
-        self.DyDPy = self.Dy @ self.DPy
+        self.DxDPx = self.Dx[1:-1,1:-1] @ self.DPx
+        self.DyDPy = self.Dy[1:-1,1:-1] @ self.DPy
 
         self.DxDPx_lambda, self.DxDPx_P = np.linalg.eig(self.DxDPx)
         self.DyDPy_lambda, self.DyDPy_Q = np.linalg.eig(self.DyDPy)
@@ -473,8 +473,8 @@ class NavierStokesSystem():
                 if i != j:
                     bar_c_i = self._get_bar_c_k(i, N)
                     bar_c_j = self._get_bar_c_k(j, N)
-                    diff = 2 * np.sin((j + i) * np.pi / (2 * N)) * \
-                            np.sin((j - i) * np.pi / (2 * N))
+                    diff = 2 * np.sin((j + i) * np.pi / (2. * N)) * \
+                            np.sin((j - i) * np.pi / (2. * N))
                     D[i, j] = bar_c_i / bar_c_j * (-1)**(i + j) / diff
 
         # now we fill out the diagonals
@@ -516,28 +516,22 @@ class NavierStokesSystem():
             Gauss-Lobatto points -- this requires us to make a 
             new differentiation matrix.
 
-        Again, for numerical stability:
-            let x_i - x_j = 2\sin(\frac{(j+i)\pi}{2N})\sin(\frac{(j-i)\pi}{2N})
-            and 1 - x_i^2 = \sin^2(i\pi/N)
+        We do not use the tricks for numerical stability here -- ironically
+        for PN-2, they introduce instability.
         
         We also compute the diagonals last to ensure proper summation.
         """
         D = np.zeros((N + 1, N + 1))
+        x = self._get_gauss_lobatto_points(N, k=1)
         
-        for i in range(0, N + 1):
-            for j in range(0, N + 1):
+        for i in range(1, N):
+            for j in range(1, N):
                 if i != j:
-                    x_i_minus_x_j = 2 * np.sin((j + i) * np.pi / (2 * N)) * \
-                                    np.sin((j - i) * np.pi / (2 * N))
-                    one_minus_x_i_sqr = np.sin(i * np.pi / N)**2
-                    one_minus_x_j_sqr = np.sin(j * np.pi / N)**2
-
-                    D[i, j] = ((-1)**(j+1) * one_minus_x_j_sqr) / (one_minus_x_i_sqr * x_i_minus_x_j)
-
-        for i in range(0, N + 1):
-            # we can include when i == j in the sum bc its 0
-            D[i, i] = -np.sum(D[i, :])
-
+                    D[i, j] = ((-1)**(j+1) * (1. - x[j]**2) / ((1. - x[i]**2) * (x[i] - x[j])))
+                else:
+                    D[i, i] = 3*x[i] / (2. * (1. - x[i]**2)) 
+        
+        D = D[1:-1, 1:-1]  # only defined for i,j=1...N-1
         return D
 
     # --- end section on pseudospectral method helpers
