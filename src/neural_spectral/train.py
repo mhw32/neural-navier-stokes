@@ -65,29 +65,10 @@ class InferenceNetwork(nn.Module):
         self.gru = nn.GRU(self.obs_dim, self.hidden_dim, batch_first=True)
         self.linear = nn.Linear(self.hidden_dim, self.latent_dim * 2)
 
-    def forward(self, obs_seq, obs_len):
-        batch_size = obs_seq.size(0)
-
-        if batch_size > 1:
-            sorted_len, sorted_idx = torch.sort(obs_len, descending=True)
-            obs_seq = obs_seq[sorted_idx]
-
-        packed_len = (  sorted_len.detach().tolist() if batch_size > 1
-                        else obs_len.detach().tolist()  )
-
-        packed = rnn_utils.pack_padded_sequence(obs_seq, packed_len, 
-                                                batch_first=True)
-
-        _, hidden = self.gru(packed, None)
-        hidden = hidden[-1, ...]
-
-        if batch_size > 1:
-            _, reversed_idx = torch.sort(sorted_idx)
-            hidden = hidden[reversed_idx]
-
-        latent = self.linear(hidden)
+    def forward(self, obs_seq):
+        _, hidden = self.gru(obs_seq, None)
+        latent = self.linear(hidden[-1])
         mu, logvar = torch.chunk(latent, 2, dim=1)
-
         return mu, logvar
 
 
@@ -221,11 +202,9 @@ if __name__ == "__main__":
             optimizer.zero_grad()
             batch_t, batch_obs = get_batch()
             batch_size = batch_obs.size(0)
-            batch_len = torch.ones(batch_size).int() * args.batch_time
-            batch_len = batch_len.to(device)
             
             batch_obs = batch_obs.view(batch_size, args.batch_time, nx*ny*3)
-            qz0_mean, qz0_logvar = inf_net(batch_obs, batch_len)
+            qz0_mean, qz0_logvar = inf_net(batch_obs)
             epsilon = torch.randn(qz0_mean.size()).to(device)
             pred_z0 = epsilon * torch.exp(0.5 * qz0_logvar) + qz0_mean
 
@@ -273,3 +252,27 @@ if __name__ == "__main__":
         'config': args,
     }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
 
+    with torch.no_grad():
+        obs_seq_init = obs[0:args.batch_time]  # give it the first batch_time seq
+        obs_seq_init = obs_seq_init.unsqueeze(0)  # add fake batch size
+        qz0_mean, qz0_logvar = inf_net(obs_seq_init)
+        epsilon = torch.randn(qz0_mean.size()).to(device)
+        pred_z0 = epsilon * torch.exp(0.5 * qz0_logvar) + qz0_mean
+        pred_z = odeint(ode_net, pred_z0, t)
+        pred_z = pred_z.permute(1, 0, 2) 
+        pred_z = pred_z.view(1, -1, args.n_coeff, args.n_coeff, 3)
+        pred_lambda = pred_z[:, :, :, :, 0]
+        pred_omega  = pred_z[:, :, :, :, 1]
+        pred_gamma  = pred_z[:, :, :, :, 2]
+        pred_u = build_u(pred_lambda)
+        pred_v = build_v(pred_omega)
+        pred_p = build_p(pred_gamma)
+        pred_obs = torch.cat([pred_u.unsqueeze(4), 
+                              pred_v.unsqueeze(4), 
+                              pred_p.unsqueeze(4)], dim=4)
+        out_extrapolate = torch.cat([obs_seq_init, pred_obs], dim=0)
+        out_extrapolate = out_extrapolate[0]  # get rid of batch size
+        obs_extrapolate = obs_extrapolate.numpy()
+    
+    np.save(os.path.join(args.out_dir, 'extrapolation.npy'), 
+            obs_extrapolate)

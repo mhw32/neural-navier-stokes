@@ -118,9 +118,12 @@ if __name__ == "__main__":
         'config': args,
     }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
 
-    obs_seq_init = obs[0:args.batch_time]  # give it the first batch_time seq
-    obs_extrapolate = rnn_net.extrapolate(obs_seq_init, nt - args.batch_time)
-    obs_extrapolate = obs_extrapolate.numpy()
+    with torch.no_grad():
+        obs_seq_init = obs[0:args.batch_time]  # give it the first batch_time seq
+        obs_seq_init = obs_seq_init.unsqueeze(0)  # add fake batch size
+        obs_extrapolate = rnn_net.extrapolate(obs_seq_init, nt - args.batch_time)
+        obs_extrapolate = obs_extrapolate[0]  # get rid of batch size
+        obs_extrapolate = obs_extrapolate.numpy()
 
     np.save(os.path.join(args.out_dir, 'extrapolation.npy'), 
             obs_extrapolate)
