@@ -550,7 +550,8 @@ class NavierStokesSystem():
         u, v, p = self._init_variables()
         u1, v1 = u.copy(), v.copy()
 
-        for n in tqdm(range(self.nt)):
+        pbar = tqdm(total=self.nt)
+        for n in range(self.nt):
             _u, _v, p = self.step(u, v, u1, v1, p)
             u1, v1 = u.copy(), v.copy()
             u, v = _u.copy(), _v.copy()
@@ -558,6 +559,9 @@ class NavierStokesSystem():
             u_list.append(u.copy())
             v_list.append(v.copy())
             p_list.append(p.copy())
+
+            pbar.update()
+        pbar.close()
 
         u_list = np.stack(u_list)
         v_list = np.stack(v_list)
