@@ -143,11 +143,8 @@ def log_normal_pdf(x, mean, logvar):
 
 
 def normal_kl(mu1, lv1, mu2, lv2):
-    v1 = torch.exp(lv1)
-    v2 = torch.exp(lv2)
-    lstd1 = lv1 / 2.
-    lstd2 = lv2 / 2.
-
+    v1, v2 = torch.exp(lv1), torch.exp(lv2)
+    lstd1, lstd2 = lv1 / 2., lv2 / 2.
     kl = lstd2 - lstd1 + ((v1 + (mu1 - mu2) ** 2.) / (2. * v2)) - .5
     return kl
 
@@ -158,7 +155,7 @@ if __name__ == "__main__":
                         help='where dataset is stored [default: CHORIN_FD_DATA_FILE]')
     parser.add_argument('--out-dir', type=str, default='./checkpoints', 
                         help='where to save checkpoints [default: ./checkpoints]')
-    parser.add_argument('--n-coeff', type=int, default=20, help='default: 20')
+    parser.add_argument('--n-coeff', type=int, default=10, help='default: 10')
     parser.add_argument('--batch-time', type=int, default=20, help='default: 20')
     parser.add_argument('--batch-size', type=int, default=10, help='default: 10')
     parser.add_argument('--n-iters', type=int, default=100, help='default: 100')
@@ -265,9 +262,9 @@ if __name__ == "__main__":
         }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
 
     torch.save({
-	'ode_net_state_dict': ode_net.state_dict(),
-	'inf_net_state_dict': inf_net.state_dict(),
-	'optimizer_state_dict': optimizer.state_dict(),
-	'config': args,
+        'ode_net_state_dict': ode_net.state_dict(),
+        'inf_net_state_dict': inf_net.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'config': args,
     }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
 
