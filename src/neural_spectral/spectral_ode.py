@@ -214,7 +214,7 @@ if __name__ == "__main__":
         obs0 = obs[0]  # first timestep - shape: mb x 3 x nx x ny
         t = (torch.arange(nt) + 1).to(device)  
 
-        obs_pred = model(obs0, t, obs)  # nt x mb x 3 nx x ny
+        obs_pred = model(obs0, t)  # nt x mb x 3 nx x ny
         obs_pred = obs_pred.squeeze(1)
         obs_pred = obs_pred.cpu().detach().numpy()
         
