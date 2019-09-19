@@ -8,6 +8,7 @@ import torch.optim as optim
 import torch.nn.utils.rnn as rnn_utils
 
 from torchdiffeq import odeint_adjoint as odeint
+from src.neural_spectral.anode import odesolver_adjoint as odesolver
 
 
 class ODEFunc(nn.Module):
@@ -64,8 +65,9 @@ class PDEFunc(nn.Module):
         # coeff = nt x mb x K*3
     
         mb, nt = grid0.size(0), t.size(0)
-        coeff = odeint(self.basis_coeffs, self.init_coeffs.unsqueeze(0).repeat(mb, 1), 
-                       t.float(), method='rk4')
+        coeff = odesolver(  self.basis_coeffs, 
+                            self.init_coeffs.unsqueeze(0).repeat(mb, 1), 
+                            {'Nt': nt, 'method': 'Euler'}  )
         coeff = coeff.view(nt, mb, self.K, 3)
 
         soln = 0
@@ -153,7 +155,7 @@ if __name__ == "__main__":
               if torch.cuda.is_available() else 'cpu'))
 
     data = np.load(args.npz_path)
-    u, v, p = data['u'][:100], data['v'][:100], data['p'][:100]
+    u, v, p = data['u'], data['v'], data['p']
     u = torch.from_numpy(u).float()
     v = torch.from_numpy(v).float()
     p = torch.from_numpy(p).float()
