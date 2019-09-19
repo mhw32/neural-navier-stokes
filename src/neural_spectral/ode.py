@@ -34,32 +34,31 @@ class SpectralCoeffODEFunc(nn.Module):
 
         self.net = nn.Sequential(
             nn.Linear(self.latent_dim, self.hidden_dim),
-            nn.LeakyReLU(),
+            nn.ELU(),
             nn.Linear(self.hidden_dim, self.hidden_dim),
-            nn.LeakyReLU(),
+            nn.ELU(),
             nn.Linear(self.hidden_dim, self.latent_dim))
 
     def forward(self, t, x):
         return self.net(x)
 
 
-class RunningAverageMeter(object):
+class AverageMeter(object):
     """Computes and stores the average and current value"""
-
-    def __init__(self, momentum=0.99):
-        self.momentum = momentum
+    def __init__(self):
         self.reset()
 
     def reset(self):
-        self.val = None
+        self.val = 0
         self.avg = 0
+        self.sum = 0
+        self.count = 0
 
-    def update(self, val):
-        if self.val is None:
-            self.avg = val
-        else:
-            self.avg = self.avg * self.momentum + val * (1 - self.momentum)
+    def update(self, val, n=1):
         self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 
 def get_gauss_lobatto_points(N, k=1):
@@ -183,7 +182,7 @@ if __name__ == "__main__":
     
     if not args.evaluate_only:
         optimizer = optim.Adam(ode_net.parameters(), lr=1e-3)
-        loss_meter = RunningAverageMeter(0.97)
+        loss_meter = AverageMeter()
 
         def get_batch():
             s = np.random.choice(np.arange(nt - args.batch_time, dtype=np.int64),
