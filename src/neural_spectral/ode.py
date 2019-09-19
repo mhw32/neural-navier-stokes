@@ -26,21 +26,33 @@ class SpectralCoeffODEFunc(nn.Module):
                        number of hidden dimensions
     """
 
-    def __init__(self, latent_dim, hidden_dim=512):
+    def __init__(self, latent_dim, nx, ny, hidden_dim=512):
         super().__init__()
 
         self.latent_dim = latent_dim
         self.hidden_dim = hidden_dim
+        self.nx, self.ny = nx, ny
 
         self.net = nn.Sequential(
-            nn.Linear(self.latent_dim, self.hidden_dim),
-            nn.ELU(),
-            nn.Linear(self.hidden_dim, self.hidden_dim),
-            nn.ELU(),
-            nn.Linear(self.hidden_dim, self.latent_dim))
+            nn.Conv2d(3, 16, 1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 32, 1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 32, 1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 16, 1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 3, 1),
+        )
 
     def forward(self, t, x):
-        return self.net(x)
+        batch_size = x.size(0)
+        x = x.view(batch_size, self.nx, self.ny, 3)
+        x = x.permute(0, 3, 1, 2).contiguous()
+        y = self.net(x)
+        y = y.permute(0, 2, 3, 1).contiguous()
+        y = y.view(batch_size, self.nx * self.ny * 3)
+        return y
 
 
 class AverageMeter(object):
@@ -178,7 +190,7 @@ if __name__ == "__main__":
 
     latent_dim = 3 * n_coeff**2
     obs_dim = 3 * nx * ny
-    ode_net = SpectralCoeffODEFunc(obs_dim).to(device)
+    ode_net = SpectralCoeffODEFunc(obs_dim, nx, ny).to(device)
     
     if not args.evaluate_only:
         optimizer = optim.Adam(ode_net.parameters(), lr=1e-3)
