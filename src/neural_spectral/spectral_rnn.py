@@ -10,29 +10,6 @@ import torch.nn.utils.rnn as rnn_utils
 from torchdiffeq import odeint_adjoint as odeint
 
 
-class ODEFunc(nn.Module):
-    """Model basis coefficients as a an ODE wrt time"""
-
-    def __init__(self, K):
-        super().__init__()
-        self.K = K
-        self.net = nn.Sequential(
-            nn.Linear(self.K, 128),
-            nn.ReLU(inplace=True),
-            nn.Linear(128, 128),
-            nn.ELU(inplace=True),
-            nn.Linear(128, self.K),
-        )
-
-        for m in self.net.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, mean=0, std=0.1)
-                nn.init.constant_(m.bias, val=0)
-
-    def forward(self, t, coeff):
-        return self.net(coeff)
-
-
 class PDEFunc(nn.Module):
     """
     Model solution to a PDE as 
@@ -50,22 +27,29 @@ class PDEFunc(nn.Module):
         self.K = K
         self.nx, self.ny = nx, ny
         self.init_coeffs = nn.Parameter(torch.normal(torch.zeros(self.K * 3), 1))
-        self.basis_coeffs = ODEFunc(self.K * 3)
-        # self.basis_fns = nn.ModuleList([BasisFunc(self.nx, self.ny)
-        #                                 for _ in range(self.K) ])
+        self.basis_coeffs = nn.GRU(self.K * 3, self.K * 3, batch_first=True)
         self.basis_fns = nn.ParameterList([
             nn.Parameter(torch.normal(torch.zeros(3, self.nx, self.ny), 1))
             for _ in range(self.K)
         ])
 
+    def rnnint(self, init_coeff, nt):
+        inputs = init_coeff
+        h0 = None
+        coeff = []
+        for t in range(nt):
+            inputs, h0 = self.basis_coeffs(inputs, h0)
+            coeff.append(inputs)
+        coeff = torch.cat(coeff)
+        return coeff
+
     def forward(self, grid0, t):
         # grid0 = mb x 3 x nx x ny
         # t     = nt
         # coeff = nt x mb x K*3
-    
+
         mb, nt = grid0.size(0), t.size(0)
-        coeff = odeint(self.basis_coeffs, self.init_coeffs.unsqueeze(0).repeat(mb, 1), 
-                       t.float(), method='rk4')
+        coeff = rnnint(self.init_coeffs.unsqueeze(0).repeat(mb, 1), nt)
         coeff = coeff.view(nt, mb, self.K, 3)
 
         soln = 0
@@ -77,44 +61,6 @@ class PDEFunc(nn.Module):
             soln = soln + f_k * w_k
         
         return soln
-
-    def basis_weight_mat(self):
-        W = []
-        for k in range(self.K):
-            theta = self.basis_fns[k].flatten()
-            W.append(theta)
-        return torch.stack(W)
-
-    def diversity_penalty(self):
-        W = self.basis_weight_mat()
-        penalty = 0
-        for i in range(0, self.K):
-            for j in range(i, self.K):
-                penalty = penalty + torch.norm(W[i] - W[j], p=2)
-        penalty = 1. / penalty
-        return penalty
-
-
-class BasisFunc(nn.Module):
-    """A basis to build up a function."""
-
-    def __init__(self, nx, ny):
-        super().__init__()
-        self.nx, self.ny = nx, ny
-        self.net = nn.Sequential(
-            nn.Conv2d(3, 16, 1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(16, 32, 1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, 32, 1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, 16, 1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(16, 3, 1),
-        )
-
-    def forward(self, grid):
-        return self.net(grid) 
 
 
 class AverageMeter(object):
@@ -139,8 +85,8 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--npz-path', type=str, default='../data/data_semi_implicit.npz')
-    parser.add_argument('--out-dir', type=str, default='./checkpoints/spectral', 
-                        help='where to save checkpoints [default: ./checkpoints/spectral]')
+    parser.add_argument('--out-dir', type=str, default='./checkpoints/spectral_rnn', 
+                        help='where to save checkpoints [default: ./checkpoints/spectral_rnn]')
     parser.add_argument('--n-iters', type=int, default=1000, help='default: 1000')
     parser.add_argument('--n-coeffs', type=int, default=10, help='default: 10')
     parser.add_argument('--gpu-device', type=int, default=0, help='default: 0')
@@ -176,10 +122,6 @@ if __name__ == "__main__":
 
         obs_pred = model(obs0, t)
         loss = torch.norm(obs_pred - obs, p=2)
-        
-        with torch.no_grad():
-            penalty = 1. / model.diversity_penalty()
-            penalty_meter.update(penalty.item())
 
         loss.backward()
         optimizer.step()
