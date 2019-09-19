@@ -107,6 +107,7 @@ if __name__ == "__main__":
     parser.add_argument('--n-coeffs', type=int, default=10, help='default: 10')
     parser.add_argument('--gpu-device', type=int, default=0, help='default: 0')
     args = parser.parse_args()
+    args.out_dir = '{}_{}'.format(args.out_dir, args.n_coeffs)
 
     if not os.path.isdir(args.out_dir):
         os.makedirs(args.out_dir)
@@ -115,7 +116,7 @@ if __name__ == "__main__":
               if torch.cuda.is_available() else 'cpu'))
 
     data = np.load(args.npz_path)
-    u, v, p = data['u'][:100], data['v'][:100], data['p'][:100]
+    u, v, p = data['u'], data['v'], data['p']
     u = torch.from_numpy(u).float()
     v = torch.from_numpy(v).float()
     p = torch.from_numpy(p).float()
@@ -176,7 +177,7 @@ if __name__ == "__main__":
         obs0 = obs[0]  # first timestep - shape: mb x 3 x nx x ny
         t = (torch.arange(nt) + 1).to(device)  
 
-        obs_pred = model(obs0, t, obs)  # nt x mb x 3 nx x ny
+        obs_pred = model(obs0, t)  # nt x mb x 3 nx x ny
         obs_pred = obs_pred.squeeze(1)
         obs_pred = obs_pred.cpu().detach().numpy()
         
