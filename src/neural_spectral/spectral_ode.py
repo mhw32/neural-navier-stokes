@@ -13,10 +13,9 @@ from torchdiffeq import odeint_adjoint as odeint
 class ODEFunc(nn.Module):
     """Model basis coefficients as a an ODE wrt time"""
 
-    def __init__(self, K, nx, ny):
+    def __init__(self, K):
         super().__init__()
         self.K = K
-        self.nx, self.ny = nx, ny
         self.net = nn.Sequential(
             nn.Linear(self.K, 128),
             nn.ReLU(inplace=True),
@@ -51,7 +50,7 @@ class PDEFunc(nn.Module):
         self.K = K
         self.nx, self.ny = nx, ny
         self.init_coeffs = nn.Parameter(torch.normal(torch.zeros(self.K * 3), 1))
-        self.basis_coeffs = ODEFunc(self.K * 3, self.nx, self.ny)
+        self.basis_coeffs = ODEFunc(self.K * 3)
         # self.basis_fns = nn.ModuleList([BasisFunc(self.nx, self.ny)
         #                                 for _ in range(self.K) ])
         self.basis_fns = nn.ParameterList([
