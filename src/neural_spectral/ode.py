@@ -125,9 +125,8 @@ if __name__ == "__main__":
                         help='where dataset is stored [default: CHORIN_FD_DATA_FILE]')
     parser.add_argument('--out-dir', type=str, default='./checkpoints/spectral', 
                         help='where to save checkpoints [default: ./checkpoints/spectral]')
-    parser.add_argument('--n-coeff', type=int, default=10, help='default: 10')
     parser.add_argument('--batch-time', type=int, default=20, help='default: 20')
-    parser.add_argument('--batch-size', type=int, default=64, help='default: 64')
+    parser.add_argument('--batch-size', type=int, default=10, help='default: 10')
     parser.add_argument('--n-iters', type=int, default=10000, help='default: 10000')
     parser.add_argument('--gpu-device', type=int, default=0, help='default: 0')
     parser.add_argument('--evaluate-only', action='store_true', default=False)
@@ -157,7 +156,8 @@ if __name__ == "__main__":
     Tx = get_T_matrix(nx, n_coeff).to(device)      # K x N
     Ty = get_T_matrix(ny, n_coeff).t().to(device)  # N x K
     T = Tx @ Ty                                    # K x K
-    T_inv = np.linalg.inv(T)
+    T_inv = np.linalg.inv(T.cpu().numpy())
+    T_inv = torch.from_numpy(T_inv).to(device)
 
     def get_u_coord(_lambda):
         return T @ _lambda
@@ -172,17 +172,17 @@ if __name__ == "__main__":
         return T_inv @ U
 
     def get_v_coeff(V):
-        return T_inv @ variables
+        return T_inv @ V
     
     def get_p_coeff(P):
         return T_inv @ P
 
-    latent_dim = 3 * args.n_coeff**2
+    latent_dim = 3 * n_coeff**2
     obs_dim = 3 * nx * ny
     ode_net = SpectralCoeffODEFunc(obs_dim).to(device)
     
     if not args.evaluate_only:
-        optimizer = optim.Adam(ode_net.parameters()), lr=1e-3)
+        optimizer = optim.Adam(ode_net.parameters(), lr=1e-3)
         loss_meter = RunningAverageMeter(0.97)
 
         def get_batch():
@@ -198,28 +198,24 @@ if __name__ == "__main__":
             tqdm_batch = tqdm(total=args.n_iters, desc="[Iteration]")
             for itr in range(1, args.n_iters + 1):
                 optimizer.zero_grad()
-                batch_size = obs.size(0)
                 mb_obs0, mb_t, mb_obs = get_batch()
-
                 mb_U0, mb_V0, mb_P0 = mb_obs0[:, :, :, 0], mb_obs0[:, :, :, 1], mb_obs0[:, :, :, 2]
                 mb_U, mb_V, mb_P = mb_obs[:, :, :, :, 0], mb_obs[:, :, :, :, 1], mb_obs[:, :, :, :, 2]
                 mb_lambda0, mb_omega0, mb_gamma0 = get_u_coeff(mb_U0), get_u_coeff(mb_V0), get_u_coeff(mb_P0)
                 mb_lambda, mb_omega, mb_gamma = get_u_coeff(mb_U), get_u_coeff(mb_V), get_u_coeff(mb_P)
-
-                mb_coeff0 = torch.stack([mb_lambda0, mb_omega0, mb_gamma0])
-                mb_coeff = torch.stack([mb_lambda, mb_omega, mb_gamma])
-
-                # forward in time and solve ode for reconstructions
-                pred_coeff = odeint(ode_net, mb_coeff0, mb_t.float())
-                pred_coeff = pred_coeff.view(args.batch_time, batch_size, n_coeff, n_coeff, 3)
+                mb_coeff0 = torch.cat([mb_lambda0.unsqueeze(3), mb_omega0.unsqueeze(3), mb_gamma0.unsqueeze(3)], dim=3)
+                mb_coeff = torch.cat([mb_lambda.unsqueeze(4), mb_omega.unsqueeze(4), mb_gamma.unsqueeze(4)], dim=4)
+                pred_coeff = odeint(ode_net, mb_coeff0.view(args.batch_size, nx*ny*3), mb_t.float())
+                pred_coeff = pred_coeff.view(args.batch_time, args.batch_size, n_coeff, n_coeff, 3)
                 pred_lambda, pred_omega, pred_gamma = pred_coeff[:, :, :, :, 0], pred_coeff[:, :, :, :, 1], pred_coeff[:, :, :, :, 2]
                 pred_U, pred_V, pred_P = get_u_coord(pred_lambda), get_v_coord(pred_omega), get_p_coord(pred_gamma)
                 pred_obs = torch.cat([pred_U.unsqueeze(4), pred_V.unsqueeze(4), pred_P.unsqueeze(4)], dim=4)
-                pred_obs = pred_obs.view(batch_size, args.batch_time, -1)
+                pred_obs = pred_obs.view(args.batch_time, args.batch_size, nx*ny*3)
                 noise_std_ = torch.zeros(pred_obs.size()).to(device) + noise_std
                 noise_logvar = 2. * torch.log(noise_std_).to(device)
 
-                logpx = log_normal_pdf(mb_obs, pred_obs, noise_logvar).sum(-1).sum(-1)
+                logpx = log_normal_pdf(mb_obs.view(args.batch_time, args.batch_size, nx*ny*3), 
+                                       pred_obs, noise_logvar).sum(-1).sum(-1)
                 loss = torch.mean(-logpx)
                 loss.backward()
                 optimizer.step()
@@ -231,14 +227,12 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             torch.save({
                 'ode_net_state_dict': ode_net.state_dict(),
-                'inf_net_state_dict': inf_net.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'config': args,
             }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
 
         torch.save({
             'ode_net_state_dict': ode_net.state_dict(),
-            'inf_net_state_dict': inf_net.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'config': args,
         }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
@@ -251,15 +245,14 @@ if __name__ == "__main__":
         init_obs0 = obs[0].unsqueeze(0)  
         init_U0, init_V0, init_P0 = init_obs0[:, :, :, 0], init_obs0[:, :, :, 1], init_obs0[:, :, :, 2]
         init_lambda0, init_omega0, init_gamma0 = get_u_coeff(init_U0), get_u_coeff(init_V0), get_u_coeff(init_P0)
-        init_coeff0 = torch.stack([init_lambda0, init_omega0, init_gamma0])
+        init_coeff0 = torch.cat([init_lambda0.unsqueeze(3), init_omega0.unsqueeze(3), init_gamma0.unsqueeze(3)], dim=3)
 
-        pred_coeff = odeint(ode_net, init_coeff0, t.float())
-        pred_coeff = pred_coeff.view(1, -1, args.n_coeff, args.n_coeff, 3)
+        pred_coeff = odeint(ode_net, init_coeff0.view(1, nx*ny*3), t.float())
+        pred_coeff = pred_coeff.view(-1, 1, n_coeff, n_coeff, 3)
         pred_lambda, pred_omega, pred_gamma = pred_coeff[:, :, :, :, 0], pred_coeff[:, :, :, :, 1], pred_coeff[:, :, :, :, 2]
         pred_U, pred_V, pred_P = get_u_coord(pred_lambda), get_v_coord(pred_omega), get_p_coord(pred_gamma)
         pred_obs = torch.cat([pred_U.unsqueeze(4), pred_V.unsqueeze(4), pred_P.unsqueeze(4)], dim=4)
-
+        pred_obs = pred_obs[:, 0]
         pred_obs = pred_obs.cpu().detach().numpy()
         
-    np.save(os.path.join(args.out_dir, 'extrapolation.npy'), 
-            pred_obs)
+    np.save(os.path.join(args.out_dir, 'extrapolation.npy'), pred_obs)
