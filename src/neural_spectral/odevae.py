@@ -166,7 +166,7 @@ if __name__ == "__main__":
     # Chebyshev collocation and series
     Tx = get_T_matrix(nx, n_coeff).to(device)      # K x N
     Ty = get_T_matrix(ny, n_coeff).t().to(device)  # N x K
-    T = Tx @ Ty                                         # K x K
+    T = Tx @ Ty                                    # K x K
 
     def build_u(_lambda):
         return T @ _lambda

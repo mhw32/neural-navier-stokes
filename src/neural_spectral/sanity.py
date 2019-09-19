@@ -40,8 +40,8 @@ T_inv = np.linalg.inv(T)
 
 for t in range(nt): 
     U = Us[t]
-    U_hat = T @ U
-    U_recon = T_inv @ U_hat
+    U_hat = T_inv @ U
+    U_recon = T @ U_hat
     print(np.linalg.norm(U - U_recon))
     break
 
