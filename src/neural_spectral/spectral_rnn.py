@@ -62,6 +62,22 @@ class PDEFunc(nn.Module):
         
         return soln
 
+    def basis_weight_mat(self):
+        W = []
+        for k in range(self.K):
+            theta = self.basis_fns[k].flatten()
+            W.append(theta)
+        return torch.stack(W)
+
+    def diversity_penalty(self):
+        W = self.basis_weight_mat()
+        penalty = 0
+        for i in range(0, self.K):
+            for j in range(i, self.K):
+                penalty = penalty + torch.norm(W[i] - W[j], p=2)
+        penalty = 1. / penalty
+        return penalty
+
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -114,6 +130,8 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
     loss_meter = AverageMeter()
+    penalty_meter = AverageMeter()
+    losses, penalties = [], []
 
     tqdm_batch = tqdm(total=args.n_iters, desc="[Iteration]")
     for itr in range(1, args.n_iters + 1):
@@ -122,15 +140,24 @@ if __name__ == "__main__":
         obs_pred = model(obs0, t)
         loss = torch.norm(obs_pred - obs, p=2)
 
+        with torch.no_grad():
+            penalty = 1. / model.diversity_penalty()
+            penalty_meter.update(penalty.item())
+
         loss.backward()
         optimizer.step()
         loss_meter.update(loss.item())
+
+        losses.append(loss.item())
+        penalties.append(penalty.item())
     
         if itr % 10 == 0:
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'config': args,
+                'losses': np.array(losses),
+                'penalties': np.array(penalties),
             }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
 
         tqdm_batch.set_postfix({"Loss": loss_meter.avg})

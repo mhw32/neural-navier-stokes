@@ -169,6 +169,7 @@ if __name__ == "__main__":
 
     loss_meter = AverageMeter()
     penalty_meter = AverageMeter()
+    losses, penalties = [], []
 
     tqdm_batch = tqdm(total=args.n_iters, desc="[Iteration]")
     for itr in range(1, args.n_iters + 1):
@@ -184,12 +185,17 @@ if __name__ == "__main__":
         loss.backward()
         optimizer.step()
         loss_meter.update(loss.item())
+
+        losses.append(loss.item())
+        penalties.append(penalty.item())
     
         if itr % 10 == 0:
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'config': args,
+                'losses': np.array(losses),
+                'penalties': np.array(penalties),
             }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
 
         tqdm_batch.set_postfix({"Loss": loss_meter.avg, "Penalty": penalty_meter.avg})
