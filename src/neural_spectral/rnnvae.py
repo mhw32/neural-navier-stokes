@@ -118,7 +118,7 @@ if __name__ == "__main__":
     nt, nx, ny = obs.size(0), obs.size(1), obs.size(2)
     t = torch.arange(nt) + 1
     t = t.to(device)
-    noise_std = 0.1
+    noise_std = 1e-3
     
     # 300 is same as in train.py
     rnn_vae = RNNVAE(300, nx*ny*3).to(device)
