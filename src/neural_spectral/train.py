@@ -225,7 +225,6 @@ if __name__ == "__main__":
             noise_std_ = torch.zeros(pred_obs.size()).to(device) + noise_std
             noise_logvar = 2. * torch.log(noise_std_).to(device)
 
-            import pdb; pdb.set_trace()
             logpx = log_normal_pdf(batch_obs, pred_obs, noise_logvar).sum(-1).sum(-1)
             pz0_mean = pz0_logvar = torch.zeros(pred_z0.size()).to(device)
             analytic_kl = normal_kl(qz0_mean, qz0_logvar,
@@ -256,10 +255,11 @@ if __name__ == "__main__":
     with torch.no_grad():
         obs_seq_init = obs[0:args.batch_time]  # give it the first batch_time seq
         obs_seq_init = obs_seq_init.unsqueeze(0)  # add fake batch size
+        obs_seq_init = obs_seq_init.view(1, args.batch_time, -1)
         qz0_mean, qz0_logvar = inf_net(obs_seq_init)
         epsilon = torch.randn(qz0_mean.size()).to(device)
         pred_z0 = epsilon * torch.exp(0.5 * qz0_logvar) + qz0_mean
-        pred_z = odeint(ode_net, pred_z0, t)
+        pred_z = odeint(ode_net, pred_z0, t.float())
         pred_z = pred_z.permute(1, 0, 2) 
         pred_z = pred_z.view(1, -1, args.n_coeff, args.n_coeff, 3)
         pred_lambda = pred_z[:, :, :, :, 0]
@@ -271,9 +271,10 @@ if __name__ == "__main__":
         pred_obs = torch.cat([pred_u.unsqueeze(4), 
                               pred_v.unsqueeze(4), 
                               pred_p.unsqueeze(4)], dim=4)
-        out_extrapolate = torch.cat([obs_seq_init, pred_obs], dim=0)
-        out_extrapolate = out_extrapolate[0]  # get rid of batch size
-        obs_extrapolate = obs_extrapolate.numpy()
+        obs_seq_init = obs_seq_init.view(1, args.batch_time, nx, ny, 3)
+        obs_extrapolate = torch.cat([obs_seq_init, pred_obs], dim=1)
+        obs_extrapolate = obs_extrapolate[0]  # get rid of batch size
+        obs_extrapolate = obs_extrapolate.cpu().detach().numpy()
     
     np.save(os.path.join(args.out_dir, 'extrapolation.npy'), 
             obs_extrapolate)
