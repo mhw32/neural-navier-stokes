@@ -136,13 +136,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--npz-path', type=str, default=CHORIN_FD_DATA_FILE, 
                         help='where dataset is stored [default: CHORIN_FD_DATA_FILE]')
-    parser.add_argument('--out-dir', type=str, default='./checkpoints', 
-                        help='where to save checkpoints [default: ./checkpoints]')
+    parser.add_argument('--out-dir', type=str, default='./checkpoints/spectral', 
+                        help='where to save checkpoints [default: ./checkpoints/spectral]')
     parser.add_argument('--n-coeff', type=int, default=10, help='default: 10')
     parser.add_argument('--batch-time', type=int, default=20, help='default: 20')
     parser.add_argument('--batch-size', type=int, default=64, help='default: 64')
     parser.add_argument('--n-iters', type=int, default=10000, help='default: 10000')
     parser.add_argument('--gpu-device', type=int, default=0, help='default: 0')
+    parser.add_argument('--evaluate-only', action='store_true', default=False)
     args = parser.parse_args()
 
     if not os.path.isdir(args.out_dir):
@@ -161,6 +162,7 @@ if __name__ == "__main__":
     nt, nx, ny = obs.size(0), obs.size(1), obs.size(2)
     t = torch.arange(nt) + 1
     t = t.to(device)
+
     noise_std = 0.1
 
     # Chebyshev collocation and series
@@ -181,76 +183,82 @@ if __name__ == "__main__":
     inf_net = InferenceNetwork(latent_dim, obs_dim, hidden_dim=256)
     ode_net = SpectralCoeffODEFunc(latent_dim)
     inf_net, ode_net = inf_net.to(device), ode_net.to(device)
-    parameters = [inf_net.parameters(), ode_net.parameters()]
-    optimizer = optim.Adam(chain(*parameters), lr=1e-3)
+    
+    if not args.evaluate_only:
+        parameters = [inf_net.parameters(), ode_net.parameters()]
+        optimizer = optim.Adam(chain(*parameters), lr=1e-3)
 
-    loss_meter = RunningAverageMeter(0.97)
+        loss_meter = RunningAverageMeter(0.97)
 
-    def get_batch():
-        s = np.random.choice(np.arange(nt - args.batch_time, dtype=np.int64),
-                             args.batch_size, replace=False)
-        s = torch.from_numpy(s)
-        batch_x0 = obs[s]
-        batch_t = t[:args.batch_time]
-        batch_x = torch.stack([obs[s+i] for i in range(args.batch_time)], dim=0)
-        batch_x = batch_x.permute(1, 0, 2, 3, 4)
-        return batch_t, batch_x
+        def get_batch():
+            s = np.random.choice(np.arange(nt - args.batch_time, dtype=np.int64),
+                                 args.batch_size, replace=False)
+            s = torch.from_numpy(s)
+            batch_x0 = obs[s]
+            batch_t = t[:args.batch_time]
+            batch_x = torch.stack([obs[s+i] for i in range(args.batch_time)], dim=0)
+            batch_x = batch_x.permute(1, 0, 2, 3, 4)
+            return batch_t, batch_x
 
-    try:
-        tqdm_batch = tqdm(total=args.n_iters, desc="[Iteration]")
-        for itr in range(1, args.n_iters + 1):
-            optimizer.zero_grad()
-            batch_t, batch_obs = get_batch()
-            batch_size = batch_obs.size(0)
-            
-            batch_obs = batch_obs.view(batch_size, args.batch_time, nx*ny*3)
-            qz0_mean, qz0_logvar = inf_net(batch_obs)
-            epsilon = torch.randn(qz0_mean.size()).to(device)
-            pred_z0 = epsilon * torch.exp(0.5 * qz0_logvar) + qz0_mean
+        try:
+            tqdm_batch = tqdm(total=args.n_iters, desc="[Iteration]")
+            for itr in range(1, args.n_iters + 1):
+                optimizer.zero_grad()
+                batch_t, batch_obs = get_batch()
+                batch_size = batch_obs.size(0)
+                
+                batch_obs = batch_obs.view(batch_size, args.batch_time, nx*ny*3)
+                qz0_mean, qz0_logvar = inf_net(batch_obs)
+                epsilon = torch.randn(qz0_mean.size()).to(device)
+                pred_z0 = epsilon * torch.exp(0.5 * qz0_logvar) + qz0_mean
 
-            # forward in time and solve ode for reconstructions
-            pred_z = odeint(ode_net, pred_z0, batch_t.float())
-            pred_z = pred_z.permute(1, 0, 2)  # batch_size x t x dim
-            pred_z = pred_z.view(batch_size, -1, args.n_coeff, args.n_coeff, 3)
-            pred_lambda = pred_z[:, :, :, :, 0]
-            pred_omega  = pred_z[:, :, :, :, 1]
-            pred_gamma  = pred_z[:, :, :, :, 2]
-            pred_u = build_u(pred_lambda)
-            pred_v = build_v(pred_omega)
-            pred_p = build_p(pred_gamma)
-            pred_obs = torch.cat([pred_u.unsqueeze(4), 
-                                  pred_v.unsqueeze(4), 
-                                  pred_p.unsqueeze(4)], dim=4)
-            pred_obs = pred_obs.view(batch_size, args.batch_time, -1)
-            noise_std_ = torch.zeros(pred_obs.size()).to(device) + noise_std
-            noise_logvar = 2. * torch.log(noise_std_).to(device)
+                # forward in time and solve ode for reconstructions
+                pred_z = odeint(ode_net, pred_z0, batch_t.float())
+                pred_z = pred_z.permute(1, 0, 2)  # batch_size x t x dim
+                pred_z = pred_z.view(batch_size, -1, args.n_coeff, args.n_coeff, 3)
+                pred_lambda = pred_z[:, :, :, :, 0]
+                pred_omega  = pred_z[:, :, :, :, 1]
+                pred_gamma  = pred_z[:, :, :, :, 2]
+                pred_u = build_u(pred_lambda)
+                pred_v = build_v(pred_omega)
+                pred_p = build_p(pred_gamma)
+                pred_obs = torch.cat([pred_u.unsqueeze(4), 
+                                      pred_v.unsqueeze(4), 
+                                      pred_p.unsqueeze(4)], dim=4)
+                pred_obs = pred_obs.view(batch_size, args.batch_time, -1)
+                noise_std_ = torch.zeros(pred_obs.size()).to(device) + noise_std
+                noise_logvar = 2. * torch.log(noise_std_).to(device)
 
-            logpx = log_normal_pdf(batch_obs, pred_obs, noise_logvar).sum(-1).sum(-1)
-            pz0_mean = pz0_logvar = torch.zeros(pred_z0.size()).to(device)
-            analytic_kl = normal_kl(qz0_mean, qz0_logvar,
-                                    pz0_mean, pz0_logvar).sum(-1)
-            loss = torch.mean(-logpx + analytic_kl, dim=0)
-            loss.backward()
-            optimizer.step()
-            
-            loss_meter.update(loss.item())
-            tqdm_batch.set_postfix({"Loss": loss_meter.avg})
-            tqdm_batch.update()
-        tqdm_batch.close()
-    except KeyboardInterrupt:
+                logpx = log_normal_pdf(batch_obs, pred_obs, noise_logvar).sum(-1).sum(-1)
+                pz0_mean = pz0_logvar = torch.zeros(pred_z0.size()).to(device)
+                analytic_kl = normal_kl(qz0_mean, qz0_logvar,
+                                        pz0_mean, pz0_logvar).sum(-1)
+                loss = torch.mean(-logpx + analytic_kl, dim=0)
+                loss.backward()
+                optimizer.step()
+                
+                loss_meter.update(loss.item())
+                tqdm_batch.set_postfix({"Loss": loss_meter.avg})
+                tqdm_batch.update()
+            tqdm_batch.close()
+        except KeyboardInterrupt:
+            torch.save({
+                'ode_net_state_dict': ode_net.state_dict(),
+                'inf_net_state_dict': inf_net.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'config': args,
+            }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
+
         torch.save({
             'ode_net_state_dict': ode_net.state_dict(),
             'inf_net_state_dict': inf_net.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'config': args,
         }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
-
-    torch.save({
-        'ode_net_state_dict': ode_net.state_dict(),
-        'inf_net_state_dict': inf_net.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'config': args,
-    }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
+    else:
+        checkpoint = torch.load(os.path.join(args.out_dir, 'checkpoint.pth.tar'))
+        inf_net.load_state_dict(checkpoint['inf_net_state_dict'])
+        ode_net.load_state_dict(checkpoint['ode_net_state_dict'])
 
     with torch.no_grad():
         obs_seq_init = obs[0:args.batch_time]  # give it the first batch_time seq
@@ -259,7 +267,8 @@ if __name__ == "__main__":
         qz0_mean, qz0_logvar = inf_net(obs_seq_init)
         epsilon = torch.randn(qz0_mean.size()).to(device)
         pred_z0 = epsilon * torch.exp(0.5 * qz0_logvar) + qz0_mean
-        pred_z = odeint(ode_net, pred_z0, t.float())
+        t_extrapolate = torch.arange(args.batch_time, nt).to(device)
+        pred_z = odeint(ode_net, pred_z0, t_extrapolate.float())
         pred_z = pred_z.permute(1, 0, 2) 
         pred_z = pred_z.view(1, -1, args.n_coeff, args.n_coeff, 3)
         pred_lambda = pred_z[:, :, :, :, 0]

@@ -49,8 +49,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--npz-path', type=str, default=CHORIN_FD_DATA_FILE, 
                         help='where dataset is stored [default: CHORIN_FD_DATA_FILE]')
-    parser.add_argument('--out-dir', type=str, default='./checkpoints', 
-                        help='where to save checkpoints [default: ./checkpoints]')
+    parser.add_argument('--out-dir', type=str, default='./checkpoints/rnn', 
+                        help='where to save checkpoints [default: ./checkpoints/rnn]')
     parser.add_argument('--n-coeff', type=int, default=10, help='default: 10')
     parser.add_argument('--batch-time', type=int, default=20, help='default: 20')
     parser.add_argument('--batch-size', type=int, default=64, help='default: 64')
