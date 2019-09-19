@@ -40,6 +40,24 @@ class RNN(nn.Module):
         return out_extrapolate
 
 
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
@@ -47,7 +65,6 @@ if __name__ == "__main__":
     parser.add_argument('--out-dir', type=str, default='./checkpoints/spectral', 
                         help='where to save checkpoints [default: ./checkpoints/spectral]')
     parser.add_argument('--n-iters', type=int, default=1000, help='default: 1000')
-    parser.add_argument('--n-coeffs', type=int, default=10, help='default: 10')
     parser.add_argument('--gpu-device', type=int, default=0, help='default: 0')
     args = parser.parse_args()
 
@@ -64,12 +81,12 @@ if __name__ == "__main__":
     p = torch.from_numpy(p).float()
     obs = torch.stack([u, v, p]).permute(1, 0, 2, 3).to(device)
     nt, nx, ny = obs.size(0), obs.size(2), obs.size(3)
-    obs = obs.unsqueeze(1)  # add a batch size of 1
-    K = args.n_coeffs
+    obs = obs.unsqueeze(0)  # add a batch size of 1
 
-    obs_in, obs_out = obs[:-1], obs[1:]
+    obs = obs.view(1, nt, 3*nx*ny)
+    obs_in, obs_out = obs[:, :-1], obs[:, 1:]
     
-    model = RNN(nx*ny*3).to(device)
+    model = RNN(nx*ny*3, 512).to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
     loss_meter = AverageMeter()
@@ -77,6 +94,7 @@ if __name__ == "__main__":
     tqdm_batch = tqdm(total=args.n_iters, desc="[Iteration]")
     for itr in range(1, args.n_iters + 1):
         optimizer.zero_grad()
+
         obs_pred, _ = model(obs_in)
         loss = torch.norm(obs_pred - obs_out, p=2)
 
@@ -103,13 +121,14 @@ if __name__ == "__main__":
         p = torch.from_numpy(p).float()
         obs = torch.stack([u, v, p]).permute(1, 0, 2, 3).to(device)
         nt, nx, ny = obs.size(0), obs.size(2), obs.size(3)
-        obs = obs.unsqueeze(1)  # add a batch size of 1
-        obs0 = obs[0]  # first timestep - shape: mb x 3 x nx x ny
+        obs = obs.unsqueeze(0)  # add a batch size of 1
+        obs = obs.view(1, nt, 3*nx*ny)
+        obs0 = obs[:, 0].unsqueeze(1)  # first timestep - shape: mb x 3 x nx x ny
 
         obs_extrapolate = model.extrapolate(obs0, nt)
-        obs_extrapolate = obs_extrapolate[:,0]
+        obs_extrapolate = obs_extrapolate[0]
         obs_extrapolate = obs_extrapolate.numpy()
-        obs_extrapolate = obs_extrapolate.reshape(obs_extrapolate.shape[0], nx, ny, 3)
+        obs_extrapolate = obs_extrapolate.reshape(obs_extrapolate.shape[0], 3, nx, ny)
 
     np.save(os.path.join(args.out_dir, 'extrapolation.npy'), 
             obs_extrapolate)
