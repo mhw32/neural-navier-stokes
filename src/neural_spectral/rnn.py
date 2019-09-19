@@ -34,13 +34,14 @@ class RNN(nn.Module):
 
     def extrapolate(self, obs_seq, T_extrapolate):
         out_seq, h0 = self.forward(obs_seq)
-        obs = obs_seq[-1]
+        obs = obs_seq[:, -1].unsqueeze(1)
         out_extrapolate = []
         for t in range(T_extrapolate):
-            obs, h0 = self.gru(obs, h0)
+            out, h0 = self.gru(obs, h0)
+            obs = self.linear(out.squeeze(1)).unsqueeze(1)
             out_extrapolate.append(obs.cpu().detach())
-        out_extrapolate = torch.stack(out_extrapolate)
-        out_extrapolate = torch.cat([obs_seq, out_extrapolate], dim=0)
+        out_extrapolate = torch.cat(out_extrapolate, dim=1)
+        out_extrapolate = torch.cat([obs_seq.cpu().detach(), out_extrapolate], dim=1)
         return out_extrapolate
 
 
@@ -128,9 +129,11 @@ if __name__ == "__main__":
     with torch.no_grad():
         obs_seq_init = obs[0:args.batch_time]  # give it the first batch_time seq
         obs_seq_init = obs_seq_init.unsqueeze(0)  # add fake batch size
+        obs_seq_init = obs_seq_init.view(1, args.batch_time, -1)
         obs_extrapolate = rnn_net.extrapolate(obs_seq_init, nt - args.batch_time)
         obs_extrapolate = obs_extrapolate[0]  # get rid of batch size
         obs_extrapolate = obs_extrapolate.numpy()
+        obs_extrapolate = obs_extrapolate.reshape(obs_extrapolate.shape[0], nx, ny, 3)
 
     np.save(os.path.join(args.out_dir, 'extrapolation.npy'), 
             obs_extrapolate)
