@@ -34,12 +34,12 @@ class PDEFunc(nn.Module):
         ])
 
     def rnnint(self, init_coeff, nt):
-        inputs = init_coeff
+        inputs = init_coeff.unsqueeze(1)
         h0 = None
         coeff = []
         for t in range(nt):
             inputs, h0 = self.basis_coeffs(inputs, h0)
-            coeff.append(inputs)
+            coeff.append(inputs.squeeze(1))
         coeff = torch.cat(coeff)
         return coeff
 
@@ -49,7 +49,7 @@ class PDEFunc(nn.Module):
         # coeff = nt x mb x K*3
 
         mb, nt = grid0.size(0), t.size(0)
-        coeff = rnnint(self.init_coeffs.unsqueeze(0).repeat(mb, 1), nt)
+        coeff = self.rnnint(self.init_coeffs.unsqueeze(0).repeat(mb, 1), nt)
         coeff = coeff.view(nt, mb, self.K, 3)
 
         soln = 0
@@ -114,7 +114,6 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
     loss_meter = AverageMeter()
-    penalty_meter = AverageMeter()
 
     tqdm_batch = tqdm(total=args.n_iters, desc="[Iteration]")
     for itr in range(1, args.n_iters + 1):
@@ -134,7 +133,7 @@ if __name__ == "__main__":
                 'config': args,
             }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
 
-        tqdm_batch.set_postfix({"Loss": loss_meter.avg, "Penalty": penalty_meter.avg})
+        tqdm_batch.set_postfix({"Loss": loss_meter.avg})
         tqdm_batch.update()
     tqdm_batch.close()
 
