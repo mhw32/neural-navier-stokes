@@ -22,7 +22,7 @@ class RNNVAE(nn.Module):
     def forward(self, obs_seq_in, obs_seq_out):
         latent_mu, latent_logvar = self.encoder(obs_seq_in)
         latent = self.reparameterize(latent_mu, latent_logvar)
-        obs_seq_pred = self.decoder(latent, obs_seq)
+        obs_seq_pred = self.decoder(latent, obs_seq_out)
         return obs_seq_pred, latent, latent_mu, latent_logvar
 
     def reparameterize(self, mu, logvar):
@@ -68,13 +68,23 @@ class SequenceDecoder(nn.Module):
         self.hidden_dim = hidden_dim
 
         self.gru = nn.GRU(self.obs_dim, self.hidden_dim, batch_first=True)
-        self.latent2hidden = nn.Linear(self.latent_dim, self.hidden_dim)
+        self.latent2hidden = nn.Sequential(
+            nn.Linear(self.latent_dim, self.latent_dim),
+            nn.LeakyReLU(),
+            nn.Linear(self.latent_dim, self.hidden_dim))
+        self.linear = nn.Sequential(
+            nn.Linear(self.hidden_dim, self.hidden_dim),
+            nn.LeakyReLU(),
+            nn.Linear(self.hidden_dim, self.obs_dim))
 
     def forward(self, latent, obs_seq):
-        T = obs_seq.size(1)
+        batch_size, T = obs_seq.size(0), obs_seq.size(1)
         hidden = self.latent2hidden(latent)
         hidden = hidden.unsqueeze(0).contiguous()
         out_seq, _ = self.gru(obs_seq, hidden)
+        out_seq = out_seq.contiguous().view(batch_size * T, self.hidden_dim)
+        out_seq = self.linear(out_seq)
+        out_seq = out_seq.view(batch_size, T, self.obs_dim)
         return out_seq
 
 
@@ -134,15 +144,12 @@ if __name__ == "__main__":
 
             batch_obs = batch_obs.view(batch_size, args.batch_time, nx*ny*3)
             batch_in, batch_out = batch_obs[:, 0:-1, :], batch_obs[:, 1:, :]
-            batch_len = torch.ones(batch_size).int() * args.batch_time
-            batch_len = batch_len.to(device)
-            batch_len = batch_len - 1  # since we split into -in and -out
 
-            batch_pred, batch_latent, batch_mu, batch_logvar = rnn_vae(batch_in, batch_len)
-            noise_std_ = torch.zeros(batch_obs.size()).to(device) + noise_std
+            batch_pred, batch_latent, batch_mu, batch_logvar = rnn_vae(batch_in, batch_out)
+            noise_std_ = torch.zeros(batch_in.size()).to(device) + noise_std
             noise_logvar = 2. * torch.log(noise_std_).to(device)
 
-            logpx = log_normal_pdf(batch_obs, batch_pred, noise_logvar).sum(-1).sum(-1)
+            logpx = log_normal_pdf(batch_out, batch_pred, noise_logvar).sum(-1).sum(-1)
             pz_mean = pz_logvar = torch.zeros(batch_latent.size()).to(device)
             analytic_kl = normal_kl(batch_mu, batch_logvar,
                                     pz_mean, pz_logvar).sum(-1)

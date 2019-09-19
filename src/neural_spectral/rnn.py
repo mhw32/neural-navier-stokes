@@ -16,10 +16,20 @@ from src.neural_spectral.train import RunningAverageMeter, log_normal_pdf
 class RNN(nn.Module):
     def __init__(self, input_dim, hidden_dim=256):
         super().__init__()
+        self.hidden_dim = hidden_dim
+        self.input_dim = input_dim
         self.gru = nn.GRU(input_dim, hidden_dim, batch_first=True)
+        self.linear = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LeakyReLU(),
+            nn.Linear(hidden_dim, input_dim))
     
     def forward(self, obs_seq):
+        batch_size, T = obs_seq.size(0), obs_seq.size(1)
         out_seq, gru_hid = self.gru(obs_seq, None)
+        out_seq = out_seq.contiguous().view(batch_size * T, self.hidden_dim)
+        out_seq = self.linear(out_seq)
+        out_seq = out_seq.view(batch_size, T, self.input_dim)
         return out_seq, gru_hid
 
     def extrapolate(self, obs_seq, T_extrapolate):
@@ -89,14 +99,11 @@ if __name__ == "__main__":
 
             batch_obs = batch_obs.view(batch_size, args.batch_time, nx*ny*3)
             batch_in, batch_out = batch_obs[:, 0:-1, :], batch_obs[:, 1:, :]
-            batch_len = torch.ones(batch_size).int() * args.batch_time
-            batch_len = batch_len.to(device)
-            batch_len = batch_len - 1  # since we split into -in and -out
 
-            batch_pred, _ = rnn_net(batch_in, batch_len)
+            batch_pred, _ = rnn_net(batch_in)
             noise_std_ = torch.zeros(batch_pred.size()).to(device) + noise_std
             noise_logvar = 2. * torch.log(noise_std_).to(device)
-            logpx = log_normal_pdf(batch_obs, pred_obs, noise_logvar).sum(-1).sum(-1)
+            logpx = log_normal_pdf(batch_out, batch_pred, noise_logvar).sum(-1).sum(-1)
             loss = torch.mean(-logpx, dim=0)
             loss.backward()
             optimizer.step()

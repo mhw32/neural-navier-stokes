@@ -225,6 +225,7 @@ if __name__ == "__main__":
             noise_std_ = torch.zeros(pred_obs.size()).to(device) + noise_std
             noise_logvar = 2. * torch.log(noise_std_).to(device)
 
+            import pdb; pdb.set_trace()
             logpx = log_normal_pdf(batch_obs, pred_obs, noise_logvar).sum(-1).sum(-1)
             pz0_mean = pz0_logvar = torch.zeros(pred_z0.size()).to(device)
             analytic_kl = normal_kl(qz0_mean, qz0_logvar,
