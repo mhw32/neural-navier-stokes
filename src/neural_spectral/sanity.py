@@ -20,23 +20,28 @@ def get_T_matrix(N, K):
 
 def get_inv_T_matrix(N, K):
     inv_T = np.stack([np.cos(np.pi * np.arange(N) / float(N - 1))
-                      for k in np.arange(K)]).T
-    bar_c_i = np.stack([np.repeat(get_bar_c_k(i, K), N)
-                        for i in np.arange(K)])
-    bar_c_k = bar_c_i.T
+                      for k in np.arange(K)])
+    bar_c_i = np.array([get_bar_c_k(i, N) for i in range(N)])[np.newaxis, :]
+    bar_c_k = np.array([get_bar_c_k(k, K) for k in range(K)])[:, np.newaxis]
+
     inv_T = 2 * inv_T / (bar_c_k * bar_c_i * N)
     return inv_T
 
 
 data = np.load('../data/data_semi_implicit.npz')
-U = data['u']
-nt, nx, ny = u.shape[0], u.shape[1], u.shape[2]
-n_coeff = 10
+Us = data['u']
+nt, nx, ny = Us.shape[0], Us.shape[1], Us.shape[2]
+n_coeff = 51
 
-Tx = get_T_matrix(nx, n_coeff)
-Ty = get_T_matrix(ny, n_coeff)
-Tx_inv = get_inv_T_matrix(nx, n_coeff)
-Ty_inv = get_inv_T_matrix(ny, n_coeff)
+Tx = get_T_matrix(nx, n_coeff)    # k x N
+Ty = get_T_matrix(ny, n_coeff).T  # N x k
+T = Tx @ Ty  # k x k
+T_inv = np.linalg.inv(T)
 
-U_hat = (Tx_inv @ U) @ Ty_inv.T
-U = (Tx @ U_hat) @ Ty.T
+for t in range(nt): 
+    U = Us[t]
+    U_hat = T @ U
+    U_recon = T_inv @ U_hat
+    print(np.linalg.norm(U - U_recon))
+    break
+
