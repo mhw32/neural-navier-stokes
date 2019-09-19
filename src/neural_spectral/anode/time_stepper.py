@@ -35,8 +35,11 @@ class Time_Stepper(object):
     def integrate(self, y0):
         y1 = y0
         dt = 1. / float(self.Nt)
+        y1_all = []
         for n in range(self.Nt):
             t0 = 0 + n * dt
             y1 = self.step(self.func, t0, dt, y1)
+            y1_all.append(y1)
 
-        return y1
+        y1_all = torch.stack(y1_all)
+        return y1_all
