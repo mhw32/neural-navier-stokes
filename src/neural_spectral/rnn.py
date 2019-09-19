@@ -62,8 +62,8 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--npz-path', type=str, default='../data/data_semi_implicit.npz')
-    parser.add_argument('--out-dir', type=str, default='./checkpoints/spectral', 
-                        help='where to save checkpoints [default: ./checkpoints/spectral]')
+    parser.add_argument('--out-dir', type=str, default='./checkpoints/rnn', 
+                        help='where to save checkpoints [default: ./checkpoints/rnn]')
     parser.add_argument('--n-iters', type=int, default=1000, help='default: 1000')
     parser.add_argument('--gpu-device', type=int, default=0, help='default: 0')
     args = parser.parse_args()
