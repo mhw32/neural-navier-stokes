@@ -14,18 +14,27 @@ class RNN(nn.Module):
     def __init__(self, input_dim, hidden_dim=256):
         super().__init__()
         self.input_dim = input_dim
-        self.gru = nn.GRU(self.input_dim, self.input_dim, batch_first=True)
-    
+        self.hidden_dim = hidden_dim
+        self.gru = nn.GRU(self.input_dim, self.hidden_dim, batch_first=True)
+        self.linear = nn.Sequential(
+            nn.Linear(self.hidden_dim, self.hidden_dim),
+            nn.ReLU(),
+            nn.Linear(self.hidden_dim, self.input_dim))
+
     def forward(self, obs_seq):
-        batch_size, T = obs_seq.size(0), obs_seq.size(1)
+        mb, nt = obs_seq.size(0), obs_seq.size(1)
         out_seq, gru_hid = self.gru(obs_seq, None)
+        out_seq = out_seq.view(mb * nt, -1)
+        out_seq = self.linear(out_seq)
+        out_seq = out_seq.view(mb, nt, -1)
         return out_seq, gru_hid
 
     def extrapolate(self, obs, T_extrapolate):
         h0 = None
         out_extrapolate = []
         for t in range(T_extrapolate):
-            obs, h0 = self.gru(obs, h0)
+            out, h0 = self.gru(obs, h0)
+            obs = self.linear(out.squeeze(1)).unsqueeze(1)
             out_extrapolate.append(obs.cpu().detach())
         out_extrapolate = torch.cat(out_extrapolate, dim=1)
         return out_extrapolate
