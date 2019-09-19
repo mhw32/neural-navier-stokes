@@ -189,10 +189,10 @@ if __name__ == "__main__":
     
         if itr % 10 == 0:
             torch.save({
-		'model_state_dict': model.state_dict(),
-		'optimizer_state_dict': optimizer.state_dict(),
-		'config': args,
-	    }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'config': args,
+            }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
 
         tqdm_batch.set_postfix({"Loss": loss_meter.avg, "Penalty": penalty_meter.avg})
         tqdm_batch.update()
