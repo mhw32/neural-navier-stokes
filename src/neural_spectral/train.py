@@ -113,9 +113,7 @@ def get_T_matrix(N, K):
     function at the coordinate points.
     """
     T = np.stack( [ get_gauss_lobatto_points(N, k=k)
-                    for k in np.arange(0, K) ] ).T
-    # N(k) x N(i) since this will be multiplied by 
-    # the matrix of spectral coefficients (k)
+                    for k in np.arange(K) ] ).T
     return torch.from_numpy(T).float()
 
 
@@ -138,10 +136,9 @@ if __name__ == "__main__":
                         help='where dataset is stored [default: CHORIN_FD_DATA_FILE]')
     parser.add_argument('--out-dir', type=str, default='./checkpoints/spectral', 
                         help='where to save checkpoints [default: ./checkpoints/spectral]')
-    parser.add_argument('--n-coeff', type=int, default=10, help='default: 10')
-    parser.add_argument('--batch-time', type=int, default=20, help='default: 20')
-    parser.add_argument('--batch-size', type=int, default=64, help='default: 64')
-    parser.add_argument('--n-iters', type=int, default=10000, help='default: 10000')
+    parser.add_argument('--batch-time', type=int, default=100, help='default: 100')
+    parser.add_argument('--batch-size', type=int, default=20, help='default: 20')
+    parser.add_argument('--n-iters', type=int, default=1000, help='default: 1000')
     parser.add_argument('--gpu-device', type=int, default=0, help='default: 0')
     parser.add_argument('--evaluate-only', action='store_true', default=False)
     args = parser.parse_args()
@@ -164,21 +161,23 @@ if __name__ == "__main__":
     t = t.to(device)
 
     noise_std = 0.1
+    n_coeff = 51
 
     # Chebyshev collocation and series
-    Tx = get_T_matrix(nx, args.n_coeff).to(device)
-    Ty = get_T_matrix(ny, args.n_coeff).to(device)
+    Tx = get_T_matrix(nx, n_coeff).to(device)      # K x N
+    Ty = get_T_matrix(ny, n_coeff).t().to(device)  # N x K
+    T = Tx @ Ty                                         # K x K
 
     def build_u(_lambda):
-        return (Tx @ _lambda) @ Ty.t()
+        return T @ _lambda
 
     def build_v(_omega):
-        return (Tx @ _omega) @ Ty.t()
+        return T @ _omega
     
     def build_p(_gamma):
-        return (Tx @ _gamma) @ Ty.t()
+        return T @ _gamma
 
-    latent_dim = 3 * args.n_coeff**2
+    latent_dim = 3 * n_coeff**2
     obs_dim = 3 * nx * ny
     inf_net = InferenceNetwork(latent_dim, obs_dim, hidden_dim=256)
     ode_net = SpectralCoeffODEFunc(latent_dim)
@@ -215,7 +214,7 @@ if __name__ == "__main__":
                 # forward in time and solve ode for reconstructions
                 pred_z = odeint(ode_net, pred_z0, batch_t.float())
                 pred_z = pred_z.permute(1, 0, 2)  # batch_size x t x dim
-                pred_z = pred_z.view(batch_size, -1, args.n_coeff, args.n_coeff, 3)
+                pred_z = pred_z.view(batch_size, -1, n_coeff, n_coeff, 3)
                 pred_lambda = pred_z[:, :, :, :, 0]
                 pred_omega  = pred_z[:, :, :, :, 1]
                 pred_gamma  = pred_z[:, :, :, :, 2]
@@ -270,7 +269,7 @@ if __name__ == "__main__":
         t_extrapolate = torch.arange(args.batch_time, nt).to(device)
         pred_z = odeint(ode_net, pred_z0, t_extrapolate.float())
         pred_z = pred_z.permute(1, 0, 2) 
-        pred_z = pred_z.view(1, -1, args.n_coeff, args.n_coeff, 3)
+        pred_z = pred_z.view(1, -1, n_coeff, n_coeff, 3)
         pred_lambda = pred_z[:, :, :, :, 0]
         pred_omega  = pred_z[:, :, :, :, 1]
         pred_gamma  = pred_z[:, :, :, :, 2]
