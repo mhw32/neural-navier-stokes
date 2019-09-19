@@ -34,9 +34,9 @@ class SpectralCoeffODEFunc(nn.Module):
 
         self.net = nn.Sequential(
             nn.Linear(self.latent_dim, self.hidden_dim),
-            nn.ELU(inplace=True),
+            nn.LeakyReLU(),
             nn.Linear(self.hidden_dim, self.hidden_dim),
-            nn.ELU(inplace=True),
+            nn.LeakyReLU(),
             nn.Linear(self.hidden_dim, self.latent_dim))
 
     def forward(self, t, x):
