@@ -1,8 +1,13 @@
+import os
+import numpy as np
+from tqdm import tqdm
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.utils.rnn as rnn_utils
 
+from src.neural_spectral.radam import RAdam
 from torchdiffeq import odeint_adjoint as odeint
 
 
@@ -14,11 +19,11 @@ class ODEFunc(nn.Module):
         self.K = K
         self.nx, self.ny = nx, ny
         self.net = nn.Sequential(
-            nn.Linear(3*self.nx*self.ny, 512),
+            nn.Linear(self.K, 128),
             nn.ReLU(inplace=True),
-            nn.Linear(512, 256),
+            nn.Linear(128, 128),
             nn.ELU(inplace=True),
-            nn.Linear(256, self.K),
+            nn.Linear(128, self.K),
         )
 
         for m in self.net.modules():
@@ -26,10 +31,8 @@ class ODEFunc(nn.Module):
                 nn.init.normal_(m.weight, mean=0, std=0.1)
                 nn.init.constant_(m.bias, val=0)
 
-    def forward(self, t, grid):
-        batch_size = grid.size(0)
-        grid = grid.view(batch_size, 3*self.nx*self.ny)
-        return self.net(x)
+    def forward(self, t, coeff):
+        return self.net(coeff)
 
 
 class PDEFunc(nn.Module):
@@ -48,10 +51,11 @@ class PDEFunc(nn.Module):
         super().__init__()
         self.K = K
         self.nx, self.ny = nx, ny
+        self.init_coeffs = nn.Parameter(torch.normal(torch.zeros(self.K * 3), 1))
         self.basis_coeffs = ODEFunc(self.K * 3, self.nx, self.ny)
         # self.basis_fns = nn.ModuleList([BasisFunc(self.nx, self.ny)
         #                                 for _ in range(self.K) ])
-        self.basis_fns = nn.ModuleList([
+        self.basis_fns = nn.ParameterList([
             nn.Parameter(torch.normal(torch.zeros(3, self.nx, self.ny), 1))
             for _ in range(self.K)
         ])
@@ -60,14 +64,15 @@ class PDEFunc(nn.Module):
         # grid0 = mb x 3 x nx x ny
         # t     = nt
         # coeff = nt x mb x K*3
-        
+    
         mb, nt = grid0.size(0), t.size(0)
-        coeff = odeint(self.basis_coeffs, grid0, t.float())
+        coeff = odeint(self.basis_coeffs, self.init_coeffs.unsqueeze(0).repeat(mb, 1), 
+                       t.float(), method='rk4')
         coeff = coeff.view(nt, mb, self.K, 3)
-        
+
         soln = 0
         for k in range(self.K):
-            f_k = self.basis_fns[k]  # (grid)
+            f_k = self.basis_fns[k]
             f_k = f_k.unsqueeze(0).repeat(nt * mb, 1, 1, 1)
             f_k = f_k.view(nt, mb, 3, self.nx, self.ny)
             w_k = coeff[:, :, k, :, None, None]
@@ -78,8 +83,7 @@ class PDEFunc(nn.Module):
     def basis_weight_mat(self):
         W = []
         for k in range(self.K):
-            theta = list(self.basis_fns[k].parameters())
-            theta = torch.cat([w.flatten() for w in theta])
+            theta = self.basis_fns[k].flatten()
             W.append(theta)
         return torch.stack(W)
 
@@ -134,13 +138,11 @@ class AverageMeter(object):
 
 
 if __name__ == "__main__":
+    import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--npz-path', type=str, default=CHORIN_FD_DATA_FILE, 
-                        help='where dataset is stored [default: CHORIN_FD_DATA_FILE]')
+    parser.add_argument('--npz-path', type=str, default='../data/data_semi_implicit.npz')
     parser.add_argument('--out-dir', type=str, default='./checkpoints/spectral', 
                         help='where to save checkpoints [default: ./checkpoints/spectral]')
-    parser.add_argument('--batch-time', type=int, default=20, help='default: 20')
-    parser.add_argument('--batch-size', type=int, default=10, help='default: 10')
     parser.add_argument('--n-iters', type=int, default=1000, help='default: 1000')
     parser.add_argument('--n-coeffs', type=int, default=10, help='default: 10')
     parser.add_argument('--gpu-device', type=int, default=0, help='default: 0')
@@ -153,12 +155,12 @@ if __name__ == "__main__":
               if torch.cuda.is_available() else 'cpu'))
 
     data = np.load(args.npz_path)
-    u, v, p = data['u'], data['v'], data['p']
+    u, v, p = data['u'][:100], data['v'][:100], data['p'][:100]
     u = torch.from_numpy(u).float()
     v = torch.from_numpy(v).float()
     p = torch.from_numpy(p).float()
     obs = torch.stack([u, v, p]).permute(1, 0, 2, 3).to(device)
-    nt, nx, ny = obs.size(0), obs.size(1), obs.size(2)
+    nt, nx, ny = obs.size(0), obs.size(2), obs.size(3)
     obs = obs.unsqueeze(1)  # add a batch size of 1
     obs0 = obs[0]  # first timestep - shape: mb x 3 x nx x ny
     t = (torch.arange(nt) + 1).to(device)
@@ -168,25 +170,46 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
     loss_meter = AverageMeter()
+    penalty_meter = AverageMeter()
 
     tqdm_batch = tqdm(total=args.n_iters, desc="[Iteration]")
     for itr in range(1, args.n_iters + 1):
         optimizer.zero_grad()
 
-        obs_pred = model(obs0, t, obs)
+        obs_pred = model(obs0, t)
         loss = torch.norm(obs_pred - obs, p=2)
-        penalty = model.diversity_penalty()
-        loss = loss + penalty
+        
+        with torch.no_grad():
+            penalty = 1. / model.diversity_penalty()
+            penalty_meter.update(penalty.item())
 
         loss.backward()
         optimizer.step()
         loss_meter.update(loss.item())
-        
-        tqdm_batch.set_postfix({"Loss": loss_meter.avg})
+    
+        if itr % 10 == 0:
+            torch.save({
+		'model_state_dict': model.state_dict(),
+		'optimizer_state_dict': optimizer.state_dict(),
+		'config': args,
+	    }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
+
+        tqdm_batch.set_postfix({"Loss": loss_meter.avg, "Penalty": penalty_meter.avg})
         tqdm_batch.update()
     tqdm_batch.close()
 
     with torch.no_grad():
+        data = np.load(args.npz_path)
+        u, v, p = data['u'], data['v'], data['p']
+        u = torch.from_numpy(u).float()
+        v = torch.from_numpy(v).float()
+        p = torch.from_numpy(p).float()
+        obs = torch.stack([u, v, p]).permute(1, 0, 2, 3).to(device)
+        nt, nx, ny = obs.size(0), obs.size(2), obs.size(3)
+        obs = obs.unsqueeze(1)  # add a batch size of 1
+        obs0 = obs[0]  # first timestep - shape: mb x 3 x nx x ny
+        t = (torch.arange(nt) + 1).to(device)  
+
         obs_pred = model(obs0, t, obs)  # nt x mb x 3 nx x ny
         obs_pred = obs_pred.squeeze(1)
         obs_pred = obs_pred.cpu().detach().numpy()
