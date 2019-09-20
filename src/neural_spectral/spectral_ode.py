@@ -67,7 +67,7 @@ class PDEFunc(nn.Module):
         mb, nt = grid0.size(0), t.size(0)
         coeff = odesolver(  self.basis_coeffs, 
                             self.init_coeffs.unsqueeze(0).repeat(mb, 1), 
-                            {'Nt': nt, 'method': 'Euler'}  )
+                            {'Nt': nt, 'method': 'RK4'}  )
         coeff = coeff.view(nt, mb, self.K, 3)
 
         soln = 0
