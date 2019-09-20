@@ -143,10 +143,11 @@ if __name__ == "__main__":
     parser.add_argument('--npz-path', type=str, default='../data/data_semi_implicit.npz')
     parser.add_argument('--out-dir', type=str, default='./checkpoints/spectral_ode', 
                         help='where to save checkpoints [default: ./checkpoints/spectral_ode]')
-    parser.add_argument('--n-iters', type=int, default=10000, help='default: 10000')
+    parser.add_argument('--n-iters', type=int, default=1000, help='default: 1000')
     parser.add_argument('--n-coeffs', type=int, default=10, help='default: 10')
     parser.add_argument('--gpu-device', type=int, default=0, help='default: 0')
     args = parser.parse_args()
+    args.out_dir = '{}_{}'.format(args.out_dir, args.n_coeffs)
 
     if not os.path.isdir(args.out_dir):
         os.makedirs(args.out_dir)
