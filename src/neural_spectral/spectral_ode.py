@@ -155,7 +155,7 @@ if __name__ == "__main__":
               if torch.cuda.is_available() else 'cpu'))
 
     data = np.load(args.npz_path)
-    u, v, p = data['u'], data['v'], data['p']
+    u, v, p = data['u'][:100], data['v'][:100], data['p'][:100]
     u = torch.from_numpy(u).float()
     v = torch.from_numpy(v).float()
     p = torch.from_numpy(p).float()
