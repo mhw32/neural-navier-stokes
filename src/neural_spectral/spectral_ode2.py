@@ -82,7 +82,7 @@ class PDEFunc(nn.Module):
                               self.p_init_coeffs.unsqueeze(0).repeat(mb, 1), 
                               {'Nt': nt, 'method': 'RK4'}  )
 
-        u_soln, v_soln, p_soln = 0
+        u_soln, v_soln, p_soln = 0, 0, 0
         for k in range(self.K):
             u_f_k = self.u_basis_fns[k]
             u_f_k = u_f_k.unsqueeze(0).repeat(nt * mb, 1, 1)
@@ -181,7 +181,7 @@ if __name__ == "__main__":
                 'losses': np.array(losses),
             }, os.path.join(args.out_dir, 'checkpoint.pth.tar'))
 
-        tqdm_batch.set_postfix({"Loss": loss_meter.avg, "Penalty": penalty_meter.avg})
+        tqdm_batch.set_postfix({"Loss": loss_meter.avg})
         tqdm_batch.update()
     tqdm_batch.close()
 
